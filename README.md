@@ -16,6 +16,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 ## Test Plans
 
 - [v0.1 Test Plan — Instruction Sandbox](docs/test-plan-v0.1.md)
+- [v0.2 Test Plan — Branches and Loops](docs/test-plan-v0.2.md)
 
 ## Education
 
