@@ -25,7 +25,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the first development pass for **v0.2 — Branches and Loops**.
+The repository currently contains the runtime implementation for **v0.2 — Branches and Loops**.
 
 Implemented now:
 
@@ -56,7 +56,13 @@ Implemented now:
   - `CMP` immediate
   - `CMP` register, unshifted
 - Basic examples in `examples/v0_1/`.
-- Branch and loop examples in `examples/v0_2/`.
+- Branch and loop examples in `examples/v0_2/`, including:
+  - forward unconditional branch
+  - backward unconditional branch inside a terminating loop
+  - `CBZ` / `CBNZ` conditional branches
+  - `CMP` + `B.cond` conditional branches
+  - `CMP` + `B.cond` loop
+  - trace-mode loop
 - Automated v0.1 test suite following `docs/test-plan-v0.1.md`:
   - unit tests for CPU, memory, loader, fetch, and decode behavior
   - integration tests for supported instructions and edge cases
@@ -106,7 +112,7 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, compiles the v0.1 C unit/integration test runner, assembles examples, and runs v0.1 CLI checks. v0.2 implementation is present, but v0.2 automated tests have not been added yet.
+The test target currently builds the emulator, compiles the v0.1 C unit/integration test runner, assembles examples, and runs v0.1 CLI checks. v0.2 runtime implementation and examples are present, but v0.2 automated tests have not been added yet.
 
 Expected result includes:
 
@@ -154,6 +160,8 @@ These decisions come from the v0.2 test plan and current implementation pass:
 - `CBZ` and `CBNZ` support both 64-bit `x` and 32-bit `w` forms; 32-bit forms compare only the lower 32 bits.
 - Trace mode uses `./emulator trace <raw-binary>` and prints each executed `pc` before the final register dump.
 - `ADD register` is intentionally deferred because v0.2 examples use immediate addition.
+- `CMP` immediate supports the ARM64 immediate shift forms accepted by the decoder: unshifted and `lsl #12`.
+- `CMP` register is intentionally limited to unshifted register operands in v0.2.
 
 ## Planned Versions
 
@@ -259,6 +267,7 @@ Definition of done:
 - The emulator can execute a counting loop.
 - Conditional branches behave correctly for at least equality and non-equality.
 - Trace mode can print each executed instruction address.
+- Example coverage includes a backward unconditional branch loop and a `CMP` + `B.cond` loop.
 
 ### v0.3 — Memory and Stack
 

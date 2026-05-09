@@ -32,9 +32,11 @@ $(TARGET): $(OBJ)
 V0_1_EXAMPLES := examples/v0_1/add.bin examples/v0_1/nop_hlt.bin examples/v0_1/sub.bin
 V0_2_EXAMPLES := \
 	examples/v0_2/branch_forward.bin \
+	examples/v0_2/branch_backward_loop.bin \
 	examples/v0_2/cbnz_countdown.bin \
 	examples/v0_2/cbz_skip.bin \
 	examples/v0_2/cmp_beq.bin \
+	examples/v0_2/cmp_bcond_loop.bin \
 	examples/v0_2/cmp_bne.bin \
 	examples/v0_2/signed_compare_lt_ge.bin \
 	examples/v0_2/infinite_branch.bin \

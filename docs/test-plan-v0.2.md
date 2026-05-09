@@ -59,13 +59,23 @@ Implemented now:
 - NZCV updates for compare/subtract semantics
 - condition evaluation for common ARM64 conditions
 - `./emulator trace <raw-binary>`
-- v0.2 assembly examples under `examples/v0_2/`
+- v0.2 assembly examples under `examples/v0_2/`, including:
+  - forward unconditional branch
+  - backward unconditional branch inside a terminating loop
+  - `CBZ` / `CBNZ` examples
+  - `CMP` + `B.cond` examples
+  - `CMP` + `B.cond` loop
+  - trace-mode loop
 
 Deferred for v0.2 unless deliberately added later:
 
 - `ADD Xd, Xn, Xm` / `ADD Wd, Wn, Wm`
 - shifted `CMP register` forms
 - v0.2 automated tests
+
+Implemented detail to test when v0.2 automated tests are added:
+
+- `CMP` immediate accepts shift `0` and shift `12`, matching ARM64 immediate arithmetic encoding forms supported by the decoder.
 
 The existing v0.1 test suite must continue to pass throughout v0.2 development.
 
@@ -148,6 +158,7 @@ examples/v0_2/
 ├── cbnz_countdown.s
 ├── cbz_skip.s
 ├── cmp_beq.s
+├── cmp_bcond_loop.s
 ├── cmp_bne.s
 ├── signed_compare_lt_ge.s
 └── trace_loop.s
