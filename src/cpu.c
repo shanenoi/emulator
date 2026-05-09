@@ -4,22 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 
-typedef enum {
-    INST_NOP,
-    INST_HLT,
-    INST_MOVZ,
-    INST_ADD_IMM,
-    INST_SUB_IMM,
-} InstructionKind;
-
-typedef struct {
-    InstructionKind kind;
-    bool is_64_bit;
-    uint8_t rd;
-    uint8_t rn;
-    uint64_t imm;
-} DecodedInstruction;
-
 void cpu_init(Cpu *cpu, uint64_t pc, uint64_t sp) {
     memset(cpu, 0, sizeof(*cpu));
     cpu->pc = pc;
@@ -61,16 +45,16 @@ bool cpu_fetch(const Cpu *cpu, const Memory *memory, uint32_t *opcode, char *err
     return true;
 }
 
-static bool decode(uint32_t opcode, DecodedInstruction *instruction, char *error, size_t error_size) {
+bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error, size_t error_size) {
     memset(instruction, 0, sizeof(*instruction));
 
     if (opcode == 0xd503201fu) {
-        instruction->kind = INST_NOP;
+        instruction->kind = EMU_INST_NOP;
         return true;
     }
 
     if ((opcode & 0xffe0001fu) == 0xd4400000u) {
-        instruction->kind = INST_HLT;
+        instruction->kind = EMU_INST_HLT;
         instruction->imm = (opcode >> 5u) & 0xffffu;
         return true;
     }
@@ -85,7 +69,7 @@ static bool decode(uint32_t opcode, DecodedInstruction *instruction, char *error
             return false;
         }
 
-        instruction->kind = INST_MOVZ;
+        instruction->kind = EMU_INST_MOVZ;
         instruction->is_64_bit = sf != 0;
         instruction->rd = (uint8_t)(opcode & 0x1fu);
         instruction->imm = ((uint64_t)imm16) << (16u * hw);
@@ -103,7 +87,7 @@ static bool decode(uint32_t opcode, DecodedInstruction *instruction, char *error
             return false;
         }
 
-        instruction->kind = is_sub ? INST_SUB_IMM : INST_ADD_IMM;
+        instruction->kind = is_sub ? EMU_INST_SUB_IMM : EMU_INST_ADD_IMM;
         instruction->is_64_bit = is_64_bit;
         instruction->rd = (uint8_t)(opcode & 0x1fu);
         instruction->rn = (uint8_t)((opcode >> 5u) & 0x1fu);
@@ -117,14 +101,14 @@ static bool decode(uint32_t opcode, DecodedInstruction *instruction, char *error
 
 EmuStatus cpu_step(Cpu *cpu, const Memory *memory, char *error, size_t error_size) {
     uint32_t opcode = 0;
-    DecodedInstruction instruction;
+    EmuDecodedInstruction instruction;
     uint64_t current_pc = cpu->pc;
 
     if (!cpu_fetch(cpu, memory, &opcode, error, error_size)) {
         return EMU_ERROR;
     }
 
-    if (!decode(opcode, &instruction, error, error_size)) {
+    if (!cpu_decode(opcode, &instruction, error, error_size)) {
         char detail[256];
         snprintf(detail, sizeof(detail), "%s", error);
         snprintf(error, error_size, "decode error at pc=0x%016" PRIx64 ": %s", current_pc, detail);
@@ -132,27 +116,27 @@ EmuStatus cpu_step(Cpu *cpu, const Memory *memory, char *error, size_t error_siz
     }
 
     switch (instruction.kind) {
-    case INST_NOP:
+    case EMU_INST_NOP:
         cpu->pc += 4;
         break;
 
-    case INST_HLT:
+    case EMU_INST_HLT:
         cpu->halted = true;
         break;
 
-    case INST_MOVZ:
+    case EMU_INST_MOVZ:
         cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, instruction.imm);
         cpu->pc += 4;
         break;
 
-    case INST_ADD_IMM: {
+    case EMU_INST_ADD_IMM: {
         uint64_t value = cpu_read_register(cpu, instruction.rn) + instruction.imm;
         cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
         cpu->pc += 4;
         break;
     }
 
-    case INST_SUB_IMM: {
+    case EMU_INST_SUB_IMM: {
         uint64_t value = cpu_read_register(cpu, instruction.rn) - instruction.imm;
         cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
         cpu->pc += 4;

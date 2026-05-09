@@ -1008,6 +1008,16 @@ v0.1 is releasable only when all of the following are true:
 - Final register dump is stable enough for test assertions.
 - Known limitations are documented in the README.
 
+### Current implementation status
+
+The v0.1 suite is implemented with:
+
+- `tests/v0_1/test_v0_1.c` for CPU, memory, loader, fetch, decode, execution, acceptance, and edge-case coverage.
+- `tests/v0_1/test_cli.sh` for CLI success and error behavior.
+- `make test` as the documented release-gate command.
+
+The C test runner creates temporary raw binaries under `tests/v0_1/tmp/` when a loader or CLI scenario needs an input file.
+
 ## 13. Suggested automated test strategy
 
 Use three layers of tests:

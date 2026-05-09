@@ -47,8 +47,10 @@ Implemented now:
   - `ADD` immediate
   - `SUB` immediate
 - Basic examples in `examples/v0_1/`.
-
-Tests are intentionally not added yet. The first implementation pass follows the v0.1 test plan but does not yet include the automated test suite.
+- Automated v0.1 test suite following `docs/test-plan-v0.1.md`:
+  - unit tests for CPU, memory, loader, fetch, and decode behavior
+  - integration tests for supported instructions and edge cases
+  - CLI tests for success, usage errors, loader errors, and decode errors
 
 ## Build and Run
 
@@ -75,6 +77,14 @@ Or build and run the main demo in one command:
 ```sh
 make run-demo
 ```
+
+Run the v0.1 automated test suite:
+
+```sh
+make test
+```
+
+The test target builds the emulator, compiles the C unit/integration test runner, assembles the v0.1 examples, and runs CLI checks.
 
 Expected result includes:
 
@@ -109,7 +119,6 @@ Known v0.1 limitations:
 - No ELF or Mach-O loader yet.
 - No syscalls yet.
 - No debugger REPL yet.
-- No automated tests yet.
 
 ## Planned Versions
 

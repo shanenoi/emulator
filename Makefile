@@ -6,12 +6,20 @@ LDFLAGS ?=
 TARGET := emulator
 SRC := \
 	src/main.c \
+	src/emulator.c \
 	src/cpu.c \
 	src/memory.c \
 	src/loader.c
 OBJ := $(SRC:.c=.o)
 
-.PHONY: all clean examples run-demo
+CORE_SRC := \
+	src/emulator.c \
+	src/cpu.c \
+	src/memory.c \
+	src/loader.c
+CORE_OBJ := $(CORE_SRC:.c=.o)
+
+.PHONY: all clean examples run-demo test
 
 all: $(TARGET)
 
@@ -33,4 +41,12 @@ run-demo: all examples/v0_1/add.bin
 	./$(TARGET) run examples/v0_1/add.bin
 
 clean:
-	rm -f $(TARGET) $(OBJ) examples/v0_1/*.o examples/v0_1/*.bin
+	rm -f $(TARGET) $(OBJ) tests/v0_1/*.o tests/v0_1/test_v0_1 \
+		examples/v0_1/*.o examples/v0_1/*.bin tests/v0_1/tmp/*
+
+tests/v0_1/test_v0_1: tests/v0_1/test_v0_1.o $(CORE_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+test: all tests/v0_1/test_v0_1
+	./tests/v0_1/test_v0_1
+	./tests/v0_1/test_cli.sh

@@ -16,6 +16,22 @@ typedef enum {
     EMU_HALTED = 2,
 } EmuStatus;
 
+typedef enum {
+    EMU_INST_NOP = 0,
+    EMU_INST_HLT,
+    EMU_INST_MOVZ,
+    EMU_INST_ADD_IMM,
+    EMU_INST_SUB_IMM,
+} EmuInstructionKind;
+
+typedef struct {
+    EmuInstructionKind kind;
+    bool is_64_bit;
+    uint8_t rd;
+    uint8_t rn;
+    uint64_t imm;
+} EmuDecodedInstruction;
+
 typedef struct {
     bool n;
     bool z;
@@ -56,6 +72,7 @@ void cpu_init(Cpu *cpu, uint64_t pc, uint64_t sp);
 uint64_t cpu_read_register(const Cpu *cpu, uint8_t index);
 void cpu_write_register(Cpu *cpu, uint8_t index, bool is_64_bit, uint64_t value);
 bool cpu_fetch(const Cpu *cpu, const Memory *memory, uint32_t *opcode, char *error, size_t error_size);
+bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error, size_t error_size);
 EmuStatus cpu_step(Cpu *cpu, const Memory *memory, char *error, size_t error_size);
 void cpu_dump(const Cpu *cpu, FILE *stream);
 
