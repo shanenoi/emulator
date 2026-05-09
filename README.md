@@ -15,24 +15,34 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Planned Versions
 
+The project evolves in small, demo-driven releases. Each version should be useful on its own and should include a small assembly or C example, a reproducible command, and updated documentation.
+
 ### v0.1 — Instruction Sandbox
 
-Initial emulator core:
+**Goal:** execute tiny hand-written ARM64 instruction sequences from a raw binary.
 
-- CPU register state
-- Program counter
-- Stack pointer
-- Flat memory
-- Raw binary loader
-- Fetch/decode/execute loop
-- Minimal instructions:
+Core features:
+
+- CPU state:
+  - general-purpose registers `x0` through `x30`
+  - stack pointer `sp`
+  - program counter `pc`
+  - NZCV condition flags storage, even if not fully used yet
+- Flat memory buffer, initially around 1 MiB.
+- Raw binary loader:
+  - load code at a fixed base address, such as `0x1000`
+  - initialize `pc` to the load address
+  - initialize `sp` to the top of memory
+- Minimal fetch/decode/execute loop.
+- Minimal instruction support:
   - `NOP`
   - `HLT`
   - `MOVZ`
   - `ADD` immediate
   - `SUB` immediate
+- Exit-time register dump.
 
-Expected demo:
+Demo program:
 
 ```asm
 mov x0, #2
@@ -50,42 +60,163 @@ x2 = 5
 halted
 ```
 
+Definition of done:
+
+- The emulator can load a raw `.bin` file.
+- The emulator can run the demo above.
+- The emulator prints final register state and instruction count.
+
 ### v0.2 — Branches and Loops
 
-Add:
+**Goal:** support loops and simple conditional control flow.
+
+Add instruction support:
 
 - `CMP`
 - `B`
 - `B.cond`
 - `CBZ`
 - `CBNZ`
-- NZCV flags
-- basic instruction tracing
+- additional `ADD`/`SUB` register forms if needed by examples
+
+Add behavior:
+
+- Correct NZCV flag updates for compare/subtract operations.
+- Conditional branch evaluation for common conditions:
+  - `EQ`
+  - `NE`
+  - `LT`
+  - `LE`
+  - `GT`
+  - `GE`
+- Basic instruction tracing mode.
+
+Demo program idea:
+
+```asm
+mov x0, #5      // counter
+mov x1, #0      // sum
+
+loop:
+add x1, x1, x0
+sub x0, x0, #1
+cbnz x0, loop
+
+hlt #0
+```
+
+Expected result:
+
+```text
+x1 = 15
+```
+
+Definition of done:
+
+- The emulator can execute a counting loop.
+- Conditional branches behave correctly for at least equality and non-equality.
+- Trace mode can print each executed instruction address.
 
 ### v0.3 — Memory and Stack
 
-Add:
+**Goal:** support memory reads/writes and basic stack usage.
+
+Add memory features:
+
+- `read8`, `read16`, `read32`, `read64`
+- `write8`, `write16`, `write32`, `write64`
+- bounds checking for every access
+- readable error messages for invalid memory access
+
+Add instruction support:
 
 - `LDR`
 - `STR`
+- `LDUR`
+- `STUR`
 - `LDP`
 - `STP`
-- stack initialization
-- memory bounds checking
-- memory dump tools
+
+Support addressing modes gradually:
+
+- `[base]`
+- `[base, #offset]`
+- `[base, #offset]!` pre-index
+- `[base], #offset` post-index
+
+Demo program:
+
+```asm
+mov x0, #42
+str x0, [sp, #-8]!
+ldr x1, [sp], #8
+hlt #0
+```
+
+Expected result:
+
+```text
+x1 = 42
+```
+
+Definition of done:
+
+- Stack push/pop style addressing works.
+- Invalid memory accesses stop execution with a clear emulator error.
+- The CLI can dump a memory range.
 
 ### v0.4 — Functions
 
-Add:
+**Goal:** support function calls and returns.
+
+Add instruction support:
 
 - `BL`
 - `RET`
-- link register `x30`
-- call tracing
+- more branch immediate decoding as needed
+
+Add behavior:
+
+- Correct link register behavior through `x30`.
+- Simple call tracing.
+- Optional stack-frame display for common `x29`/`x30` frame patterns.
+
+Demo program:
+
+```asm
+mov x0, #2
+mov x1, #3
+bl add_numbers
+hlt #0
+
+add_numbers:
+add x0, x0, x1
+ret
+```
+
+Expected result:
+
+```text
+x0 = 5
+```
+
+Definition of done:
+
+- The emulator can call a function and return to the caller.
+- Nested calls work for simple examples.
+- Trace output can show call and return addresses.
 
 ### v0.5 — Debugger REPL
 
-Add interactive commands:
+**Goal:** make the emulator interactive and useful for learning.
+
+Add command:
+
+```text
+emulator debug <program.bin>
+```
+
+Debugger commands:
 
 ```text
 run
@@ -94,54 +225,392 @@ continue
 regs
 mem <addr> <len>
 break <addr>
+delete <breakpoint>
 trace on
 trace off
 quit
 ```
 
-### v0.6 — Better CLI and Tracing
+Debugger behavior:
 
-Add:
+- Break before executing an instruction at a breakpoint address.
+- Step exactly one instruction.
+- Continue until breakpoint, halt, or error.
+- Print registers in a stable, readable format.
+- Print memory as hex bytes and optionally 64-bit words.
 
-- improved command-line interface
-- disassembly in traces
-- symbol map support
-- more example programs
+Definition of done:
+
+- A user can load a raw binary, set a breakpoint, run, inspect registers, step, and continue.
+- Breakpoints survive across `run`/`continue` in the same session.
+- Debugger errors do not crash the emulator process.
+
+### v0.6 — Assembler-Friendly Runtime
+
+**Goal:** make examples easier to build, run, inspect, and document.
+
+Add CLI polish:
+
+- `emulator run <program.bin>`
+- `emulator trace <program.bin>`
+- `emulator debug <program.bin>`
+- `emulator regs <program.bin>` or equivalent final-state view
+
+Add developer tooling:
+
+- `Makefile` targets for examples.
+- `examples/` organized by version.
+- Optional symbol map support from assembler/linker output.
+- Better error messages with instruction address and raw opcode.
+- Disassembly text in traces, even if initially partial.
+
+Example trace output:
+
+```text
+0x1000: mov x0, #5        x0: 0 -> 5
+0x1004: mov x1, #0        x1: 0 -> 0
+0x1008: add x1, x1, x0    x1: 0 -> 5
+```
+
+Definition of done:
+
+- All examples can be built with one command.
+- Trace output is readable enough to use in README demos.
+- Unknown instructions report the raw opcode and address.
 
 ### v0.7 — Fake Syscalls
 
-Add:
+**Goal:** allow small programs to interact with the host through a simple emulator ABI.
+
+Add instruction support:
 
 - `SVC`
-- fake syscall dispatcher
-- `exit`
-- `write`
+
+Add fake syscall dispatcher:
+
+```text
+x8 = syscall number
+x0-x5 = arguments
+x0 = return value
+```
+
+Suggested initial syscalls:
+
+```text
+1 = exit(code)
+2 = write(fd, ptr, len)
+3 = read(fd, ptr, len)       // optional in this version
+4 = time()                   // optional
+5 = random()                 // optional
+```
+
+Demo program idea:
+
+```asm
+mov x0, #1          // stdout
+adr x1, message
+mov x2, #13
+mov x8, #2          // write
+svc #0
+
+mov x0, #0
+mov x8, #1          // exit
+svc #0
+
+message:
+.ascii "hello world!\n"
+```
+
+Expected result:
+
+```text
+hello world!
+program exited with code 0
+```
+
+Definition of done:
+
+- A program can print text through `write`.
+- A program can terminate through `exit`.
+- Invalid syscall numbers produce clear errors or return a documented error code.
 
 ### v0.8 — ELF Loader
 
-Add:
+**Goal:** load real AArch64 ELF64 executable files instead of only raw binaries.
 
-- ELF64 parser
-- AArch64 executable loading
-- program header mapping
-- entry point detection
-- `.bss` zero-fill
+Add ELF support:
+
+- Validate ELF magic.
+- Validate class is ELF64.
+- Validate target is AArch64.
+- Validate little-endian encoding.
+- Load `PT_LOAD` segments into emulator memory.
+- Respect entry point from ELF header.
+- Zero-fill `.bss` through segment memory size handling.
+- Create initial stack.
+
+Initial limitations:
+
+- Support static `ET_EXEC` first.
+- No dynamic linker.
+- No libc requirement.
+- No relocations unless a later example needs a small subset.
+
+Example command:
+
+```sh
+aarch64-linux-gnu-gcc -nostdlib -static examples/v0_7_hello.s -o hello.elf
+./emulator run hello.elf
+```
+
+Definition of done:
+
+- The emulator can load a simple static AArch64 ELF.
+- The emulator starts at the ELF entry point.
+- Segment bounds and permissions are represented internally, even if permissions are not enforced yet.
 
 ### v0.9 — Tiny C Programs
 
-Add enough instructions to run small freestanding C programs.
+**Goal:** run small freestanding C programs compiled to AArch64.
+
+Add instruction support commonly emitted by compilers:
+
+- `AND`
+- `ORR`
+- `EOR`
+- `LSL`
+- `LSR`
+- `ASR`
+- `MUL`
+- `SDIV`
+- `UDIV`
+- `ADR`
+- `ADRP`
+- more load/store variants as needed
+
+Add C runtime support:
+
+- A tiny `_start` assembly stub.
+- Simple call into `main`.
+- Exit via fake syscall.
+- No standard library required.
+
+Demo C program:
+
+```c
+int fib(int n) {
+    if (n <= 1) return n;
+    return fib(n - 1) + fib(n - 2);
+}
+
+int main(void) {
+    return fib(10);
+}
+```
+
+Expected result:
+
+```text
+program exited with code 55
+```
+
+Definition of done:
+
+- A freestanding C program can be compiled and executed.
+- Recursive function calls work.
+- The README documents the exact compiler command.
 
 ### v1.0 — Stable Learning Emulator
 
-A polished release with:
+**Goal:** publish a polished first stable release for learning ARM64 emulation.
 
-- raw binary loader
-- ELF64 loader
-- debugger
-- fake syscalls
-- tests
-- examples
-- documentation
+Required features:
+
+- Raw binary loader.
+- ELF64 loader.
+- Debugger REPL.
+- Breakpoints.
+- Register inspection.
+- Memory inspection.
+- Instruction tracing.
+- Fake syscalls for `exit` and `write`.
+- Example assembly programs.
+- Example freestanding C programs.
+- Automated tests for CPU, memory, loader, and syscall behavior.
+- Documentation for supported instructions and known limitations.
+
+Suggested demos:
+
+- add two numbers
+- loop and sum numbers
+- stack push/pop
+- function call
+- recursive Fibonacci
+- hello world through fake syscall
+- simple string length
+- simple memory copy
+
+Definition of done:
+
+- A new user can clone the repository, build the emulator, run examples, debug a program, and understand what is happening from the docs.
+- CI or a local `make test` target verifies the supported instruction set.
+
+### v1.1 — Mach-O Loader
+
+**Goal:** add Apple-focused binary-format learning without trying to boot iOS or macOS.
+
+Add Mach-O support:
+
+- Parse Mach-O arm64 headers.
+- Parse `LC_SEGMENT_64`.
+- Map `__TEXT` and `__DATA` segments.
+- Parse entry point from `LC_MAIN` when available.
+- Basic symbol/table inspection if practical.
+- Clear unsupported-feature errors for dynamic linking and complex relocations.
+
+Initial limitations:
+
+- Prefer simple, static or freestanding Mach-O examples.
+- Do not attempt to run normal macOS/iOS dynamically linked apps.
+- Treat this as a binary loader and inspection milestone, not an OS compatibility milestone.
+
+Definition of done:
+
+- The emulator can inspect a simple arm64 Mach-O file.
+- The emulator can load and run a deliberately simple Mach-O example, or clearly document why a given Mach-O requires unsupported runtime features.
+
+### v1.2 — Virtual Memory
+
+**Goal:** teach page-based memory, permissions, and fault handling.
+
+Add memory model:
+
+- Page-sized mappings.
+- Mapped and unmapped regions.
+- Read/write/execute permissions.
+- Stack guard page.
+- Memory access fault reporting.
+
+Example behavior:
+
+```text
+write to RX code page -> permission fault
+execute RW data page -> permission fault
+read unmapped page    -> unmapped memory fault
+```
+
+Add debugger support:
+
+- List memory mappings.
+- Show page permissions.
+- Identify the mapping for an address.
+
+Definition of done:
+
+- ELF segment permissions can be represented and enforced.
+- Invalid memory behavior is deterministic and easy to debug.
+- The project has documentation explaining the virtual memory model.
+
+### v1.3 — Memory-Mapped Devices
+
+**Goal:** introduce simple hardware-device emulation.
+
+Add device bus:
+
+- Route memory accesses to RAM or devices.
+- Register devices at fixed address ranges.
+- Provide clear errors for unmapped device addresses.
+
+Initial devices:
+
+- UART console.
+- Timer.
+- Random-number device.
+
+Suggested memory map:
+
+```text
+0x0000_1000 - code / program area
+0x0001_0000 - data area
+0x0008_0000 - stack area
+0x0900_0000 - UART
+0x0901_0000 - timer
+0x0902_0000 - random device
+```
+
+UART behavior:
+
+```text
+write byte to 0x09000000 -> print character
+```
+
+Definition of done:
+
+- A program can print through memory-mapped UART without using fake syscalls.
+- Device reads/writes are tested.
+- The memory map is documented.
+
+### v1.4 — Toy Kernel Mode
+
+**Goal:** support a tiny educational kernel running above the emulator platform.
+
+Add simplified privilege support:
+
+- EL0 and EL1 mode tracking.
+- A small subset of system registers:
+  - `CurrentEL`
+  - `SPSR_EL1`
+  - `ELR_EL1`
+  - `SP_EL0`
+  - `SP_EL1`
+  - `VBAR_EL1`
+- Exception vector address handling.
+- `SVC` trap from user mode into kernel mode.
+- Return from exception through a simplified `ERET` implementation.
+
+Toy kernel capabilities:
+
+- Print through UART.
+- Install an exception vector.
+- Handle a syscall from user code.
+- Return to user code.
+
+Definition of done:
+
+- A tiny kernel binary can boot at a fixed address.
+- The kernel can handle one user `SVC` call and resume execution.
+- The control transfer is visible in trace/debug output.
+
+### v1.5 — Tiny OS Lab
+
+**Goal:** turn the emulator into a small operating-systems playground.
+
+Add OS-lab features:
+
+- Load multiple user programs.
+- Maintain per-task CPU state.
+- Simple cooperative scheduler.
+- Basic task switching.
+- Per-task memory regions or simplified address spaces.
+- Syscall table managed by the toy kernel.
+
+Demo idea:
+
+```text
+kernel booting...
+task 1: hello
+task 2: counter 1
+task 1: hello
+task 2: counter 2
+task 1: done
+task 2: done
+```
+
+Definition of done:
+
+- The toy kernel can switch between at least two tasks.
+- Each task has its own saved registers and stack.
+- The docs explain how the scheduler, task state, and syscall path work.
 
 ## Suggested Directory Layout
 
