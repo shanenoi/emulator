@@ -17,6 +17,10 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 - [v0.1 Test Plan — Instruction Sandbox](docs/test-plan-v0.1.md)
 
+## Education
+
+- [v0.1 Learning Guide — Understanding the Emulator](education/v0.1-learning-guide.md)
+
 ## Current Implementation Status
 
 The repository currently contains the first development pass for **v0.1 — Instruction Sandbox**.
