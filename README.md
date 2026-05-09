@@ -13,6 +13,10 @@ The goal is to grow this project version by version:
 
 This project is for learning CPU emulation, binary loading, low-level debugging, and ARM64 architecture basics.
 
+## Test Plans
+
+- [v0.1 Test Plan — Instruction Sandbox](docs/test-plan-v0.1.md)
+
 ## Planned Versions
 
 The project evolves in small, demo-driven releases. Each version should be useful on its own and should include a small assembly or C example, a reproducible command, and updated documentation.
