@@ -917,6 +917,8 @@ hlt #0
 
 **Purpose:** avoid crashes on memory allocation failures.
 
+**v0.1 status:** implementation handles allocation failure in `memory_init()` by returning `false` with a clear error message. Automated forced allocation-failure testing is deferred because v0.1 does not yet include allocator injection or a test hook for making `calloc()` fail deterministically.
+
 **Steps:**
 
 1. Force memory allocation failure through a test hook, if available.

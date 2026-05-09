@@ -152,9 +152,9 @@ Core features:
 Demo program:
 
 ```asm
-mov x0, #2
-mov x1, #3
-add x2, x0, x1
+movz x0, #2
+movz x1, #3
+add  x2, x0, #3
 hlt #0
 ```
 

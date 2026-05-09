@@ -29,8 +29,21 @@ require_contains "$TMP_DIR/add.out" "halted"
 require_contains "$TMP_DIR/add.out" "x0  = 0x0000000000000002"
 require_contains "$TMP_DIR/add.out" "x1  = 0x0000000000000003"
 require_contains "$TMP_DIR/add.out" "x2  = 0x0000000000000005"
+
+# TC-OUT-001: the final dump exposes every general-purpose register x0-x30.
+i=0
+while [ "$i" -le 30 ]; do
+    if [ "$i" -lt 10 ]; then
+        require_contains "$TMP_DIR/add.out" "x${i}  = 0x"
+    else
+        require_contains "$TMP_DIR/add.out" "x${i} = 0x"
+    fi
+    i=$((i + 1))
+done
+
 require_contains "$TMP_DIR/add.out" "sp  = 0x0000000000100000"
 require_contains "$TMP_DIR/add.out" "pc  = 0x000000000000100c"
+require_contains "$TMP_DIR/add.out" "nzcv = 0000"
 require_contains "$TMP_DIR/add.out" "instructions = 0x0000000000000004"
 
 require_not_success ./emulator

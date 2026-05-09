@@ -24,6 +24,7 @@
 #define OP_MOVZ_X0_42 0xd2800540u
 #define OP_MOVZ_X0_1234 0xd2824680u
 #define OP_MOVZ_X0_1234_LSL16 0xd2a24680u
+#define OP_MOVZ_X0_FFFF 0xd29fffe0u
 #define OP_MOVZ_X0_FFFF_LSL16 0xd2bfffe0u
 #define OP_MOVZ_W0_1234 0x52824680u
 #define OP_MOVZ_W0_1 0x52800020u
@@ -159,6 +160,7 @@ static EmuStatus run_program(const uint32_t *opcodes, size_t opcode_count, Emula
 }
 
 static void test_cpu_initialization(void) {
+    /* TC-CPU-001 through TC-CPU-004, plus register width and xzr behavior. */
     Cpu cpu;
     cpu_init(&cpu, EMU_LOAD_ADDRESS, EMU_MEMORY_SIZE);
 
@@ -183,6 +185,7 @@ static void test_cpu_initialization(void) {
 }
 
 static void test_memory(void) {
+    /* TC-MEM-001 through TC-MEM-008. */
     char error[256];
     Memory memory;
     uint8_t byte = 0;
@@ -240,6 +243,7 @@ static void test_memory(void) {
 }
 
 static void test_loader(void) {
+    /* TC-LOAD-001 through TC-LOAD-007. */
     char error[512];
     Memory memory;
     uint32_t word = 0;
@@ -286,6 +290,7 @@ static void test_loader(void) {
 }
 
 static void test_fetch_and_decode(void) {
+    /* TC-FETCH-001 through TC-FETCH-004 and TC-DEC-001 through TC-DEC-007. */
     char error[256];
     Memory memory;
     Cpu cpu;
@@ -364,6 +369,7 @@ static void test_fetch_and_decode(void) {
 }
 
 static void test_execution_programs(void) {
+    /* TC-EXEC-001 through TC-EXEC-014 and TC-ERR-001 through TC-ERR-003. */
     char error[512];
     Emulator emu;
 
@@ -391,6 +397,18 @@ static void test_execution_programs(void) {
     reset_error(error, sizeof(error));
     EXPECT_STATUS_EQ(run_program(movz_basic, 2, &emu, error, sizeof(error)), EMU_HALTED);
     EXPECT_U64_EQ(emu.cpu.x[0], 0x1234);
+    emulator_free(&emu);
+
+    const uint32_t movz_zero[] = {OP_MOVZ_X0_0, OP_HLT};
+    reset_error(error, sizeof(error));
+    EXPECT_STATUS_EQ(run_program(movz_zero, 2, &emu, error, sizeof(error)), EMU_HALTED);
+    EXPECT_U64_EQ(emu.cpu.x[0], 0);
+    emulator_free(&emu);
+
+    const uint32_t movz_max_imm16[] = {OP_MOVZ_X0_FFFF, OP_HLT};
+    reset_error(error, sizeof(error));
+    EXPECT_STATUS_EQ(run_program(movz_max_imm16, 2, &emu, error, sizeof(error)), EMU_HALTED);
+    EXPECT_U64_EQ(emu.cpu.x[0], 0xffff);
     emulator_free(&emu);
 
     const uint32_t movz_shift[] = {OP_MOVZ_X0_1234_LSL16, OP_HLT};
@@ -485,6 +503,7 @@ static void test_execution_programs(void) {
 }
 
 static void test_acceptance_programs(void) {
+    /* TC-ACC-001 through TC-ACC-004. */
     char error[512];
     Emulator emu;
 
