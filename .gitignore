@@ -1,0 +1,4 @@
+emulator
+*.o
+*.bin
+*.dSYM/

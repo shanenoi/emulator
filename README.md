@@ -17,6 +17,96 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 - [v0.1 Test Plan — Instruction Sandbox](docs/test-plan-v0.1.md)
 
+## Current Implementation Status
+
+The repository currently contains the first development pass for **v0.1 — Instruction Sandbox**.
+
+Implemented now:
+
+- C-based emulator core.
+- Raw binary runner CLI:
+
+```sh
+./emulator run <raw-binary>
+```
+
+- Fixed 1 MiB flat memory.
+- Raw binary load address: `0x1000`.
+- Initial `pc`: `0x1000`.
+- Initial `sp`: top of memory, currently `0x100000`.
+- Stable final register dump.
+- Instruction execution limit to avoid accidental infinite runs.
+- Supported instructions:
+  - `NOP`
+  - `HLT`
+  - `MOVZ`
+  - `ADD` immediate
+  - `SUB` immediate
+- Basic examples in `examples/v0_1/`.
+
+Tests are intentionally not added yet. The first implementation pass follows the v0.1 test plan but does not yet include the automated test suite.
+
+## Build and Run
+
+Build the emulator:
+
+```sh
+make
+```
+
+Build the example raw ARM64 binaries:
+
+```sh
+make examples
+```
+
+Run the v0.1 add demo:
+
+```sh
+./emulator run examples/v0_1/add.bin
+```
+
+Or build and run the main demo in one command:
+
+```sh
+make run-demo
+```
+
+Expected result includes:
+
+```text
+halted
+x0  = 0x0000000000000002
+x1  = 0x0000000000000003
+x2  = 0x0000000000000005
+```
+
+## v0.1 Implementation Decisions
+
+These decisions come from the v0.1 test plan:
+
+- `HLT` counts as an executed instruction.
+- Raw binaries are accepted even when their size is not divisible by 4.
+- Instruction fetch still requires a valid 4-byte aligned instruction address.
+- Misaligned `pc` is rejected.
+- Output uses fixed-width hexadecimal values for registers, `sp`, `pc`, and instruction count.
+- `xzr` semantics are supported by treating register index `31` as the zero register:
+  - reads return `0`
+  - writes are ignored
+- `MOVZ` shifted immediates are supported.
+- `w`-register writes are supported for implemented instructions by zero-extending to the corresponding `x` register.
+- A default instruction limit prevents runaway execution.
+
+Known v0.1 limitations:
+
+- No branches yet.
+- No load/store ARM64 instructions yet.
+- No stack operations yet.
+- No ELF or Mach-O loader yet.
+- No syscalls yet.
+- No debugger REPL yet.
+- No automated tests yet.
+
 ## Planned Versions
 
 The project evolves in small, demo-driven releases. Each version should be useful on its own and should include a small assembly or C example, a reproducible command, and updated documentation.
