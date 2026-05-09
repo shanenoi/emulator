@@ -11,8 +11,8 @@ static int64_t sign_extend(uint64_t value, unsigned bits) {
     return (int64_t)((value ^ sign_bit) - sign_bit);
 }
 
-static bool checked_branch_target(uint64_t pc, int64_t offset, const Memory *memory, uint64_t *target, char *error,
-                                  size_t error_size) {
+bool cpu_calculate_branch_target(uint64_t pc, int64_t offset, const Memory *memory, uint64_t *target, char *error,
+                                 size_t error_size) {
     uint64_t result = 0;
 
     if (offset < 0) {
@@ -309,7 +309,7 @@ EmuStatus cpu_step(Cpu *cpu, const Memory *memory, char *error, size_t error_siz
 
     case EMU_INST_B: {
         uint64_t target = 0;
-        if (!checked_branch_target(current_pc, instruction.offset, memory, &target, error, error_size)) {
+        if (!cpu_calculate_branch_target(current_pc, instruction.offset, memory, &target, error, error_size)) {
             return EMU_ERROR;
         }
         cpu->pc = target;
@@ -319,7 +319,7 @@ EmuStatus cpu_step(Cpu *cpu, const Memory *memory, char *error, size_t error_siz
     case EMU_INST_B_COND: {
         if (cpu_condition_passed(cpu->flags, instruction.condition)) {
             uint64_t target = 0;
-            if (!checked_branch_target(current_pc, instruction.offset, memory, &target, error, error_size)) {
+            if (!cpu_calculate_branch_target(current_pc, instruction.offset, memory, &target, error, error_size)) {
                 return EMU_ERROR;
             }
             cpu->pc = target;
@@ -340,7 +340,7 @@ EmuStatus cpu_step(Cpu *cpu, const Memory *memory, char *error, size_t error_siz
         bool should_branch = instruction.kind == EMU_INST_CBZ ? is_zero : !is_zero;
         if (should_branch) {
             uint64_t target = 0;
-            if (!checked_branch_target(current_pc, instruction.offset, memory, &target, error, error_size)) {
+            if (!cpu_calculate_branch_target(current_pc, instruction.offset, memory, &target, error, error_size)) {
                 return EMU_ERROR;
             }
             cpu->pc = target;

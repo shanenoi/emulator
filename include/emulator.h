@@ -104,6 +104,8 @@ bool cpu_fetch(const Cpu *cpu, const Memory *memory, uint32_t *opcode, char *err
 bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error, size_t error_size);
 EmuStatus cpu_step(Cpu *cpu, const Memory *memory, char *error, size_t error_size);
 bool cpu_condition_passed(EmuFlags flags, EmuCondition condition);
+bool cpu_calculate_branch_target(uint64_t pc, int64_t offset, const Memory *memory, uint64_t *target, char *error,
+                                 size_t error_size);
 void cpu_dump(const Cpu *cpu, FILE *stream);
 
 bool load_raw_binary(Memory *memory, const char *path, uint64_t load_address, char *error, size_t error_size);

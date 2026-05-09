@@ -47,7 +47,7 @@ The goal of v0.2 is to make the emulator capable of running small loops and simp
 
 ## Current implementation notes
 
-This implementation pass adds the v0.2 runtime features but intentionally does **not** add the v0.2 automated tests yet.
+The v0.2 runtime features and automated tests are implemented. `make test` runs the v0.1 suite and the v0.2 suite.
 
 Implemented now:
 
@@ -71,13 +71,12 @@ Deferred for v0.2 unless deliberately added later:
 
 - `ADD Xd, Xn, Xm` / `ADD Wd, Wn, Wm`
 - shifted `CMP register` forms
-- v0.2 automated tests
 
-Implemented detail to test when v0.2 automated tests are added:
+Implemented and covered by v0.2 tests:
 
 - `CMP` immediate accepts shift `0` and shift `12`, matching ARM64 immediate arithmetic encoding forms supported by the decoder.
 
-The existing v0.1 test suite must continue to pass throughout v0.2 development.
+The existing v0.1 test suite must continue to pass throughout v0.2 development and release checks.
 
 v0.2 must support the following new instructions.
 

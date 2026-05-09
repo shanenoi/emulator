@@ -60,13 +60,18 @@ run-demo: all examples/v0_1/add.bin
 	./$(TARGET) run examples/v0_1/add.bin
 
 clean:
-	rm -f $(TARGET) $(OBJ) tests/v0_1/*.o tests/v0_1/test_v0_1 \
+	rm -f $(TARGET) $(OBJ) tests/v0_1/*.o tests/v0_1/test_v0_1 tests/v0_2/*.o tests/v0_2/test_v0_2 \
 		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
-		tests/v0_1/tmp/*
+		tests/v0_1/tmp/* tests/v0_2/tmp/*
 
 tests/v0_1/test_v0_1: tests/v0_1/test_v0_1.o $(CORE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^
 
-test: all tests/v0_1/test_v0_1
+tests/v0_2/test_v0_2: tests/v0_2/test_v0_2.o $(CORE_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+test: all tests/v0_1/test_v0_1 tests/v0_2/test_v0_2
 	./tests/v0_1/test_v0_1
 	./tests/v0_1/test_cli.sh
+	./tests/v0_2/test_v0_2
+	./tests/v0_2/test_cli_trace.sh
