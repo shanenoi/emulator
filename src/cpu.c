@@ -4,6 +4,62 @@
 #include <stdio.h>
 #include <string.h>
 
+static int64_t sign_extend(uint64_t value, unsigned bits) {
+    uint64_t sign_bit = 1ull << (bits - 1u);
+    uint64_t mask = (1ull << bits) - 1ull;
+    value &= mask;
+    return (int64_t)((value ^ sign_bit) - sign_bit);
+}
+
+static bool checked_branch_target(uint64_t pc, int64_t offset, const Memory *memory, uint64_t *target, char *error,
+                                  size_t error_size) {
+    uint64_t result = 0;
+
+    if (offset < 0) {
+        uint64_t magnitude = (uint64_t)(-(offset + 1)) + 1ull;
+        if (magnitude > pc) {
+            snprintf(error, error_size, "branch target before memory: pc=0x%016" PRIx64 " offset=%" PRId64, pc,
+                     offset);
+            return false;
+        }
+        result = pc - magnitude;
+    } else {
+        uint64_t magnitude = (uint64_t)offset;
+        if (magnitude > UINT64_MAX - pc) {
+            snprintf(error, error_size, "branch target overflow: pc=0x%016" PRIx64 " offset=%" PRId64, pc,
+                     offset);
+            return false;
+        }
+        result = pc + magnitude;
+    }
+
+    if ((result & 0x3ull) != 0) {
+        snprintf(error, error_size, "misaligned branch target: target=0x%016" PRIx64, result);
+        return false;
+    }
+
+    if (result > (uint64_t)memory->size || memory->size - (size_t)result < sizeof(uint32_t)) {
+        snprintf(error, error_size, "branch target outside memory: target=0x%016" PRIx64, result);
+        return false;
+    }
+
+    *target = result;
+    return true;
+}
+
+static void set_sub_flags(Cpu *cpu, uint64_t left, uint64_t right, bool is_64_bit) {
+    uint64_t mask = is_64_bit ? UINT64_MAX : 0xffffffffull;
+    uint64_t sign_bit = is_64_bit ? (1ull << 63u) : (1ull << 31u);
+    uint64_t lhs = left & mask;
+    uint64_t rhs = right & mask;
+    uint64_t result = (lhs - rhs) & mask;
+
+    cpu->flags.n = (result & sign_bit) != 0;
+    cpu->flags.z = result == 0;
+    cpu->flags.c = lhs >= rhs;
+    cpu->flags.v = ((lhs ^ rhs) & (lhs ^ result) & sign_bit) != 0;
+}
+
 void cpu_init(Cpu *cpu, uint64_t pc, uint64_t sp) {
     memset(cpu, 0, sizeof(*cpu));
     cpu->pc = pc;
@@ -95,7 +151,115 @@ bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error
         return true;
     }
 
+    if ((opcode & 0x7c000000u) == 0x14000000u) {
+        uint32_t imm26 = opcode & 0x03ffffffu;
+
+        instruction->kind = EMU_INST_B;
+        instruction->offset = sign_extend(imm26, 26u) * 4;
+        return true;
+    }
+
+    if ((opcode & 0xff000010u) == 0x54000000u) {
+        uint8_t condition = (uint8_t)(opcode & 0xfu);
+        uint32_t imm19 = (opcode >> 5u) & 0x7ffffu;
+
+        if (condition == 0xfu) {
+            snprintf(error, error_size, "unsupported B.cond condition: opcode=0x%08x", opcode);
+            return false;
+        }
+
+        instruction->kind = EMU_INST_B_COND;
+        instruction->condition = (EmuCondition)condition;
+        instruction->offset = sign_extend(imm19, 19u) * 4;
+        return true;
+    }
+
+    if ((opcode & 0x7e000000u) == 0x34000000u) {
+        bool is_64_bit = ((opcode >> 31u) & 0x1u) != 0;
+        bool is_cbnz = ((opcode >> 24u) & 0x1u) != 0;
+        uint32_t imm19 = (opcode >> 5u) & 0x7ffffu;
+
+        instruction->kind = is_cbnz ? EMU_INST_CBNZ : EMU_INST_CBZ;
+        instruction->is_64_bit = is_64_bit;
+        instruction->rn = (uint8_t)(opcode & 0x1fu);
+        instruction->offset = sign_extend(imm19, 19u) * 4;
+        return true;
+    }
+
+    if ((opcode & 0x1f000000u) == 0x11000000u && ((opcode >> 30u) & 0x1u) == 1u &&
+        ((opcode >> 29u) & 0x1u) == 1u && (opcode & 0x1fu) == 0x1fu) {
+        bool is_64_bit = ((opcode >> 31u) & 0x1u) != 0;
+        uint8_t shift = (uint8_t)((opcode >> 22u) & 0x3u);
+        uint64_t imm = (opcode >> 10u) & 0xfffu;
+
+        if (shift > 1) {
+            snprintf(error, error_size, "unsupported CMP immediate shift: opcode=0x%08x", opcode);
+            return false;
+        }
+
+        instruction->kind = EMU_INST_CMP_IMM;
+        instruction->is_64_bit = is_64_bit;
+        instruction->rn = (uint8_t)((opcode >> 5u) & 0x1fu);
+        instruction->imm = imm << (shift == 1 ? 12u : 0u);
+        return true;
+    }
+
+    if ((opcode & 0x1f000000u) == 0x0b000000u && ((opcode >> 30u) & 0x1u) == 1u &&
+        ((opcode >> 29u) & 0x1u) == 1u && (opcode & 0x1fu) == 0x1fu) {
+        bool is_64_bit = ((opcode >> 31u) & 0x1u) != 0;
+        uint8_t shift = (uint8_t)((opcode >> 22u) & 0x3u);
+        uint8_t imm6 = (uint8_t)((opcode >> 10u) & 0x3fu);
+
+        if (shift != 0 || imm6 != 0) {
+            snprintf(error, error_size, "unsupported shifted CMP register: opcode=0x%08x", opcode);
+            return false;
+        }
+
+        instruction->kind = EMU_INST_CMP_REG;
+        instruction->is_64_bit = is_64_bit;
+        instruction->rn = (uint8_t)((opcode >> 5u) & 0x1fu);
+        instruction->rm = (uint8_t)((opcode >> 16u) & 0x1fu);
+        return true;
+    }
+
     snprintf(error, error_size, "unsupported instruction: opcode=0x%08x", opcode);
+    return false;
+}
+
+bool cpu_condition_passed(EmuFlags flags, EmuCondition condition) {
+    switch (condition) {
+    case EMU_COND_EQ:
+        return flags.z;
+    case EMU_COND_NE:
+        return !flags.z;
+    case EMU_COND_CS:
+        return flags.c;
+    case EMU_COND_CC:
+        return !flags.c;
+    case EMU_COND_MI:
+        return flags.n;
+    case EMU_COND_PL:
+        return !flags.n;
+    case EMU_COND_VS:
+        return flags.v;
+    case EMU_COND_VC:
+        return !flags.v;
+    case EMU_COND_HI:
+        return flags.c && !flags.z;
+    case EMU_COND_LS:
+        return !flags.c || flags.z;
+    case EMU_COND_GE:
+        return flags.n == flags.v;
+    case EMU_COND_LT:
+        return flags.n != flags.v;
+    case EMU_COND_GT:
+        return !flags.z && flags.n == flags.v;
+    case EMU_COND_LE:
+        return flags.z || flags.n != flags.v;
+    case EMU_COND_AL:
+        return true;
+    }
+
     return false;
 }
 
@@ -142,6 +306,60 @@ EmuStatus cpu_step(Cpu *cpu, const Memory *memory, char *error, size_t error_siz
         cpu->pc += 4;
         break;
     }
+
+    case EMU_INST_B: {
+        uint64_t target = 0;
+        if (!checked_branch_target(current_pc, instruction.offset, memory, &target, error, error_size)) {
+            return EMU_ERROR;
+        }
+        cpu->pc = target;
+        break;
+    }
+
+    case EMU_INST_B_COND: {
+        if (cpu_condition_passed(cpu->flags, instruction.condition)) {
+            uint64_t target = 0;
+            if (!checked_branch_target(current_pc, instruction.offset, memory, &target, error, error_size)) {
+                return EMU_ERROR;
+            }
+            cpu->pc = target;
+        } else {
+            cpu->pc += 4;
+        }
+        break;
+    }
+
+    case EMU_INST_CBZ:
+    case EMU_INST_CBNZ: {
+        uint64_t value = cpu_read_register(cpu, instruction.rn);
+        if (!instruction.is_64_bit) {
+            value &= 0xffffffffull;
+        }
+
+        bool is_zero = value == 0;
+        bool should_branch = instruction.kind == EMU_INST_CBZ ? is_zero : !is_zero;
+        if (should_branch) {
+            uint64_t target = 0;
+            if (!checked_branch_target(current_pc, instruction.offset, memory, &target, error, error_size)) {
+                return EMU_ERROR;
+            }
+            cpu->pc = target;
+        } else {
+            cpu->pc += 4;
+        }
+        break;
+    }
+
+    case EMU_INST_CMP_IMM:
+        set_sub_flags(cpu, cpu_read_register(cpu, instruction.rn), instruction.imm, instruction.is_64_bit);
+        cpu->pc += 4;
+        break;
+
+    case EMU_INST_CMP_REG:
+        set_sub_flags(cpu, cpu_read_register(cpu, instruction.rn), cpu_read_register(cpu, instruction.rm),
+                      instruction.is_64_bit);
+        cpu->pc += 4;
+        break;
     }
 
     cpu->instructions_executed++;

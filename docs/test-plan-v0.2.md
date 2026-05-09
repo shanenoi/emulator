@@ -45,6 +45,30 @@ The goal of v0.2 is to make the emulator capable of running small loops and simp
 
 ## Required instruction support
 
+## Current implementation notes
+
+This implementation pass adds the v0.2 runtime features but intentionally does **not** add the v0.2 automated tests yet.
+
+Implemented now:
+
+- `B`
+- `B.cond`
+- `CBZ` / `CBNZ`
+- `CMP Xn, #imm` / `CMP Wn, #imm`
+- `CMP Xn, Xm` / `CMP Wn, Wm`, unshifted only
+- NZCV updates for compare/subtract semantics
+- condition evaluation for common ARM64 conditions
+- `./emulator trace <raw-binary>`
+- v0.2 assembly examples under `examples/v0_2/`
+
+Deferred for v0.2 unless deliberately added later:
+
+- `ADD Xd, Xn, Xm` / `ADD Wd, Wn, Wm`
+- shifted `CMP register` forms
+- v0.2 automated tests
+
+The existing v0.1 test suite must continue to pass throughout v0.2 development.
+
 v0.2 must support the following new instructions.
 
 ### Required branch/control-flow instructions

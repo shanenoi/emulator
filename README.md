@@ -21,10 +21,11 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 ## Education
 
 - [v0.1 Learning Guide — Understanding the Emulator](education/v0.1-learning-guide.md)
+- [v0.2 Learning Guide — Branches, Flags, and Loops](education/v0.2-learning-guide.md)
 
 ## Current Implementation Status
 
-The repository currently contains the first development pass for **v0.1 — Instruction Sandbox**.
+The repository currently contains the first development pass for **v0.2 — Branches and Loops**.
 
 Implemented now:
 
@@ -33,6 +34,7 @@ Implemented now:
 
 ```sh
 ./emulator run <raw-binary>
+./emulator trace <raw-binary>
 ```
 
 - Fixed 1 MiB flat memory.
@@ -47,7 +49,14 @@ Implemented now:
   - `MOVZ`
   - `ADD` immediate
   - `SUB` immediate
+  - `B`
+  - `B.cond`
+  - `CBZ`
+  - `CBNZ`
+  - `CMP` immediate
+  - `CMP` register, unshifted
 - Basic examples in `examples/v0_1/`.
+- Branch and loop examples in `examples/v0_2/`.
 - Automated v0.1 test suite following `docs/test-plan-v0.1.md`:
   - unit tests for CPU, memory, loader, fetch, and decode behavior
   - integration tests for supported instructions and edge cases
@@ -73,19 +82,31 @@ Run the v0.1 add demo:
 ./emulator run examples/v0_1/add.bin
 ```
 
+Run the v0.2 countdown-loop demo:
+
+```sh
+./emulator run examples/v0_2/cbnz_countdown.bin
+```
+
+Run the same style of program with trace output:
+
+```sh
+./emulator trace examples/v0_2/trace_loop.bin
+```
+
 Or build and run the main demo in one command:
 
 ```sh
 make run-demo
 ```
 
-Run the v0.1 automated test suite:
+Run the current automated test suite:
 
 ```sh
 make test
 ```
 
-The test target builds the emulator, compiles the C unit/integration test runner, assembles the v0.1 examples, and runs CLI checks.
+The test target currently builds the emulator, compiles the v0.1 C unit/integration test runner, assembles examples, and runs v0.1 CLI checks. v0.2 implementation is present, but v0.2 automated tests have not been added yet.
 
 Expected result includes:
 
@@ -114,12 +135,25 @@ These decisions come from the v0.1 test plan:
 
 Known v0.1 limitations:
 
-- No branches yet.
+- Branches are supported starting in v0.2.
 - No load/store ARM64 instructions yet.
 - No stack operations yet.
 - No ELF or Mach-O loader yet.
 - No syscalls yet.
 - No debugger REPL yet.
+
+## v0.2 Implementation Decisions
+
+These decisions come from the v0.2 test plan and current implementation pass:
+
+- Branch offsets are decoded as signed byte offsets relative to the branch instruction address.
+- Taken branch targets must be 4-byte aligned and inside emulator memory.
+- Not-taken conditional branches advance `pc` by `4`.
+- `CMP` updates NZCV flags and does not write a general-purpose destination register.
+- Supported condition checks include the full common ARM64 condition set: `EQ`, `NE`, `CS`, `CC`, `MI`, `PL`, `VS`, `VC`, `HI`, `LS`, `GE`, `LT`, `GT`, `LE`, and `AL`.
+- `CBZ` and `CBNZ` support both 64-bit `x` and 32-bit `w` forms; 32-bit forms compare only the lower 32 bits.
+- Trace mode uses `./emulator trace <raw-binary>` and prints each executed `pc` before the final register dump.
+- `ADD register` is intentionally deferred because v0.2 examples use immediate addition.
 
 ## Planned Versions
 
@@ -202,12 +236,12 @@ Add behavior:
 Demo program idea:
 
 ```asm
-mov x0, #5      // counter
-mov x1, #0      // sum
+movz x0, #5     // counter
+movz x1, #0     // loop count
 
 loop:
-add x1, x1, x0
-sub x0, x0, #1
+add  x1, x1, #1
+sub  x0, x0, #1
 cbnz x0, loop
 
 hlt #0
@@ -216,7 +250,8 @@ hlt #0
 Expected result:
 
 ```text
-x1 = 15
+x0 = 0
+x1 = 5
 ```
 
 Definition of done:

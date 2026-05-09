@@ -29,7 +29,18 @@ $(TARGET): $(OBJ)
 %.o: %.c include/emulator.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-examples: examples/v0_1/add.bin examples/v0_1/nop_hlt.bin examples/v0_1/sub.bin
+V0_1_EXAMPLES := examples/v0_1/add.bin examples/v0_1/nop_hlt.bin examples/v0_1/sub.bin
+V0_2_EXAMPLES := \
+	examples/v0_2/branch_forward.bin \
+	examples/v0_2/cbnz_countdown.bin \
+	examples/v0_2/cbz_skip.bin \
+	examples/v0_2/cmp_beq.bin \
+	examples/v0_2/cmp_bne.bin \
+	examples/v0_2/signed_compare_lt_ge.bin \
+	examples/v0_2/infinite_branch.bin \
+	examples/v0_2/trace_loop.bin
+
+examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES)
 
 examples/v0_1/%.o: examples/v0_1/%.s
 	clang --target=aarch64-none-elf -c $< -o $@
@@ -37,12 +48,19 @@ examples/v0_1/%.o: examples/v0_1/%.s
 examples/v0_1/%.bin: examples/v0_1/%.o
 	llvm-objcopy -O binary -j .text $< $@
 
+examples/v0_2/%.o: examples/v0_2/%.s
+	clang --target=aarch64-none-elf -c $< -o $@
+
+examples/v0_2/%.bin: examples/v0_2/%.o
+	llvm-objcopy -O binary -j .text $< $@
+
 run-demo: all examples/v0_1/add.bin
 	./$(TARGET) run examples/v0_1/add.bin
 
 clean:
 	rm -f $(TARGET) $(OBJ) tests/v0_1/*.o tests/v0_1/test_v0_1 \
-		examples/v0_1/*.o examples/v0_1/*.bin tests/v0_1/tmp/*
+		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
+		tests/v0_1/tmp/*
 
 tests/v0_1/test_v0_1: tests/v0_1/test_v0_1.o $(CORE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^

@@ -10,6 +10,8 @@ bool emulator_init(Emulator *emu, char *error, size_t error_size) {
     }
     cpu_init(&emu->cpu, EMU_LOAD_ADDRESS, EMU_MEMORY_SIZE);
     emu->instruction_limit = EMU_DEFAULT_INSTRUCTION_LIMIT;
+    emu->trace_enabled = false;
+    emu->trace_stream = stdout;
     return true;
 }
 
@@ -23,6 +25,11 @@ EmuStatus emulator_run(Emulator *emu, char *error, size_t error_size) {
             snprintf(error, error_size, "execution error: instruction limit reached: 0x%016llx",
                      (unsigned long long)emu->instruction_limit);
             return EMU_ERROR;
+        }
+
+        if (emu->trace_enabled) {
+            FILE *stream = emu->trace_stream != NULL ? emu->trace_stream : stdout;
+            fprintf(stream, "trace pc=0x%016llx\n", (unsigned long long)emu->cpu.pc);
         }
 
         EmuStatus status = cpu_step(&emu->cpu, &emu->memory, error, error_size);
