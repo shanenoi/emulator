@@ -1340,6 +1340,8 @@ hlt  #0
 
 If `ADD register` is deferred, use an immediate-counting loop instead and document that full sum-loop acceptance is deferred.
 
+**Current v0.2 decision:** `ADD register` remains deferred. The release covers the immediate-counting loop variant through the countdown/counter examples. Full sum-loop acceptance using `add x1, x1, x0` is deferred until `ADD register` is implemented.
+
 ### TC-V02-ACC-003 — `CMP` + condition demo
 
 **Program:**

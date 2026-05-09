@@ -48,6 +48,16 @@ require_contains "$TMP_DIR/cmp_loop.out" "halted"
 require_contains "$TMP_DIR/cmp_loop.out" "x0  = 0x0000000000000005"
 require_contains "$TMP_DIR/cmp_loop.out" "x1  = 0x0000000000000005"
 
+# TC-V02-CLI-001: run supports a forward unconditional branch example.
+./emulator run examples/v0_2/branch_forward.bin >"$TMP_DIR/branch_forward.out" 2>"$TMP_DIR/branch_forward.err"
+require_contains "$TMP_DIR/branch_forward.out" "halted"
+require_contains "$TMP_DIR/branch_forward.out" "x0  = 0x0000000000000001"
+
+# TC-V02-CLI-001: run supports a terminating backward unconditional branch example.
+./emulator run examples/v0_2/branch_backward_loop.bin >"$TMP_DIR/branch_backward.out" 2>"$TMP_DIR/branch_backward.err"
+require_contains "$TMP_DIR/branch_backward.out" "halted"
+require_contains "$TMP_DIR/branch_backward.out" "x0  = 0x0000000000000000"
+
 # TC-V02-TRACE-001/002/004 and TC-V02-ACC-004: trace prints PCs and final dump.
 ./emulator trace examples/v0_2/trace_loop.bin >"$TMP_DIR/trace.out" 2>"$TMP_DIR/trace.err"
 require_contains "$TMP_DIR/trace.out" "trace pc=0x0000000000001000"

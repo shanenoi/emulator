@@ -1,6 +1,8 @@
 emulator
 tests/v0_1/test_v0_1
 tests/v0_1/tmp/
+tests/v0_2/test_v0_2
+tests/v0_2/tmp/
 *.o
 *.bin
 *.dSYM/

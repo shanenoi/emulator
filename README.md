@@ -162,6 +162,7 @@ These decisions come from the v0.2 test plan and current implementation pass:
 - `CBZ` and `CBNZ` support both 64-bit `x` and 32-bit `w` forms; 32-bit forms compare only the lower 32 bits.
 - Trace mode uses `./emulator trace <raw-binary>` and prints each executed `pc` before the final register dump.
 - `ADD register` is intentionally deferred because v0.2 examples use immediate addition.
+- Full sum-loop acceptance using `add x1, x1, x0` is deferred with `ADD register`; v0.2 covers the immediate-counting loop variant instead.
 - `CMP` immediate supports the ARM64 immediate shift forms accepted by the decoder: unshifted and `lsl #12`.
 - `CMP` register is intentionally limited to unshifted register operands in v0.2.
 
