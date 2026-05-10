@@ -99,6 +99,11 @@ Implemented now:
   - `breakpoints`
   - `trace on` / `trace off`
   - `quit` / `q`
+- Debugger command parsing rejects unexpected extra arguments and reports overlong input lines cleanly.
+- Debugger scripts in `examples/v0_5/`:
+  - `debug_add_script.txt`
+  - `debug_function_script.txt`
+  - `debug_memory_script.txt`
 - Automated test suites following `docs/test-plan-v0.1.md`, `docs/test-plan-v0.2.md`, `docs/test-plan-v0.3.md`, and `docs/test-plan-v0.4.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -171,6 +176,14 @@ The debugger is stdin-scriptable, so it can also be used non-interactively:
 
 ```sh
 printf 'break 0x1008\nrun\nregs\ncontinue\nquit\n' | ./emulator debug examples/v0_1/add.bin
+```
+
+Run a checked-in debugger script:
+
+```sh
+./emulator debug examples/v0_1/add.bin < examples/v0_5/debug_add_script.txt
+./emulator debug examples/v0_4/simple_call.bin < examples/v0_5/debug_function_script.txt
+./emulator debug examples/v0_3/memory_store_load.bin < examples/v0_5/debug_memory_script.txt
 ```
 
 Or build and run the main demo in one command:
@@ -526,7 +539,10 @@ Debugger behavior:
 - Step exactly one instruction.
 - Continue until breakpoint, halt, or error.
 - Print registers in a stable, readable format.
-- Print memory as hex bytes and optionally 64-bit words.
+- Print memory as hex bytes.
+- Reject unexpected extra command arguments with usage errors.
+- Report overlong input lines cleanly without executing partial commands.
+- Provide script examples in `examples/v0_5/`.
 
 Definition of done:
 

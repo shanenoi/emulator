@@ -1,0 +1,4 @@
+# v0.5 debugger script: run a memory example and inspect the stored value.
+run
+mem 0xffff8 8
+quit

@@ -1,0 +1,6 @@
+# v0.5 debugger script: stop before the add instruction in the v0.1 add demo.
+break 0x1008
+run
+regs
+continue
+quit

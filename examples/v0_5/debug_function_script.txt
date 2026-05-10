@@ -1,0 +1,7 @@
+# v0.5 debugger script: observe a simple function call.
+trace on
+break 0x100c
+run
+regs
+continue
+quit

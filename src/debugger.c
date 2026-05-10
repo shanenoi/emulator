@@ -60,6 +60,25 @@ static char *next_token(char **cursor) {
     return start;
 }
 
+static bool has_extra_tokens(char **cursor) {
+    return next_token(cursor) != NULL;
+}
+
+static bool require_no_extra_args(char **cursor, const char *usage, FILE *error_stream) {
+    if (has_extra_tokens(cursor)) {
+        fprintf(error_stream, "error: usage: %s\n", usage);
+        return false;
+    }
+    return true;
+}
+
+static void consume_overlong_line(FILE *input) {
+    int ch = 0;
+    while ((ch = fgetc(input)) != '\n' && ch != EOF) {
+        /* discard remaining characters */
+    }
+}
+
 static void debugger_print_help(FILE *stream) {
     fprintf(stream, "commands:\n");
     fprintf(stream, "  help                         show this help\n");
@@ -284,6 +303,14 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
             return 0;
         }
 
+        size_t line_length = strlen(line);
+        if (line_length > 0 && line[line_length - 1u] != '\n' && !feof(input)) {
+            consume_overlong_line(input);
+            fprintf(error_stream, "error: input line too long; maximum is %u characters\n",
+                    (unsigned)(DEBUGGER_LINE_SIZE - 2u));
+            continue;
+        }
+
         trim_right(line);
         char *cursor = line;
         char *command = next_token(&cursor);
@@ -292,23 +319,35 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
         }
 
         if (strcmp(command, "quit") == 0 || strcmp(command, "q") == 0) {
+            if (!require_no_extra_args(&cursor, "quit", error_stream)) {
+                continue;
+            }
             return 0;
         }
         if (strcmp(command, "help") == 0) {
+            if (!require_no_extra_args(&cursor, "help", error_stream)) {
+                continue;
+            }
             debugger_print_help(output);
             continue;
         }
         if (strcmp(command, "regs") == 0) {
+            if (!require_no_extra_args(&cursor, "regs", error_stream)) {
+                continue;
+            }
             cpu_dump(&debugger->emu.cpu, output);
             continue;
         }
         if (strcmp(command, "breakpoints") == 0) {
+            if (!require_no_extra_args(&cursor, "breakpoints", error_stream)) {
+                continue;
+            }
             debugger_list_breakpoints(debugger, output);
             continue;
         }
         if (strcmp(command, "trace") == 0) {
             char *mode = next_token(&cursor);
-            if (mode == NULL) {
+            if (mode == NULL || has_extra_tokens(&cursor)) {
                 fprintf(error_stream, "error: usage: trace on|off\n");
             } else if (strcmp(mode, "on") == 0) {
                 debugger->emu.trace_enabled = true;
@@ -327,7 +366,8 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
             char *length_text = next_token(&cursor);
             uint64_t address = 0;
             uint64_t length = 0;
-            if (address_text == NULL || length_text == NULL || !parse_u64_debug(address_text, &address) ||
+            if (address_text == NULL || length_text == NULL || has_extra_tokens(&cursor) ||
+                !parse_u64_debug(address_text, &address) ||
                 !parse_u64_debug(length_text, &length)) {
                 fprintf(error_stream, "error: usage: mem <address> <length>\n");
                 continue;
@@ -340,7 +380,7 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
         if (strcmp(command, "break") == 0 || strcmp(command, "b") == 0) {
             char *address_text = next_token(&cursor);
             uint64_t address = 0;
-            if (address_text == NULL || !parse_u64_debug(address_text, &address)) {
+            if (address_text == NULL || has_extra_tokens(&cursor) || !parse_u64_debug(address_text, &address)) {
                 fprintf(error_stream, "error: usage: break <address>\n");
                 continue;
             }
@@ -354,7 +394,7 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
         if (strcmp(command, "delete") == 0) {
             char *target_text = next_token(&cursor);
             uint64_t target = 0;
-            if (target_text == NULL || !parse_u64_debug(target_text, &target)) {
+            if (target_text == NULL || has_extra_tokens(&cursor) || !parse_u64_debug(target_text, &target)) {
                 fprintf(error_stream, "error: usage: delete <breakpoint-id-or-address>\n");
                 continue;
             }
@@ -366,12 +406,18 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
             continue;
         }
         if (strcmp(command, "step") == 0 || strcmp(command, "s") == 0) {
+            if (!require_no_extra_args(&cursor, "step", error_stream)) {
+                continue;
+            }
             EmuStatus status = debugger_step(debugger, error, sizeof(error));
             fprintf(output, "pc=0x%016" PRIx64 "\n", debugger->emu.cpu.pc);
             debugger_print_stop(status, error, output, error_stream);
             continue;
         }
         if (strcmp(command, "continue") == 0 || strcmp(command, "c") == 0) {
+            if (!require_no_extra_args(&cursor, "continue", error_stream)) {
+                continue;
+            }
             EmuStatus status = debugger_continue(debugger, error, sizeof(error));
             if (status == EMU_OK && debugger->stopped_at_breakpoint) {
                 fprintf(output, "%s\n", error);
@@ -381,6 +427,9 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
             continue;
         }
         if (strcmp(command, "run") == 0 || strcmp(command, "r") == 0) {
+            if (!require_no_extra_args(&cursor, "run", error_stream)) {
+                continue;
+            }
             if (!debugger_reset(debugger, error, sizeof(error))) {
                 fprintf(error_stream, "error: %s\n", error);
                 continue;

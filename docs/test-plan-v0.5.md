@@ -76,7 +76,7 @@ printf 'break 0x1008\nrun\nregs\nquit\n' | ./emulator debug examples/v0_1/add.bi
 
 ## Implementation Assumptions
 
-Current v0.5 runtime implementation status: **implemented**, with automated v0.5 tests still pending.
+Current v0.5 runtime implementation status: **implemented**, with automated v0.5 tests still pending. Debugger script examples are present in `examples/v0_5/`.
 
 These assumptions are now implementation decisions and should be tested during the v0.5 test pass.
 
@@ -176,6 +176,19 @@ breakpoints
 trace on
 trace off
 quit / q
+```
+
+Current parser behavior:
+
+- commands reject unexpected extra arguments, for example `regs extra` and `trace on extra` return usage errors.
+- input lines longer than the REPL buffer are consumed and reported as overlong instead of being split into multiple commands.
+
+Current script examples:
+
+```text
+examples/v0_5/debug_add_script.txt
+examples/v0_5/debug_function_script.txt
+examples/v0_5/debug_memory_script.txt
 ```
 
 ## Test Categories
@@ -1303,7 +1316,7 @@ examples/v0_5/debug_function_script.txt
 examples/v0_5/debug_memory_script.txt
 ```
 
-Examples are optional, but they are useful as documentation for humans.
+These examples are now present and should be kept in sync with debugger behavior.
 
 ---
 
