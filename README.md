@@ -243,7 +243,7 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, assembles all examples, compiles the v0.1 through v0.5 C test runners, and runs all v0.1 through v0.5 CLI checks.
+The test target currently builds the emulator, assembles all examples, compiles the v0.1 through v0.6 C test runners, and runs all v0.1 through v0.6 CLI checks. v0.7 implementation code and examples are present, but v0.7 automated tests have not been added yet.
 
 ## IDE and Language Server Setup
 
@@ -634,43 +634,42 @@ Definition of done:
 - Trace output is readable enough to use in README demos.
 - Unknown instructions report the raw opcode and address.
 
-### v0.7 — Fake Syscalls
+### v0.7 — Toy Syscalls and Standalone Programs
 
-**Goal:** allow small programs to interact with the host through a simple emulator ABI.
+**Goal:** allow small raw ARM64 programs to interact with the host through a small deterministic emulator ABI.
 
-Add instruction support:
+Implemented instruction support:
 
-- `SVC`
+- `SVC #0`
 
-Add fake syscall dispatcher:
+Implemented fake syscall dispatcher:
 
 ```text
 x8 = syscall number
-x0-x5 = arguments
+x0-x2 = arguments for write(fd, ptr, len)
 x0 = return value
 ```
 
-Suggested initial syscalls:
+Implemented syscalls:
 
 ```text
-1 = exit(code)
-2 = write(fd, ptr, len)
-3 = read(fd, ptr, len)       // optional in this version
-4 = time()                   // optional
-5 = random()                 // optional
+64 = write(fd, ptr, len)
+93 = exit(status)
 ```
+
+`write` supports fd `1` for stdout and fd `2` for stderr. Unsupported fds return fake `-EBADF` in `x0`. Unknown syscall numbers return fake `-ENOSYS` in `x0`. Invalid guest write buffers are runtime errors because they are invalid emulated memory accesses rather than recoverable syscall failures.
 
 Demo program idea:
 
 ```asm
 mov x0, #1          // stdout
-adr x1, message
+mov x1, #message    // guest address of message bytes
 mov x2, #13
-mov x8, #2          // write
+mov x8, #64         // write
 svc #0
 
 mov x0, #0
-mov x8, #1          // exit
+mov x8, #93         // exit
 svc #0
 
 message:
@@ -681,14 +680,15 @@ Expected result:
 
 ```text
 hello world!
-program exited with code 0
 ```
 
 Definition of done:
 
 - A program can print text through `write`.
 - A program can terminate through `exit`.
-- Invalid syscall numbers produce clear errors or return a documented error code.
+- Guest exit status maps to the host CLI exit status.
+- Unsupported fds and syscall numbers produce documented fake errno-style return values.
+- Invalid guest memory ranges produce clear runtime errors.
 
 ### v0.8 — ELF Loader
 
