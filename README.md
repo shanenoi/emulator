@@ -159,6 +159,36 @@ make test
 
 The test target currently builds the emulator, compiles the v0.1 through v0.4 C test runners, assembles examples, and runs all v0.1 through v0.4 CLI checks.
 
+## IDE and Language Server Setup
+
+The project includes two small configuration files for IDEs that use `clangd` or a Clang-based language server:
+
+```text
+.clangd
+compile_flags.txt
+```
+
+Both files teach the IDE to use the same important compile flags as the Makefile, especially:
+
+```text
+-Iinclude
+-std=c11
+```
+
+Without these flags, an IDE may open a single `.c` file in isolation and incorrectly report errors such as:
+
+```text
+'emulator.h' file not found
+Unknown type name 'bool'
+Unknown type name 'Emulator'
+```
+
+Those are IDE configuration errors, not project build errors. From the repository root, the source of truth remains:
+
+```sh
+make clean && make test
+```
+
 Expected result includes:
 
 ```text
