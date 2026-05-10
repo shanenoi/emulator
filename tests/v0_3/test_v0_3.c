@@ -220,6 +220,22 @@ static void test_decode_unscaled_writeback_and_pair(void) {
     EXPECT_KIND(inst.kind, EMU_INST_STUR);
     EXPECT_I64_EQ(inst.offset, -16);
 
+    decode_or_die(encode_load_store_unscaled_or_wb(true, false, 4, 5, 12, EMU_ADDR_UNSCALED), &inst);
+    EXPECT_KIND(inst.kind, EMU_INST_LDUR);
+    EXPECT_FALSE(inst.is_64_bit);
+    EXPECT_U64_EQ(inst.rd, 4);
+    EXPECT_U64_EQ(inst.rn, 5);
+    EXPECT_I64_EQ(inst.offset, 12);
+    EXPECT_U64_EQ(inst.access_size, 4);
+
+    decode_or_die(encode_load_store_unscaled_or_wb(false, false, 6, 7, -4, EMU_ADDR_UNSCALED), &inst);
+    EXPECT_KIND(inst.kind, EMU_INST_STUR);
+    EXPECT_FALSE(inst.is_64_bit);
+    EXPECT_U64_EQ(inst.rd, 6);
+    EXPECT_U64_EQ(inst.rn, 7);
+    EXPECT_I64_EQ(inst.offset, -4);
+    EXPECT_U64_EQ(inst.access_size, 4);
+
     decode_or_die(encode_load_store_unscaled_or_wb(false, true, 0, 31, -8, EMU_ADDR_PRE_INDEX), &inst);
     EXPECT_KIND(inst.kind, EMU_INST_STR);
     EXPECT_MODE(inst.address_mode, EMU_ADDR_PRE_INDEX);
@@ -320,6 +336,20 @@ static void test_basic_load_store_execution(void) {
     EXPECT_U64_EQ(emu.cpu.x[5], EMU_MEMORY_SIZE - 32u);
     EXPECT_U64_EQ(emu.cpu.sp, EMU_MEMORY_SIZE);
     emulator_free(&emu);
+
+    init_emulator_or_die(&emu);
+    emu.cpu.x[5] = EMU_MEMORY_SIZE - 64u;
+    emu.cpu.x[0] = 0xffffffff12345678ull;
+    const uint32_t stur_w_ldur_w[] = {encode_load_store_unscaled_or_wb(false, false, 0, 5, -4, EMU_ADDR_UNSCALED),
+                                      encode_load_store_unscaled_or_wb(true, false, 1, 5, -4, EMU_ADDR_UNSCALED),
+                                      OP_HLT};
+    load_program(&emu, stur_w_ldur_w, 3);
+    EXPECT_STATUS(emulator_run(&emu, error, sizeof(error)), EMU_HALTED);
+    EXPECT_TRUE(memory_read32(&emu.memory, EMU_MEMORY_SIZE - 68u, &value32, error, sizeof(error)));
+    EXPECT_U64_EQ(value32, 0x12345678u);
+    EXPECT_U64_EQ(emu.cpu.x[1], 0x0000000012345678ull);
+    EXPECT_U64_EQ(emu.cpu.x[5], EMU_MEMORY_SIZE - 64u);
+    emulator_free(&emu);
 }
 
 static void test_stack_and_pair_execution(void) {
@@ -377,6 +407,22 @@ static void test_stack_and_pair_execution(void) {
     EXPECT_U64_EQ(emu.cpu.x[2], 100);
     EXPECT_U64_EQ(emu.cpu.x[3], 200);
     EXPECT_U64_EQ(emu.cpu.sp, EMU_MEMORY_SIZE);
+    emulator_free(&emu);
+
+    init_emulator_or_die(&emu);
+    emu.cpu.x[5] = EMU_MEMORY_SIZE - 64u;
+    const uint32_t pair_offset_round_trip[] = {OP_MOVZ_X0_11, OP_MOVZ_X1_22,
+                                              encode_pair(false, 0, 1, 5, 16, EMU_ADDR_PAIR_OFFSET),
+                                              encode_pair(true, 2, 3, 5, 16, EMU_ADDR_PAIR_OFFSET), OP_HLT};
+    load_program(&emu, pair_offset_round_trip, 5);
+    EXPECT_STATUS(emulator_run(&emu, error, sizeof(error)), EMU_HALTED);
+    EXPECT_U64_EQ(emu.cpu.x[2], 11);
+    EXPECT_U64_EQ(emu.cpu.x[3], 22);
+    EXPECT_U64_EQ(emu.cpu.x[5], EMU_MEMORY_SIZE - 64u);
+    EXPECT_TRUE(memory_read64(&emu.memory, EMU_MEMORY_SIZE - 48u, &value64, error, sizeof(error)));
+    EXPECT_U64_EQ(value64, 11);
+    EXPECT_TRUE(memory_read64(&emu.memory, EMU_MEMORY_SIZE - 40u, &value64, error, sizeof(error)));
+    EXPECT_U64_EQ(value64, 22);
     emulator_free(&emu);
 }
 

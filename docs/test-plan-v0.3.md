@@ -614,6 +614,16 @@ hlt  #0
 - `x3 == 200`.
 - Final `sp == 0x100000`.
 
+### TC-V03-EXEC-PAIR-004 — Pair offset round trip keeps base unchanged
+
+**Program:** store/load a pair through `[x5, #16]` with no write-back.
+
+**Expected result:**
+
+- Loaded registers match the stored pair values.
+- Base register `x5` is unchanged.
+- Memory at `x5 + 16` and `x5 + 24` contains the stored 64-bit values.
+
 ## 8. Register-31 semantics tests
 
 ### TC-V03-SP-001 — Base register `31` means `SP` for memory access

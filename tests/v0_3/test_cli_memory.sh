@@ -70,6 +70,7 @@ require_contains "$TMP_DIR/stderr.txt" "dump range out of bounds"
 # TC-V03-CLI-002: missing/invalid dump arguments print usage and fail.
 require_not_success ./emulator dump examples/v0_3/memory_store_load.bin
 require_contains "$TMP_DIR/stderr.txt" "usage: emulator run <raw-binary>"
+require_contains "$TMP_DIR/stderr.txt" "emulator dump <raw-binary> <address> <length>"
 require_not_success ./emulator dump examples/v0_3/memory_store_load.bin nope 8
 require_contains "$TMP_DIR/stderr.txt" "invalid dump address or length"
 

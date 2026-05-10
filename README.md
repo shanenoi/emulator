@@ -197,7 +197,7 @@ These decisions come from the v0.3 test plan and current implementation pass:
 - `STR Wt` writes only the low 32 bits of the source register.
 - Unsigned-offset `LDR` / `STR` offsets are scaled by access size.
 - `LDUR` / `STUR`, pre-index, and post-index offsets are signed byte offsets.
-- `STP` / `LDP` are implemented for 64-bit pair stack examples.
+- `STP` / `LDP` are implemented for 64-bit offset, pre-index, and post-index pair forms.
 - Failed loads/stores do not update destination registers or write-back bases.
 - Failed stores and pair operations do not partially modify memory.
 - Data load/store operations allow unaligned addresses because memory is byte-addressed; instruction fetch remains 4-byte aligned.
