@@ -39,6 +39,100 @@ static bool check_data_range(const Memory *memory, uint64_t address, uint8_t wid
     return true;
 }
 
+static uint64_t mask_for_width(bool is_64_bit) {
+    return is_64_bit ? UINT64_MAX : 0xffffffffull;
+}
+
+static unsigned bits_for_width(bool is_64_bit) {
+    return is_64_bit ? 64u : 32u;
+}
+
+static uint64_t read_gp_width(const Cpu *cpu, uint8_t index, bool is_64_bit) {
+    uint64_t value = cpu_read_register(cpu, index);
+    return is_64_bit ? value : (value & 0xffffffffull);
+}
+
+static uint64_t apply_shift(uint64_t value, uint8_t shift_type, uint8_t amount, bool is_64_bit) {
+    value &= mask_for_width(is_64_bit);
+    if (amount == 0) {
+        return value;
+    }
+
+    switch (shift_type) {
+    case 0: /* LSL */
+        return (value << amount) & mask_for_width(is_64_bit);
+    case 1: /* LSR */
+        return value >> amount;
+    case 2: { /* ASR */
+        if (is_64_bit) {
+            return (uint64_t)(((int64_t)value) >> amount);
+        }
+        return (uint32_t)(((int32_t)(uint32_t)value) >> amount);
+    }
+    default:
+        return value;
+    }
+}
+
+static bool memory_read_width(const Memory *memory, uint64_t address, uint8_t access_size, uint64_t *out, char *error,
+                              size_t error_size) {
+    uint8_t value8 = 0;
+    uint32_t value32 = 0;
+    uint64_t value64 = 0;
+
+    switch (access_size) {
+    case 1:
+        if (!memory_read8(memory, address, &value8, error, error_size)) {
+            return false;
+        }
+        *out = value8;
+        return true;
+    case 2:
+        if (!check_data_range(memory, address, 2, error, error_size)) {
+            return false;
+        }
+        *out = (uint64_t)memory->bytes[address] | ((uint64_t)memory->bytes[address + 1u] << 8u);
+        return true;
+    case 4:
+        if (!memory_read32(memory, address, &value32, error, error_size)) {
+            return false;
+        }
+        *out = value32;
+        return true;
+    case 8:
+        if (!memory_read64(memory, address, &value64, error, error_size)) {
+            return false;
+        }
+        *out = value64;
+        return true;
+    default:
+        snprintf(error, error_size, "unsupported access size: %u", (unsigned)access_size);
+        return false;
+    }
+}
+
+static bool memory_write_width(Memory *memory, uint64_t address, uint8_t access_size, uint64_t value, char *error,
+                               size_t error_size) {
+    switch (access_size) {
+    case 1:
+        return memory_write8(memory, address, (uint8_t)value, error, error_size);
+    case 2:
+        if (!check_data_range(memory, address, 2, error, error_size)) {
+            return false;
+        }
+        memory->bytes[address] = (uint8_t)(value & 0xffu);
+        memory->bytes[address + 1u] = (uint8_t)((value >> 8u) & 0xffu);
+        return true;
+    case 4:
+        return memory_write32(memory, address, (uint32_t)value, error, error_size);
+    case 8:
+        return memory_write64(memory, address, value, error, error_size);
+    default:
+        snprintf(error, error_size, "unsupported access size: %u", (unsigned)access_size);
+        return false;
+    }
+}
+
 static void add_instruction_context(char *error, size_t error_size, uint64_t pc, uint32_t opcode) {
     char detail[256];
     snprintf(detail, sizeof(detail), "%s", error);
@@ -104,6 +198,19 @@ static void set_sub_flags(Cpu *cpu, uint64_t left, uint64_t right, bool is_64_bi
     cpu->flags.z = result == 0;
     cpu->flags.c = lhs >= rhs;
     cpu->flags.v = ((lhs ^ rhs) & (lhs ^ result) & sign_bit) != 0;
+}
+
+static void set_add_flags(Cpu *cpu, uint64_t left, uint64_t right, bool is_64_bit) {
+    uint64_t mask = is_64_bit ? UINT64_MAX : 0xffffffffull;
+    uint64_t sign_bit = is_64_bit ? (1ull << 63u) : (1ull << 31u);
+    uint64_t lhs = left & mask;
+    uint64_t rhs = right & mask;
+    uint64_t result = (lhs + rhs) & mask;
+
+    cpu->flags.n = (result & sign_bit) != 0;
+    cpu->flags.z = result == 0;
+    cpu->flags.c = result < lhs;
+    cpu->flags.v = (~(lhs ^ rhs) & (lhs ^ result) & sign_bit) != 0;
 }
 
 void cpu_init(Cpu *cpu, uint64_t pc, uint64_t sp) {
@@ -184,9 +291,47 @@ bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error
         return true;
     }
 
-    if ((opcode & 0x1f000000u) == 0x11000000u && ((opcode >> 29u) & 0x1u) == 0) {
+    if ((opcode & 0x7f800000u) == 0x12800000u) {
+        uint8_t sf = (uint8_t)((opcode >> 31u) & 0x1u);
+        uint8_t hw = (uint8_t)((opcode >> 21u) & 0x3u);
+        uint16_t imm16 = (uint16_t)((opcode >> 5u) & 0xffffu);
+
+        if (sf == 0 && hw > 1) {
+            snprintf(error, error_size, "unsupported MOVN shift for 32-bit form: opcode=0x%08x", opcode);
+            return false;
+        }
+
+        instruction->kind = EMU_INST_MOVN;
+        instruction->is_64_bit = sf != 0;
+        instruction->rd = (uint8_t)(opcode & 0x1fu);
+        instruction->imm = ((uint64_t)imm16) << (16u * hw);
+        instruction->shift_amount = (uint8_t)(16u * hw);
+        return true;
+    }
+
+    if ((opcode & 0x7f800000u) == 0x72800000u) {
+        uint8_t sf = (uint8_t)((opcode >> 31u) & 0x1u);
+        uint8_t hw = (uint8_t)((opcode >> 21u) & 0x3u);
+        uint16_t imm16 = (uint16_t)((opcode >> 5u) & 0xffffu);
+
+        if (sf == 0 && hw > 1) {
+            snprintf(error, error_size, "unsupported MOVK shift for 32-bit form: opcode=0x%08x", opcode);
+            return false;
+        }
+
+        instruction->kind = EMU_INST_MOVK;
+        instruction->is_64_bit = sf != 0;
+        instruction->rd = (uint8_t)(opcode & 0x1fu);
+        instruction->imm = ((uint64_t)imm16) << (16u * hw);
+        instruction->shift_amount = (uint8_t)(16u * hw);
+        return true;
+    }
+
+    if ((opcode & 0x1f000000u) == 0x11000000u && !(((opcode >> 29u) & 0x1u) == 1u &&
+                                                      (opcode & 0x1fu) == 0x1fu)) {
         bool is_sub = ((opcode >> 30u) & 0x1u) != 0;
         bool is_64_bit = ((opcode >> 31u) & 0x1u) != 0;
+        bool sets_flags = ((opcode >> 29u) & 0x1u) != 0;
         uint8_t shift = (uint8_t)((opcode >> 22u) & 0x3u);
         uint64_t imm = (opcode >> 10u) & 0xfffu;
 
@@ -197,9 +342,125 @@ bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error
 
         instruction->kind = is_sub ? EMU_INST_SUB_IMM : EMU_INST_ADD_IMM;
         instruction->is_64_bit = is_64_bit;
+        instruction->sets_flags = sets_flags;
         instruction->rd = (uint8_t)(opcode & 0x1fu);
         instruction->rn = (uint8_t)((opcode >> 5u) & 0x1fu);
         instruction->imm = imm << (shift == 1 ? 12u : 0u);
+        return true;
+    }
+
+    if ((opcode & 0x1f000000u) == 0x0b000000u && !(((opcode >> 29u) & 0x1u) == 1u &&
+                                                      (opcode & 0x1fu) == 0x1fu)) {
+        bool is_sub = ((opcode >> 30u) & 0x1u) != 0;
+        bool is_64_bit = ((opcode >> 31u) & 0x1u) != 0;
+        bool sets_flags = ((opcode >> 29u) & 0x1u) != 0;
+        uint8_t shift_type = (uint8_t)((opcode >> 22u) & 0x3u);
+        uint8_t shift_amount = (uint8_t)((opcode >> 10u) & 0x3fu);
+
+        if (shift_type == 3 || (!is_64_bit && shift_amount > 31)) {
+            snprintf(error, error_size, "unsupported ADD/SUB shifted-register variant: opcode=0x%08x", opcode);
+            return false;
+        }
+
+        instruction->kind = is_sub ? EMU_INST_SUB_REG : EMU_INST_ADD_REG;
+        instruction->is_64_bit = is_64_bit;
+        instruction->sets_flags = sets_flags;
+        instruction->rd = (uint8_t)(opcode & 0x1fu);
+        instruction->rn = (uint8_t)((opcode >> 5u) & 0x1fu);
+        instruction->rm = (uint8_t)((opcode >> 16u) & 0x1fu);
+        instruction->shift_type = shift_type;
+        instruction->shift_amount = shift_amount;
+        return true;
+    }
+
+    if ((opcode & 0x1f000000u) == 0x0a000000u) {
+        bool is_64_bit = ((opcode >> 31u) & 0x1u) != 0;
+        uint8_t opc = (uint8_t)((opcode >> 29u) & 0x3u);
+        uint8_t shift_type = (uint8_t)((opcode >> 22u) & 0x3u);
+        uint8_t shift_amount = (uint8_t)((opcode >> 10u) & 0x3fu);
+
+        if (opc == 3 || shift_type == 3 || (!is_64_bit && shift_amount > 31)) {
+            snprintf(error, error_size, "unsupported logical shifted-register variant: opcode=0x%08x", opcode);
+            return false;
+        }
+
+        instruction->kind = opc == 0 ? EMU_INST_AND_REG : (opc == 1 ? EMU_INST_ORR_REG : EMU_INST_EOR_REG);
+        instruction->is_64_bit = is_64_bit;
+        instruction->rd = (uint8_t)(opcode & 0x1fu);
+        instruction->rn = (uint8_t)((opcode >> 5u) & 0x1fu);
+        instruction->rm = (uint8_t)((opcode >> 16u) & 0x1fu);
+        instruction->shift_type = shift_type;
+        instruction->shift_amount = shift_amount;
+        return true;
+    }
+
+    if ((opcode & 0x7f200000u) == 0x53000000u) {
+        bool is_64_bit = ((opcode >> 31u) & 0x1u) != 0;
+        bool is_signed = ((opcode >> 29u) & 0x3u) == 0;
+        bool is_unsigned = ((opcode >> 29u) & 0x3u) == 2;
+        bool n_bit = ((opcode >> 22u) & 0x1u) != 0;
+        uint8_t immr = (uint8_t)((opcode >> 16u) & 0x3fu);
+        uint8_t imms = (uint8_t)((opcode >> 10u) & 0x3fu);
+        unsigned width = bits_for_width(is_64_bit);
+
+        if (n_bit != is_64_bit || (!is_64_bit && (immr > 31 || imms > 31)) || (!is_signed && !is_unsigned)) {
+            snprintf(error, error_size, "unsupported bitfield/shift variant: opcode=0x%08x", opcode);
+            return false;
+        }
+
+        instruction->is_64_bit = is_64_bit;
+        instruction->rd = (uint8_t)(opcode & 0x1fu);
+        instruction->rn = (uint8_t)((opcode >> 5u) & 0x1fu);
+        if (is_unsigned && imms == width - 1u) {
+            instruction->kind = EMU_INST_LSR_IMM;
+            instruction->shift_amount = immr;
+            return true;
+        }
+        if (is_signed && imms == width - 1u) {
+            instruction->kind = EMU_INST_ASR_IMM;
+            instruction->shift_amount = immr;
+            return true;
+        }
+        if (is_unsigned && immr == ((imms + 1u) & (width - 1u))) {
+            instruction->kind = EMU_INST_LSL_IMM;
+            instruction->shift_amount = (uint8_t)((width - immr) & (width - 1u));
+            return true;
+        }
+
+        snprintf(error, error_size, "unsupported bitfield alias: opcode=0x%08x", opcode);
+        return false;
+    }
+
+    if ((opcode & 0x7fe0fc00u) == 0x1ac00800u || (opcode & 0x7fe0fc00u) == 0x1ac00c00u) {
+        bool is_64_bit = ((opcode >> 31u) & 0x1u) != 0;
+        bool is_signed = ((opcode & 0x7fe0fc00u) == 0x1ac00c00u);
+        instruction->kind = is_signed ? EMU_INST_SDIV : EMU_INST_UDIV;
+        instruction->is_64_bit = is_64_bit;
+        instruction->rd = (uint8_t)(opcode & 0x1fu);
+        instruction->rn = (uint8_t)((opcode >> 5u) & 0x1fu);
+        instruction->rm = (uint8_t)((opcode >> 16u) & 0x1fu);
+        return true;
+    }
+
+    if ((opcode & 0x7fe08000u) == 0x1b000000u && ((opcode >> 10u) & 0x1fu) == 31u) {
+        instruction->kind = EMU_INST_MUL;
+        instruction->is_64_bit = ((opcode >> 31u) & 0x1u) != 0;
+        instruction->rd = (uint8_t)(opcode & 0x1fu);
+        instruction->rn = (uint8_t)((opcode >> 5u) & 0x1fu);
+        instruction->rm = (uint8_t)((opcode >> 16u) & 0x1fu);
+        return true;
+    }
+
+    if ((opcode & 0x9f000000u) == 0x10000000u || (opcode & 0x9f000000u) == 0x90000000u) {
+        uint64_t immlo = (opcode >> 29u) & 0x3u;
+        uint64_t immhi = (opcode >> 5u) & 0x7ffffu;
+        int64_t signed_imm = sign_extend((immhi << 2u) | immlo, 21u);
+        bool is_adrp = (opcode & 0x80000000u) != 0;
+
+        instruction->kind = is_adrp ? EMU_INST_ADRP : EMU_INST_ADR;
+        instruction->is_64_bit = true;
+        instruction->rd = (uint8_t)(opcode & 0x1fu);
+        instruction->offset = is_adrp ? signed_imm * 4096ll : signed_imm;
         return true;
     }
 
@@ -292,7 +553,7 @@ bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error
         uint8_t size = (uint8_t)((opcode >> 30u) & 0x3u);
         uint8_t opc = (uint8_t)((opcode >> 22u) & 0x3u);
 
-        if ((size != 2 && size != 3) || (opc != 0 && opc != 1)) {
+        if (opc != 0 && opc != 1) {
             snprintf(error, error_size, "unsupported LDR/STR unsigned-offset variant: opcode=0x%08x", opcode);
             return false;
         }
@@ -315,7 +576,7 @@ bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error
         uint8_t opc = (uint8_t)((opcode >> 22u) & 0x3u);
         uint8_t mode = (uint8_t)((opcode >> 10u) & 0x3u);
 
-        if ((size != 2 && size != 3) || (opc != 0 && opc != 1) || mode == 2) {
+        if ((opc != 0 && opc != 1) || mode == 2) {
             snprintf(error, error_size, "unsupported LDR/STR unscaled/write-back variant: opcode=0x%08x", opcode);
             return false;
         }
@@ -490,16 +751,147 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
         cpu->pc += 4;
         break;
 
-    case EMU_INST_ADD_IMM: {
-        uint64_t value = cpu_read_register(cpu, instruction.rn) + instruction.imm;
+    case EMU_INST_MOVN:
+        cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, ~instruction.imm);
+        cpu->pc += 4;
+        break;
+
+    case EMU_INST_MOVK: {
+        uint64_t old_value = read_gp_width(cpu, instruction.rd, instruction.is_64_bit);
+        uint64_t mask = 0xffffull << instruction.shift_amount;
+        uint64_t value = (old_value & ~mask) | instruction.imm;
         cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
         cpu->pc += 4;
         break;
     }
 
-    case EMU_INST_SUB_IMM: {
-        uint64_t value = cpu_read_register(cpu, instruction.rn) - instruction.imm;
+    case EMU_INST_ADD_IMM: {
+        uint64_t lhs = cpu_read_register(cpu, instruction.rn);
+        uint64_t value = lhs + instruction.imm;
         cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
+        if (instruction.sets_flags) {
+            set_add_flags(cpu, lhs, instruction.imm, instruction.is_64_bit);
+        }
+        cpu->pc += 4;
+        break;
+    }
+
+    case EMU_INST_SUB_IMM: {
+        uint64_t lhs = cpu_read_register(cpu, instruction.rn);
+        uint64_t value = lhs - instruction.imm;
+        cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
+        if (instruction.sets_flags) {
+            set_sub_flags(cpu, lhs, instruction.imm, instruction.is_64_bit);
+        }
+        cpu->pc += 4;
+        break;
+    }
+
+    case EMU_INST_ADD_REG:
+    case EMU_INST_SUB_REG: {
+        uint64_t lhs = read_gp_width(cpu, instruction.rn, instruction.is_64_bit);
+        uint64_t rhs = apply_shift(read_gp_width(cpu, instruction.rm, instruction.is_64_bit), instruction.shift_type,
+                                   instruction.shift_amount, instruction.is_64_bit);
+        uint64_t value = instruction.kind == EMU_INST_ADD_REG ? lhs + rhs : lhs - rhs;
+        cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
+        if (instruction.sets_flags) {
+            if (instruction.kind == EMU_INST_ADD_REG) {
+                set_add_flags(cpu, lhs, rhs, instruction.is_64_bit);
+            } else {
+                set_sub_flags(cpu, lhs, rhs, instruction.is_64_bit);
+            }
+        }
+        cpu->pc += 4;
+        break;
+    }
+
+    case EMU_INST_AND_REG:
+    case EMU_INST_ORR_REG:
+    case EMU_INST_EOR_REG: {
+        uint64_t lhs = read_gp_width(cpu, instruction.rn, instruction.is_64_bit);
+        uint64_t rhs = apply_shift(read_gp_width(cpu, instruction.rm, instruction.is_64_bit), instruction.shift_type,
+                                   instruction.shift_amount, instruction.is_64_bit);
+        uint64_t value = 0;
+        if (instruction.kind == EMU_INST_AND_REG) {
+            value = lhs & rhs;
+        } else if (instruction.kind == EMU_INST_ORR_REG) {
+            value = lhs | rhs;
+        } else {
+            value = lhs ^ rhs;
+        }
+        cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
+        cpu->pc += 4;
+        break;
+    }
+
+    case EMU_INST_LSL_IMM:
+    case EMU_INST_LSR_IMM:
+    case EMU_INST_ASR_IMM: {
+        uint8_t shift_type = instruction.kind == EMU_INST_LSL_IMM ? 0u : (instruction.kind == EMU_INST_LSR_IMM ? 1u : 2u);
+        uint64_t value = apply_shift(read_gp_width(cpu, instruction.rn, instruction.is_64_bit), shift_type,
+                                     instruction.shift_amount, instruction.is_64_bit);
+        cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
+        cpu->pc += 4;
+        break;
+    }
+
+    case EMU_INST_MUL: {
+        uint64_t value = read_gp_width(cpu, instruction.rn, instruction.is_64_bit) *
+                         read_gp_width(cpu, instruction.rm, instruction.is_64_bit);
+        cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
+        cpu->pc += 4;
+        break;
+    }
+
+    case EMU_INST_UDIV: {
+        uint64_t divisor = read_gp_width(cpu, instruction.rm, instruction.is_64_bit);
+        uint64_t value = divisor == 0 ? 0 : read_gp_width(cpu, instruction.rn, instruction.is_64_bit) / divisor;
+        cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
+        cpu->pc += 4;
+        break;
+    }
+
+    case EMU_INST_SDIV: {
+        uint64_t dividend_bits = read_gp_width(cpu, instruction.rn, instruction.is_64_bit);
+        uint64_t divisor_bits = read_gp_width(cpu, instruction.rm, instruction.is_64_bit);
+        uint64_t value = 0;
+        if (divisor_bits != 0) {
+            if (instruction.is_64_bit) {
+                int64_t dividend = (int64_t)dividend_bits;
+                int64_t divisor = (int64_t)divisor_bits;
+                value = (dividend == INT64_MIN && divisor == -1) ? (uint64_t)INT64_MIN : (uint64_t)(dividend / divisor);
+            } else {
+                int32_t dividend = (int32_t)(uint32_t)dividend_bits;
+                int32_t divisor = (int32_t)(uint32_t)divisor_bits;
+                value = (dividend == INT32_MIN && divisor == -1) ? (uint32_t)INT32_MIN : (uint32_t)(dividend / divisor);
+            }
+        }
+        cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
+        cpu->pc += 4;
+        break;
+    }
+
+    case EMU_INST_ADR: {
+        uint64_t target = 0;
+        if (!checked_add_signed(current_pc, instruction.offset, &target)) {
+            snprintf(error, error_size, "ADR target overflow: pc=0x%016" PRIx64 " offset=%" PRId64, current_pc,
+                     instruction.offset);
+            return EMU_ERROR;
+        }
+        cpu_write_register(cpu, instruction.rd, true, target);
+        cpu->pc += 4;
+        break;
+    }
+
+    case EMU_INST_ADRP: {
+        uint64_t page = current_pc & ~0xfffull;
+        uint64_t target = 0;
+        if (!checked_add_signed(page, instruction.offset, &target)) {
+            snprintf(error, error_size, "ADRP target overflow: pc_page=0x%016" PRIx64 " offset=%" PRId64, page,
+                     instruction.offset);
+            return EMU_ERROR;
+        }
+        cpu_write_register(cpu, instruction.rd, true, target);
         cpu->pc += 4;
         break;
     }
@@ -594,8 +986,7 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
         uint64_t address = 0;
         uint64_t writeback_value = 0;
         bool has_writeback = false;
-        uint64_t value64 = 0;
-        uint32_t value32 = 0;
+        uint64_t value = 0;
 
         if (!cpu_calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
                                          error_size)) {
@@ -603,19 +994,11 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
             return EMU_ERROR;
         }
 
-        if (instruction.access_size == 8) {
-            if (!memory_read64(memory, address, &value64, error, error_size)) {
-                add_instruction_context(error, error_size, current_pc, opcode);
-                return EMU_ERROR;
-            }
-            cpu_write_register(cpu, instruction.rd, true, value64);
-        } else {
-            if (!memory_read32(memory, address, &value32, error, error_size)) {
-                add_instruction_context(error, error_size, current_pc, opcode);
-                return EMU_ERROR;
-            }
-            cpu_write_register(cpu, instruction.rd, false, value32);
+        if (!memory_read_width(memory, address, instruction.access_size, &value, error, error_size)) {
+            add_instruction_context(error, error_size, current_pc, opcode);
+            return EMU_ERROR;
         }
+        cpu_write_register(cpu, instruction.rd, instruction.access_size == 8, value);
 
         if (has_writeback) {
             cpu_write_base_register(cpu, instruction.rn, writeback_value);
@@ -636,17 +1019,10 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
             return EMU_ERROR;
         }
 
-        if (instruction.access_size == 8) {
-            if (!memory_write64(memory, address, cpu_read_register(cpu, instruction.rd), error, error_size)) {
-                add_instruction_context(error, error_size, current_pc, opcode);
-                return EMU_ERROR;
-            }
-        } else {
-            if (!memory_write32(memory, address, (uint32_t)cpu_read_register(cpu, instruction.rd), error,
+        if (!memory_write_width(memory, address, instruction.access_size, cpu_read_register(cpu, instruction.rd), error,
                                 error_size)) {
-                add_instruction_context(error, error_size, current_pc, opcode);
-                return EMU_ERROR;
-            }
+            add_instruction_context(error, error_size, current_pc, opcode);
+            return EMU_ERROR;
         }
 
         if (has_writeback) {

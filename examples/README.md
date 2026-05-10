@@ -10,7 +10,7 @@ From the repository root:
 make examples
 ```
 
-This assembles the raw-binary examples and links the v0.8 ELF examples. Generated `.bin`, `.o`, and `.elf` files are ignored by Git.
+This assembles the raw-binary examples, links the v0.8 ELF examples, and builds the v0.9 freestanding C ELF examples. Generated `.bin`, `.o`, and `.elf` files are ignored by Git.
 
 The build flow is:
 
@@ -25,6 +25,12 @@ v0.8 ELF example.s
   -> clang --target=aarch64-none-elf
 example.o
   -> ld.lld -static -nostdlib -T examples/v0_8/linker.ld
+example.elf
+
+v0.9 freestanding C example.c
+  -> clang --target=aarch64-none-elf -ffreestanding -nostdlib -fno-stack-protector -fno-pic -fno-pie -O2
+example.o + examples/v0_9/start.o
+  -> ld.lld -static -nostdlib -T examples/v0_9/linker.ld
 example.elf
 ```
 
@@ -126,7 +132,32 @@ v0.8 detects ELF files by their `\x7fELF` magic bytes. For supported ELF files, 
 - zero-fills `.bss` bytes when segment memory size is larger than file size,
 - starts execution at `e_entry` instead of forcing `pc = 0x1000`.
 
-The v0.8 examples are intentionally tiny freestanding ELF executables. They use the same supported instructions and v0.7 fake syscalls; they do not require libc.
+The v0.8 examples are intentionally tiny hand-written ELF executables. They use the same supported instructions and v0.7 fake syscalls; they do not require libc.
+
+
+## Run a tiny freestanding C example
+
+```sh
+make examples/v0_9/fib.elf
+./emulator run examples/v0_9/fib.elf
+echo $?
+```
+
+v0.9 adds a tiny C-facing runtime:
+
+```text
+_start -> main -> fake exit syscall
+```
+
+The `_start` stub lives in `examples/v0_9/start.s`. It calls C `main`, then exits through the v0.7 fake syscall ABI:
+
+```text
+x0 = main return value
+x8 = 93
+svc #0
+```
+
+These examples are freestanding C. They are compiled without libc, without dynamic linking, without PIE, and without normal operating-system startup files. Programs that use `printf`, `malloc`, `argv`, environment variables, or shared libraries are still out of scope.
 
 ## Versioned layout
 
@@ -138,4 +169,5 @@ examples/v0_4/    function-call examples
 examples/v0_5/    debugger script examples
 examples/v0_7/    toy-syscall standalone examples
 examples/v0_8/    simple static ELF64 examples
+examples/v0_9/    tiny freestanding C ELF examples
 ```

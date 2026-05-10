@@ -13,6 +13,10 @@ tests/v0_6/test_v0_6
 tests/v0_6/tmp/
 tests/v0_7/test_v0_7
 tests/v0_7/tmp/
+tests/v0_8/test_v0_8
+tests/v0_8/tmp/
+tests/v0_9/test_v0_9
+tests/v0_9/tmp/
 *.o
 *.bin
 *.elf

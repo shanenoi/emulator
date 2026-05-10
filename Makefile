@@ -69,8 +69,14 @@ V0_8_EXAMPLES := \
 	examples/v0_8/hello_elf.elf \
 	examples/v0_8/exit_status_elf.elf \
 	examples/v0_8/bss_elf.elf
+V0_9_EXAMPLES := \
+	examples/v0_9/return_42.elf \
+	examples/v0_9/fib.elf \
+	examples/v0_9/sum_array.elf \
+	examples/v0_9/string_len.elf \
+	examples/v0_9/hello_c.elf
 
-examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES)
+examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES) $(V0_9_EXAMPLES)
 
 examples/v0_1/%.o: examples/v0_1/%.s
 	clang --target=aarch64-none-elf -c $< -o $@
@@ -108,6 +114,15 @@ examples/v0_8/%.o: examples/v0_8/%.s
 examples/v0_8/%.elf: examples/v0_8/%.o examples/v0_8/linker.ld
 	ld.lld -static -nostdlib -T examples/v0_8/linker.ld $< -o $@
 
+examples/v0_9/start.o: examples/v0_9/start.s
+	clang --target=aarch64-none-elf -c $< -o $@
+
+examples/v0_9/%.o: examples/v0_9/%.c
+	clang --target=aarch64-none-elf -ffreestanding -nostdlib -fno-stack-protector -fno-pic -fno-pie -O2 -c $< -o $@
+
+examples/v0_9/%.elf: examples/v0_9/start.o examples/v0_9/%.o examples/v0_9/linker.ld
+	ld.lld -static -nostdlib -T examples/v0_9/linker.ld examples/v0_9/start.o examples/v0_9/$*.o -o $@
+
 run-demo: all examples/v0_1/add.bin
 	./$(TARGET) run examples/v0_1/add.bin
 
@@ -119,6 +134,7 @@ clean:
 		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
 		examples/v0_3/*.o examples/v0_3/*.bin examples/v0_4/*.o examples/v0_4/*.bin \
 		examples/v0_7/*.o examples/v0_7/*.bin examples/v0_8/*.o examples/v0_8/*.elf \
+		examples/v0_9/*.o examples/v0_9/*.elf \
 		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/* tests/v0_4/tmp/* tests/v0_5/tmp/* \
 		tests/v0_6/tmp/* tests/v0_7/tmp/* tests/v0_8/tmp/*
 

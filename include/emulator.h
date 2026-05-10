@@ -46,9 +46,24 @@ typedef enum {
 typedef enum {
     EMU_INST_NOP = 0,
     EMU_INST_HLT,
+    EMU_INST_MOVN,
     EMU_INST_MOVZ,
+    EMU_INST_MOVK,
     EMU_INST_ADD_IMM,
     EMU_INST_SUB_IMM,
+    EMU_INST_ADD_REG,
+    EMU_INST_SUB_REG,
+    EMU_INST_AND_REG,
+    EMU_INST_ORR_REG,
+    EMU_INST_EOR_REG,
+    EMU_INST_LSL_IMM,
+    EMU_INST_LSR_IMM,
+    EMU_INST_ASR_IMM,
+    EMU_INST_MUL,
+    EMU_INST_UDIV,
+    EMU_INST_SDIV,
+    EMU_INST_ADR,
+    EMU_INST_ADRP,
     EMU_INST_B,
     EMU_INST_BL,
     EMU_INST_B_COND,
@@ -95,10 +110,13 @@ typedef enum {
 typedef struct {
     EmuInstructionKind kind;
     bool is_64_bit;
+    bool sets_flags;
     uint8_t rd;
     uint8_t rn;
     uint8_t rm;
     uint8_t rt2;
+    uint8_t shift_type;
+    uint8_t shift_amount;
     EmuCondition condition;
     EmuAddressMode address_mode;
     uint8_t access_size;

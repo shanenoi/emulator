@@ -35,10 +35,11 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v0.6 Lesson — Readable Traces and Disassembly](lessons/v0.6-assembler-friendly-runtime.md)
 - [v0.7 Lesson — SVC, Write, Exit, and Toy Syscalls](lessons/v0.7-toy-syscalls.md)
 - [v0.8 Lesson — ELF64 Loader](lessons/v0.8-elf-loader.md)
+- [v0.9 Lesson — Tiny Freestanding C Programs](lessons/v0.9-tiny-c-programs.md)
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation for **v0.8 — ELF64 Loader**.
+The repository currently contains the runtime implementation for **v0.9 — Tiny Freestanding C Programs**.
 
 Implemented now:
 
@@ -79,6 +80,7 @@ Implemented now:
   - `RET`
   - `RET Xn`
   - `SVC #0` for the tiny fake-syscall runtime
+  - v0.9 compiler-oriented instructions: `MOVN`, `MOVK`, `ADD`/`SUB` register and flag-setting immediate/register forms, `AND`/`ORR`/`EOR` register forms, `LSL`/`LSR`/`ASR` immediate aliases, `MUL`, `UDIV`, `SDIV`, `ADR`, `ADRP`, and byte/halfword `LDR`/`STR` forms
 - Basic examples in `examples/v0_1/`.
 - Branch and loop examples in `examples/v0_2/`, including:
   - forward unconditional branch
@@ -140,6 +142,11 @@ Implemented now:
   - keeps `sp` at the top of flat memory and does not reserve/protect a stack region from loaded segments yet
   - preserves raw `.bin` behavior for v0.1 through v0.7 examples
   - ELF examples live in `examples/v0_8/`
+- v0.9 tiny freestanding C support:
+  - examples live in `examples/v0_9/`
+  - `examples/v0_9/start.s` provides a tiny `_start` that calls C `main` and exits through fake syscall `93`
+  - C examples are compiled with `clang --target=aarch64-none-elf -ffreestanding -nostdlib -fno-stack-protector -fno-pic -fno-pie -O2` and linked as static `ET_EXEC` ELF files
+  - normal hosted/libc C programs remain out of scope
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v0.8.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -159,7 +166,7 @@ Implemented now:
   - v0.8 unit/integration tests for ELF detection, header validation, program-header validation, segment loading, `.bss` zero-fill, entry/stack initialization, ELF execution, syscalls from ELF, debugger behavior, and malformed-file edge cases
   - v0.8 CLI/ELF tests for `run`, `regs`, `trace`, `dump`, `debug`, dynamic-file rejection, malformed-file errors, raw-binary compatibility, docs, and acceptance workflows
 
-The full v0.1 through v0.8 test suite runs with `make test`.
+The full v0.1 through v0.8 test suite runs with `make test`. v0.9 development code and examples are present; v0.9 automated tests are intentionally not added yet.
 
 ## Build and Run
 
@@ -169,7 +176,7 @@ Build the emulator:
 make
 ```
 
-Build the example raw ARM64 binaries and v0.8 ELF demos:
+Build the example raw ARM64 binaries, v0.8 ELF demos, and v0.9 freestanding C demos:
 
 ```sh
 make examples
@@ -277,7 +284,7 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, assembles all examples, links the v0.8 ELF examples, compiles the v0.1 through v0.8 C test runners, and runs all v0.1 through v0.8 CLI checks.
+The test target currently builds the emulator, assembles all examples, links the v0.8 ELF examples, builds the v0.9 freestanding C examples, compiles the v0.1 through v0.8 C test runners, and runs all v0.1 through v0.8 CLI checks.
 
 ## IDE and Language Server Setup
 
@@ -764,56 +771,65 @@ Definition of done:
 - Segment bounds and permissions are represented internally, even if permissions are not enforced yet.
 - Raw v0.1 through v0.7 binaries still load exactly as before.
 
-### v0.9 — Tiny C Programs
+### v0.9 — Tiny Freestanding C Programs
 
-**Goal:** run small freestanding C programs compiled to AArch64.
+**Goal:** run small freestanding C programs compiled to static AArch64 ELF64.
 
-Add instruction support commonly emitted by compilers:
+Implemented development support:
 
-- `AND`
-- `ORR`
-- `EOR`
-- `LSL`
-- `LSR`
-- `ASR`
-- `MUL`
-- `SDIV`
-- `UDIV`
-- `ADR`
-- `ADRP`
-- more load/store variants as needed
+- New compiler-oriented instruction support:
+  - `MOVN` / `MOVK`
+  - `ADD` / `SUB` register
+  - flag-setting `ADDS` / `SUBS` immediate/register forms used by loops
+  - `AND` / `ORR` / `EOR` register
+  - `LSL` / `LSR` / `ASR` immediate aliases
+  - `MUL`, `UDIV`, `SDIV`
+  - `ADR`, `ADRP`
+  - byte and halfword `LDR` / `STR` forms
+- A tiny `_start` assembly stub in `examples/v0_9/start.s`:
+  - calls C `main` with `BL`,
+  - leaves `main`'s return value in `x0`,
+  - exits through fake syscall `x8 = 93`, `SVC #0`.
+- Freestanding C examples:
+  - `return_42.c`
+  - `fib.c`
+  - `sum_array.c`
+  - `string_len.c`
+  - `hello_c.c`
 
-Add C runtime support:
+Documented compile profile:
 
-- A tiny `_start` assembly stub.
-- Simple call into `main`.
-- Exit via fake syscall.
-- No standard library required.
+```sh
+clang --target=aarch64-none-elf -ffreestanding -nostdlib \
+  -fno-stack-protector -fno-pic -fno-pie -O2 \
+  -c examples/v0_9/fib.c -o examples/v0_9/fib.o
 
-Demo C program:
-
-```c
-int fib(int n) {
-    if (n <= 1) return n;
-    return fib(n - 1) + fib(n - 2);
-}
-
-int main(void) {
-    return fib(10);
-}
+ld.lld -static -nostdlib -T examples/v0_9/linker.ld \
+  examples/v0_9/start.o examples/v0_9/fib.o \
+  -o examples/v0_9/fib.elf
 ```
 
-Expected result:
+Example command:
+
+```sh
+make examples/v0_9/fib.elf
+./emulator run examples/v0_9/fib.elf
+echo $?
+```
+
+Expected host exit status:
 
 ```text
-program exited with code 55
+55
 ```
 
-Definition of done:
+Important limitation: v0.9 is still freestanding C only. It does not run normal hosted C programs that depend on libc startup, `printf`, `malloc`, dynamic linking, `argv`, environment variables, or auxiliary vectors.
 
-- A freestanding C program can be compiled and executed.
-- Recursive function calls work.
-- The README documents the exact compiler command.
+Definition of done for the later v0.9 test phase:
+
+- Add the dedicated v0.9 automated tests from `docs/test-plan-v0.9.md`.
+- Lock down the exact instruction subset and edge-case behavior.
+- Keep v0.1 through v0.8 behavior passing unchanged.
 
 ### v1.0 — Stable Learning Emulator
 
