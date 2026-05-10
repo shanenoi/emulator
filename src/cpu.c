@@ -404,7 +404,7 @@ bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error
         return true;
     }
 
-    if ((opcode & 0x7f200000u) == 0x53000000u) {
+    if ((opcode & 0x7f000000u) == 0x53000000u || (opcode & 0x7f000000u) == 0x13000000u) {
         bool is_64_bit = ((opcode >> 31u) & 0x1u) != 0;
         bool is_signed = ((opcode >> 29u) & 0x3u) == 0;
         bool is_unsigned = ((opcode >> 29u) & 0x3u) == 2;

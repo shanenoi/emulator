@@ -23,7 +23,7 @@ CORE_SRC := \
 	src/loader.c
 CORE_OBJ := $(CORE_SRC:.c=.o)
 
-.PHONY: all clean examples run-demo test
+.PHONY: all clean examples regression-examples run-demo test
 
 all: $(TARGET)
 
@@ -84,6 +84,10 @@ V0_9_EXAMPLES := \
 	examples/v0_9/invalid_write_c.elf
 
 examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES) $(V0_9_EXAMPLES)
+
+TEST_EXAMPLES := $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES)
+
+regression-examples: $(TEST_EXAMPLES)
 
 examples/v0_1/%.o: examples/v0_1/%.s
 	clang --target=aarch64-none-elf -c $< -o $@
@@ -150,12 +154,13 @@ clean:
 		tests/v0_3/*.o tests/v0_3/test_v0_3 tests/v0_4/*.o tests/v0_4/test_v0_4 \
 		tests/v0_5/*.o tests/v0_5/test_v0_5 tests/v0_6/*.o tests/v0_6/test_v0_6 \
 		tests/v0_7/*.o tests/v0_7/test_v0_7 tests/v0_8/*.o tests/v0_8/test_v0_8 \
+		tests/v0_9/*.o tests/v0_9/test_v0_9 \
 		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
 		examples/v0_3/*.o examples/v0_3/*.bin examples/v0_4/*.o examples/v0_4/*.bin \
 		examples/v0_7/*.o examples/v0_7/*.bin examples/v0_8/*.o examples/v0_8/*.elf \
 		examples/v0_9/*.o examples/v0_9/*.elf \
 		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/* tests/v0_4/tmp/* tests/v0_5/tmp/* \
-		tests/v0_6/tmp/* tests/v0_7/tmp/* tests/v0_8/tmp/*
+		tests/v0_6/tmp/* tests/v0_7/tmp/* tests/v0_8/tmp/* tests/v0_9/tmp/*
 
 tests/v0_1/test_v0_1: tests/v0_1/test_v0_1.o $(CORE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^
@@ -181,7 +186,10 @@ tests/v0_7/test_v0_7: tests/v0_7/test_v0_7.o $(CORE_OBJ)
 tests/v0_8/test_v0_8: tests/v0_8/test_v0_8.o $(CORE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^
 
-test: all examples tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_3 tests/v0_4/test_v0_4 tests/v0_5/test_v0_5 tests/v0_6/test_v0_6 tests/v0_7/test_v0_7 tests/v0_8/test_v0_8
+tests/v0_9/test_v0_9: tests/v0_9/test_v0_9.o $(CORE_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+test: all $(TEST_EXAMPLES) tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_3 tests/v0_4/test_v0_4 tests/v0_5/test_v0_5 tests/v0_6/test_v0_6 tests/v0_7/test_v0_7 tests/v0_8/test_v0_8 tests/v0_9/test_v0_9
 	./tests/v0_1/test_v0_1
 	./tests/v0_1/test_cli.sh
 	./tests/v0_2/test_v0_2
@@ -200,3 +208,6 @@ test: all examples tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_
 	mkdir -p tests/v0_8/tmp
 	./tests/v0_8/test_v0_8
 	./tests/v0_8/test_cli_elf.sh
+	mkdir -p tests/v0_9/tmp
+	./tests/v0_9/test_v0_9
+	./tests/v0_9/test_cli_c_programs.sh

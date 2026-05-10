@@ -33,7 +33,7 @@ require_not_success() {
     fi
 }
 
-make examples >/dev/null
+make regression-examples >/dev/null
 printf '\377\377\377\377' >"$TMP_DIR/unsupported.bin"
 
 # TC-V06-CLI-001 through TC-V06-CLI-005.

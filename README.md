@@ -166,7 +166,7 @@ Implemented now:
   - v0.8 unit/integration tests for ELF detection, header validation, program-header validation, segment loading, `.bss` zero-fill, entry/stack initialization, ELF execution, syscalls from ELF, debugger behavior, and malformed-file edge cases
   - v0.8 CLI/ELF tests for `run`, `regs`, `trace`, `dump`, `debug`, dynamic-file rejection, malformed-file errors, raw-binary compatibility, docs, and acceptance workflows
 
-The full v0.1 through v0.8 test suite runs with `make test`. v0.9 development code and examples are present; v0.9 automated tests are intentionally not added yet.
+The full v0.1 through v0.9 test suite runs with `make test`.
 
 ## Build and Run
 
@@ -284,7 +284,7 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, assembles all examples, links the v0.8 ELF examples, builds the v0.9 freestanding C examples, compiles the v0.1 through v0.8 C test runners, and runs all v0.1 through v0.8 CLI checks.
+The test target currently builds the emulator, assembles the regression examples through v0.8, compiles the v0.1 through v0.9 C test runners, and runs all v0.1 through v0.9 CLI checks. The v0.9 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain.
 
 ## IDE and Language Server Setup
 
@@ -841,7 +841,7 @@ Definition of done for the later v0.9 test phase:
 
 - Add the dedicated v0.9 automated tests from `docs/test-plan-v0.9.md`.
 - Lock down the exact instruction subset and edge-case behavior.
-- Keep v0.1 through v0.8 behavior passing unchanged.
+- Keep v0.1 through v0.9 behavior passing unchanged.
 
 ### v1.0 — Stable Learning Emulator
 

@@ -33,7 +33,7 @@ require_not_success() {
     fi
 }
 
-make examples >/dev/null
+make regression-examples >/dev/null
 
 # TC-V02-CLI-001: run supports a v0.2 loop example.
 ./emulator run examples/v0_2/cbnz_countdown.bin >"$TMP_DIR/countdown.out" 2>"$TMP_DIR/countdown.err"

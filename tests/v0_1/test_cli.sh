@@ -22,7 +22,7 @@ require_not_success() {
     fi
 }
 
-make examples >/dev/null
+make regression-examples >/dev/null
 
 ./emulator run examples/v0_1/add.bin >"$TMP_DIR/add.out" 2>"$TMP_DIR/add.err"
 require_contains "$TMP_DIR/add.out" "halted"

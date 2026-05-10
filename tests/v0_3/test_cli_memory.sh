@@ -22,7 +22,7 @@ require_not_success() {
     fi
 }
 
-make examples >/dev/null
+make regression-examples >/dev/null
 
 # TC-V03-CLI-001 and TC-V03-ACC-001: run supports the basic store/load example.
 ./emulator run examples/v0_3/memory_store_load.bin >"$TMP_DIR/memory_store_load.out" 2>"$TMP_DIR/memory_store_load.err"

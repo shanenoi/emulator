@@ -41,7 +41,7 @@ run_debug() {
     printf '%s' "$script" | ./emulator debug "$binary" >"$out" 2>"$err"
 }
 
-make examples >/dev/null
+make regression-examples >/dev/null
 printf '\377\377\377\377' >"$TMP_DIR/unsupported.bin"
 long_line=$(printf 'a%.0s' $(seq 1 300))
 

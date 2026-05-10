@@ -54,7 +54,7 @@ run_expect_status() {
     fi
 }
 
-make examples >/dev/null
+make regression-examples >/dev/null
 
 # TC-V07-CLI-001.
 run_expect_status 2 ./emulator

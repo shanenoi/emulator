@@ -22,7 +22,7 @@ require_not_success() {
     fi
 }
 
-make examples >/dev/null
+make regression-examples >/dev/null
 
 # TC-V04-CLI-001 and TC-V04-ACC-001: simple BL/RET call.
 ./emulator run examples/v0_4/simple_call.bin >"$TMP_DIR/simple_call.out" 2>"$TMP_DIR/simple_call.err"
