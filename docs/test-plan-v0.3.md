@@ -10,7 +10,7 @@ The goal of v0.3 is to make the emulator capable of running small programs that 
 
 ## Current implementation status
 
-The v0.3 runtime implementation is present, including the required memory/stack examples and `dump` CLI command. Automated v0.3 tests have not been added yet.
+The v0.3 runtime implementation is present, including the required memory/stack examples and `dump` CLI command. Automated v0.3 unit/integration and CLI tests have been added under `tests/v0_3/` and are included in `make test`.
 
 Implemented now:
 
@@ -23,6 +23,7 @@ Implemented now:
 - Unaligned data memory access is allowed; instruction fetch alignment is unchanged.
 - Failed loads/stores avoid partial destination, memory, and write-back updates.
 - CLI syntax: `./emulator dump <raw-binary> <address> <length>`.
+- Test entry points: `tests/v0_3/test_v0_3.c` and `tests/v0_3/test_cli_memory.sh`.
 
 ## Scope
 
@@ -713,7 +714,9 @@ str x0, [x1, #-8]!
 
 ### TC-V03-ERR-004 — Post-index write-back overflow fails without partial state change
 
-**Program:** load from a valid address, but post-index offset would overflow the base register.
+**Program:** validate the post-index write-back overflow path with the shared memory-access calculation helper.
+
+Normal v0.3 ARM64 encodings use signed 9-bit post-index offsets, so a post-index write-back overflow cannot be produced from a valid in-bounds 1 MiB memory address. The test still covers the overflow logic directly through `cpu_calculate_memory_access()`.
 
 **Expected result:**
 
@@ -952,17 +955,17 @@ This test plan should be updated after implementation to mark:
 
 Before v0.3 is considered complete:
 
-- [ ] All v0.1 tests pass.
-- [ ] All v0.2 tests pass.
-- [ ] All v0.3 unit tests pass.
-- [ ] All v0.3 CLI tests pass.
-- [ ] `make clean && make test` passes.
-- [ ] `make examples` builds v0.1, v0.2, and v0.3 examples.
-- [ ] README documents v0.3 usage.
-- [ ] `education/v0.3-learning-guide.md` exists.
-- [ ] Unsupported load/store variants are documented.
-- [ ] At least one CLI command demonstrates memory dump output.
-- [ ] Git status is clean after `make clean && make test`.
+- [x] All v0.1 tests pass.
+- [x] All v0.2 tests pass.
+- [x] All v0.3 unit tests pass.
+- [x] All v0.3 CLI tests pass.
+- [x] `make clean && make test` passes.
+- [x] `make examples` builds v0.1, v0.2, and v0.3 examples.
+- [x] README documents v0.3 usage.
+- [x] `education/v0.3-learning-guide.md` exists.
+- [x] Unsupported load/store variants are documented.
+- [x] At least one CLI command demonstrates memory dump output.
+- [x] Git status is clean after `make clean && make test`, excluding ignored generated build/test artifacts.
 
 ## 14. Suggested implementation order
 

@@ -380,9 +380,9 @@ bool cpu_condition_passed(EmuFlags flags, EmuCondition condition) {
     return false;
 }
 
-static bool calculate_memory_access(const Cpu *cpu, const EmuDecodedInstruction *instruction, const Memory *memory,
-                                    uint64_t *address, uint64_t *writeback_value, bool *has_writeback, char *error,
-                                    size_t error_size) {
+bool cpu_calculate_memory_access(const Cpu *cpu, const EmuDecodedInstruction *instruction, const Memory *memory,
+                                 uint64_t *address, uint64_t *writeback_value, bool *has_writeback, char *error,
+                                 size_t error_size) {
     uint64_t base = cpu_read_base_register(cpu, instruction->rn);
     uint64_t access_address = base;
     uint64_t updated_base = base;
@@ -536,8 +536,8 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
         uint64_t value64 = 0;
         uint32_t value32 = 0;
 
-        if (!calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
-                                     error_size)) {
+        if (!cpu_calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
+                                         error_size)) {
             return EMU_ERROR;
         }
 
@@ -566,8 +566,8 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
         uint64_t writeback_value = 0;
         bool has_writeback = false;
 
-        if (!calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
-                                     error_size)) {
+        if (!cpu_calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
+                                         error_size)) {
             return EMU_ERROR;
         }
 
@@ -596,8 +596,8 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
         uint64_t first = 0;
         uint64_t second = 0;
 
-        if (!calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
-                                     error_size)) {
+        if (!cpu_calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
+                                         error_size)) {
             return EMU_ERROR;
         }
         if (!check_data_range(memory, address, 16, error, error_size)) {
@@ -622,8 +622,8 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
         uint64_t writeback_value = 0;
         bool has_writeback = false;
 
-        if (!calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
-                                     error_size)) {
+        if (!cpu_calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
+                                         error_size)) {
             return EMU_ERROR;
         }
         if (!check_data_range(memory, address, 16, error, error_size)) {

@@ -69,13 +69,14 @@ Implemented now:
   - `CMP` + `B.cond` conditional branches
   - `CMP` + `B.cond` loop
   - trace-mode loop
-- Automated test suites following `docs/test-plan-v0.1.md` and `docs/test-plan-v0.2.md`:
+- Automated test suites following `docs/test-plan-v0.1.md`, `docs/test-plan-v0.2.md`, and `docs/test-plan-v0.3.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
   - v0.1 CLI tests for success, usage errors, loader errors, and decode errors
   - v0.2 unit/integration tests for branch decoding, condition checks, CMP flags, branch execution, edge cases, and acceptance programs
   - v0.2 CLI/trace tests for loop examples, trace output, usage errors, and instruction-limit failures
-- v0.3 runtime support is implemented with examples in `examples/v0_3/`; automated v0.3 tests are pending.
+  - v0.3 unit/integration tests for load/store decoding, memory execution, stack write-back behavior, pair operations, register-31 semantics, edge cases, and acceptance programs
+  - v0.3 CLI/memory tests for memory examples, invalid accesses, `dump`, decimal/hex dump arguments, out-of-bounds dump ranges, and trace output
 
 ## Build and Run
 
@@ -133,7 +134,7 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, compiles both C test runners, assembles examples, and runs the v0.1 plus v0.2 CLI checks. v0.3 tests are not added yet.
+The test target currently builds the emulator, compiles the v0.1, v0.2, and v0.3 C test runners, assembles examples, and runs all v0.1/v0.2/v0.3 CLI checks.
 
 Expected result includes:
 
