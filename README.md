@@ -25,10 +25,11 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v0.1 Learning Guide — Understanding the Emulator](education/v0.1-learning-guide.md)
 - [v0.2 Learning Guide — Branches, Flags, and Loops](education/v0.2-learning-guide.md)
 - [v0.3 Learning Guide — Memory and Stack](education/v0.3-learning-guide.md)
+- [v0.4 Learning Guide — Functions and Returns](education/v0.4-learning-guide.md)
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation for **v0.3 — Memory and Stack**.
+The repository currently contains the runtime implementation for **v0.4 — Functions**.
 
 Implemented now:
 
@@ -62,6 +63,9 @@ Implemented now:
   - `LDR` / `STR` unsigned-offset, pre-index, and post-index forms
   - `LDUR` / `STUR` signed unscaled offset forms
   - `LDP` / `STP` 64-bit pair forms for simple stack usage
+  - `BL`
+  - `RET`
+  - `RET Xn`
 - Basic examples in `examples/v0_1/`.
 - Branch and loop examples in `examples/v0_2/`, including:
   - forward unconditional branch
@@ -70,6 +74,15 @@ Implemented now:
   - `CMP` + `B.cond` conditional branches
   - `CMP` + `B.cond` loop
   - trace-mode loop
+- Memory and stack examples in `examples/v0_3/`.
+- Function examples in `examples/v0_4/`, including:
+  - simple function call and return
+  - explicit `RET X30`
+  - `RET Xn` through a custom register
+  - nested calls with saved/restored `X30`
+  - stack-frame style `X29` / `X30` save and restore
+  - invalid return target handling
+  - unsaved nested-call negative example
 - Automated test suites following `docs/test-plan-v0.1.md`, `docs/test-plan-v0.2.md`, and `docs/test-plan-v0.3.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -78,6 +91,7 @@ Implemented now:
   - v0.2 CLI/trace tests for loop examples, trace output, usage errors, and instruction-limit failures
   - v0.3 unit/integration tests for load/store decoding, memory execution, stack write-back behavior, pair operations, register-31 semantics, edge cases, and acceptance programs
   - v0.3 CLI/memory tests for memory examples, invalid accesses, `dump`, decimal/hex dump arguments, out-of-bounds dump ranges, and trace output
+- v0.4 automated tests are not implemented yet.
 
 ## Build and Run
 
@@ -123,6 +137,12 @@ Dump memory after a v0.3 program runs:
 ./emulator dump examples/v0_3/memory_store_load.bin 0xffff8 8
 ```
 
+Run the v0.4 simple-call demo:
+
+```sh
+./emulator run examples/v0_4/simple_call.bin
+```
+
 Or build and run the main demo in one command:
 
 ```sh
@@ -135,7 +155,7 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, compiles the v0.1, v0.2, and v0.3 C test runners, assembles examples, and runs all v0.1/v0.2/v0.3 CLI checks.
+The test target currently builds the emulator, compiles the v0.1, v0.2, and v0.3 C test runners, assembles examples, and runs all v0.1/v0.2/v0.3 CLI checks. v0.4 tests are planned but intentionally not added in the current development pass.
 
 Expected result includes:
 
@@ -204,6 +224,22 @@ These decisions come from the v0.3 test plan and current implementation pass:
 - Data load/store operations allow unaligned addresses because memory is byte-addressed; instruction fetch remains 4-byte aligned.
 - Memory dump uses `./emulator dump <raw-binary> <address> <length>` and prints memory after successful program execution.
 - Byte/halfword loads and stores, sign-extending loads, atomic/exclusive instructions, and unprivileged load/store variants remain out of scope.
+
+## v0.4 Implementation Decisions
+
+These decisions come from the v0.4 test plan and current implementation pass:
+
+- `BL` decodes a signed 26-bit branch immediate scaled by 4 bytes.
+- `BL` validates the target before changing CPU state.
+- A successful `BL` writes `old_pc + 4` to `X30`, also known as the link register or `LR`.
+- `RET` defaults to returning through `X30`.
+- `RET Xn` is supported and returns through the selected register.
+- `RET XZR` and return targets below the raw-binary load address are rejected cleanly.
+- Return targets must be 4-byte aligned and must point to a fetchable instruction inside emulator memory.
+- `RET` uses but does not modify `X30` by itself.
+- Nested functions must save/restore `X30` manually, usually with the existing v0.3 `STP` / `LDP` stack operations.
+- Trace mode remains unchanged: it prints each executed `pc`; no symbolic function-name or call-stack tracing is added yet.
+- `ADD register` remains deferred. v0.4 examples use `ADD` immediate so function-call behavior does not depend on a new arithmetic form.
 
 ## Planned Versions
 
@@ -378,13 +414,12 @@ Add behavior:
 Demo program:
 
 ```asm
-mov x0, #2
-mov x1, #3
-bl add_numbers
+movz x0, #2
+bl add_three
 hlt #0
 
-add_numbers:
-add x0, x0, x1
+add_three:
+add x0, x0, #3
 ret
 ```
 
@@ -397,8 +432,8 @@ x0 = 5
 Definition of done:
 
 - The emulator can call a function and return to the caller.
-- Nested calls work for simple examples.
-- Trace output can show call and return addresses.
+- Nested calls work when the caller saves/restores `X30` before making another call.
+- Trace output can show the `pc` path through calls and returns.
 
 ### v0.5 — Debugger REPL
 

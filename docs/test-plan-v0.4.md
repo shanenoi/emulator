@@ -10,9 +10,9 @@ The goal of v0.4 is to make the emulator capable of running small hand-written A
 
 ## Current implementation status
 
-This is a planning document for the next development pass. At the time this plan is written, v0.4 runtime code and v0.4 automated tests are not implemented yet.
+v0.4 runtime code is implemented. v0.4 automated tests are not implemented yet.
 
-Expected future artifacts:
+Current runtime artifacts:
 
 ```text
 examples/v0_4/
@@ -21,8 +21,13 @@ examples/v0_4/
 ├── call_with_stack_frame.s
 ├── ret_x30.s
 ├── ret_custom_register.s
-└── invalid_return.s
+├── invalid_return.s
+└── unsaved_nested_call.s
+```
 
+Expected future test artifacts:
+
+```text
 tests/v0_4/
 ├── test_v0_4.c
 └── test_cli_functions.sh
@@ -112,7 +117,7 @@ The current emulator does not yet implement `ADD register`. v0.4 has two accepta
 1. Implement `ADD register` and test it because the examples use it.
 2. Keep `ADD register` deferred and write v0.4 examples using already-supported instructions such as `ADD immediate`, `SUB immediate`, memory, and branches.
 
-The chosen path must be documented. If `ADD register` remains deferred, tests must ensure v0.4 function behavior does not accidentally depend on it.
+The chosen path is option 2: `ADD register` remains deferred, and v0.4 examples use `ADD` immediate plus already-supported stack operations. Future v0.4 tests must ensure function behavior does not accidentally depend on `ADD register`.
 
 ## Assumptions and implementation decisions
 

@@ -47,8 +47,16 @@ V0_3_EXAMPLES := \
 	examples/v0_3/stp_ldp_stack.bin \
 	examples/v0_3/w_register_load_store.bin \
 	examples/v0_3/invalid_memory_access.bin
+V0_4_EXAMPLES := \
+	examples/v0_4/simple_call.bin \
+	examples/v0_4/nested_calls.bin \
+	examples/v0_4/call_with_stack_frame.bin \
+	examples/v0_4/ret_x30.bin \
+	examples/v0_4/ret_custom_register.bin \
+	examples/v0_4/invalid_return.bin \
+	examples/v0_4/unsaved_nested_call.bin
 
-examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES)
+examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES)
 
 examples/v0_1/%.o: examples/v0_1/%.s
 	clang --target=aarch64-none-elf -c $< -o $@
@@ -68,6 +76,12 @@ examples/v0_3/%.o: examples/v0_3/%.s
 examples/v0_3/%.bin: examples/v0_3/%.o
 	llvm-objcopy -O binary -j .text $< $@
 
+examples/v0_4/%.o: examples/v0_4/%.s
+	clang --target=aarch64-none-elf -c $< -o $@
+
+examples/v0_4/%.bin: examples/v0_4/%.o
+	llvm-objcopy -O binary -j .text $< $@
+
 run-demo: all examples/v0_1/add.bin
 	./$(TARGET) run examples/v0_1/add.bin
 
@@ -75,7 +89,7 @@ clean:
 	rm -f $(TARGET) $(OBJ) tests/v0_1/*.o tests/v0_1/test_v0_1 tests/v0_2/*.o tests/v0_2/test_v0_2 \
 		tests/v0_3/*.o tests/v0_3/test_v0_3 \
 		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
-		examples/v0_3/*.o examples/v0_3/*.bin \
+		examples/v0_3/*.o examples/v0_3/*.bin examples/v0_4/*.o examples/v0_4/*.bin \
 		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/*
 
 tests/v0_1/test_v0_1: tests/v0_1/test_v0_1.o $(CORE_OBJ)

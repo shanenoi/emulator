@@ -191,11 +191,25 @@ bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error
         return true;
     }
 
-    if ((opcode & 0x7c000000u) == 0x14000000u) {
+    if ((opcode & 0xfc000000u) == 0x94000000u) {
+        uint32_t imm26 = opcode & 0x03ffffffu;
+
+        instruction->kind = EMU_INST_BL;
+        instruction->offset = sign_extend(imm26, 26u) * 4;
+        return true;
+    }
+
+    if ((opcode & 0xfc000000u) == 0x14000000u) {
         uint32_t imm26 = opcode & 0x03ffffffu;
 
         instruction->kind = EMU_INST_B;
         instruction->offset = sign_extend(imm26, 26u) * 4;
+        return true;
+    }
+
+    if ((opcode & 0xfffffc1fu) == 0xd65f0000u) {
+        instruction->kind = EMU_INST_RET;
+        instruction->rn = (uint8_t)((opcode >> 5u) & 0x1fu);
         return true;
     }
 
@@ -477,6 +491,37 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
     case EMU_INST_B: {
         uint64_t target = 0;
         if (!cpu_calculate_branch_target(current_pc, instruction.offset, memory, &target, error, error_size)) {
+            return EMU_ERROR;
+        }
+        cpu->pc = target;
+        break;
+    }
+
+    case EMU_INST_BL: {
+        uint64_t target = 0;
+        if (!cpu_calculate_branch_target(current_pc, instruction.offset, memory, &target, error, error_size)) {
+            return EMU_ERROR;
+        }
+        cpu_write_register(cpu, 30, true, current_pc + 4u);
+        cpu->pc = target;
+        break;
+    }
+
+    case EMU_INST_RET: {
+        uint64_t target = cpu_read_register(cpu, instruction.rn);
+        if (instruction.rn == 31 || target < EMU_LOAD_ADDRESS) {
+            snprintf(error, error_size, "invalid return target: x%u=0x%016" PRIx64, (unsigned)instruction.rn,
+                     target);
+            return EMU_ERROR;
+        }
+        if ((target & 0x3ull) != 0) {
+            snprintf(error, error_size, "misaligned return target: x%u=0x%016" PRIx64, (unsigned)instruction.rn,
+                     target);
+            return EMU_ERROR;
+        }
+        if (target > (uint64_t)memory->size || memory->size - (size_t)target < sizeof(uint32_t)) {
+            snprintf(error, error_size, "return target outside memory: x%u=0x%016" PRIx64, (unsigned)instruction.rn,
+                     target);
             return EMU_ERROR;
         }
         cpu->pc = target;

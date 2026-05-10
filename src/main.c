@@ -11,7 +11,7 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "       emulator trace <raw-binary>\n");
     fprintf(stream, "       emulator dump <raw-binary> <address> <length>\n");
     fprintf(stream, "\n");
-    fprintf(stream, "v0.3 supports raw little-endian AArch64 binaries loaded at 0x%llx.\n",
+    fprintf(stream, "v0.4 supports raw little-endian AArch64 binaries loaded at 0x%llx.\n",
             (unsigned long long)EMU_LOAD_ADDRESS);
 }
 

@@ -23,6 +23,7 @@ typedef enum {
     EMU_INST_ADD_IMM,
     EMU_INST_SUB_IMM,
     EMU_INST_B,
+    EMU_INST_BL,
     EMU_INST_B_COND,
     EMU_INST_CBZ,
     EMU_INST_CBNZ,
@@ -34,6 +35,7 @@ typedef enum {
     EMU_INST_STUR,
     EMU_INST_LDP,
     EMU_INST_STP,
+    EMU_INST_RET,
 } EmuInstructionKind;
 
 typedef enum {
