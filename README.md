@@ -24,6 +24,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v0.7 Test Plan — Toy Syscalls and Standalone Programs](docs/test-plan-v0.7.md)
 - [v0.8 Test Plan — ELF64 Loader](docs/test-plan-v0.8.md)
 - [v0.9 Test Plan — Tiny Freestanding C Programs](docs/test-plan-v0.9.md)
+- [v1.0 Test Plan — Stable Learning Emulator](docs/test-plan-v1.0.md)
 
 ## Lessons
 
