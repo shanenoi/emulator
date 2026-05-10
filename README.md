@@ -23,10 +23,11 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 - [v0.1 Learning Guide — Understanding the Emulator](education/v0.1-learning-guide.md)
 - [v0.2 Learning Guide — Branches, Flags, and Loops](education/v0.2-learning-guide.md)
+- [v0.3 Learning Guide — Memory and Stack](education/v0.3-learning-guide.md)
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation for **v0.2 — Branches and Loops**.
+The repository currently contains the runtime implementation for **v0.3 — Memory and Stack**.
 
 Implemented now:
 
@@ -36,6 +37,7 @@ Implemented now:
 ```sh
 ./emulator run <raw-binary>
 ./emulator trace <raw-binary>
+./emulator dump <raw-binary> <address> <length>
 ```
 
 - Fixed 1 MiB flat memory.
@@ -56,6 +58,9 @@ Implemented now:
   - `CBNZ`
   - `CMP` immediate
   - `CMP` register, unshifted
+  - `LDR` / `STR` unsigned-offset, pre-index, and post-index forms
+  - `LDUR` / `STUR` signed unscaled offset forms
+  - `LDP` / `STP` 64-bit pair forms for simple stack usage
 - Basic examples in `examples/v0_1/`.
 - Branch and loop examples in `examples/v0_2/`, including:
   - forward unconditional branch
@@ -70,6 +75,7 @@ Implemented now:
   - v0.1 CLI tests for success, usage errors, loader errors, and decode errors
   - v0.2 unit/integration tests for branch decoding, condition checks, CMP flags, branch execution, edge cases, and acceptance programs
   - v0.2 CLI/trace tests for loop examples, trace output, usage errors, and instruction-limit failures
+- v0.3 runtime support is implemented with examples in `examples/v0_3/`; automated v0.3 tests are pending.
 
 ## Build and Run
 
@@ -103,6 +109,18 @@ Run the same style of program with trace output:
 ./emulator trace examples/v0_2/trace_loop.bin
 ```
 
+Run the v0.3 memory/stack demo:
+
+```sh
+./emulator run examples/v0_3/memory_store_load.bin
+```
+
+Dump memory after a v0.3 program runs:
+
+```sh
+./emulator dump examples/v0_3/memory_store_load.bin 0xffff8 8
+```
+
 Or build and run the main demo in one command:
 
 ```sh
@@ -115,7 +133,7 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, compiles both C test runners, assembles examples, and runs the v0.1 plus v0.2 CLI checks.
+The test target currently builds the emulator, compiles both C test runners, assembles examples, and runs the v0.1 plus v0.2 CLI checks. v0.3 tests are not added yet.
 
 Expected result includes:
 
@@ -166,6 +184,24 @@ These decisions come from the v0.2 test plan and current implementation pass:
 - Full sum-loop acceptance using `add x1, x1, x0` is deferred with `ADD register`; v0.2 covers the immediate-counting loop variant instead.
 - `CMP` immediate supports the ARM64 immediate shift forms accepted by the decoder: unshifted and `lsl #12`.
 - `CMP` register is intentionally limited to unshifted register operands in v0.2.
+
+## v0.3 Implementation Decisions
+
+These decisions come from the v0.3 test plan and current implementation pass:
+
+- Memory operations use the existing flat 1 MiB byte-addressed memory.
+- Register field `31` means `SP` when used as a load/store base register.
+- Register field `31` still behaves as `XZR` / `WZR` when used as a load/store source or destination register.
+- `LDR Wt` zero-extends the loaded 32-bit value into the corresponding `X` register.
+- `STR Wt` writes only the low 32 bits of the source register.
+- Unsigned-offset `LDR` / `STR` offsets are scaled by access size.
+- `LDUR` / `STUR`, pre-index, and post-index offsets are signed byte offsets.
+- `STP` / `LDP` are implemented for 64-bit pair stack examples.
+- Failed loads/stores do not update destination registers or write-back bases.
+- Failed stores and pair operations do not partially modify memory.
+- Data load/store operations allow unaligned addresses because memory is byte-addressed; instruction fetch remains 4-byte aligned.
+- Memory dump uses `./emulator dump <raw-binary> <address> <length>` and prints memory after successful program execution.
+- Byte/halfword loads and stores, sign-extending loads, atomic/exclusive instructions, and unprivileged load/store variants remain out of scope.
 
 ## Planned Versions
 

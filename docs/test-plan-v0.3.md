@@ -8,6 +8,22 @@ v0.1 proved straight-line instruction execution. v0.2 added control flow with br
 
 The goal of v0.3 is to make the emulator capable of running small programs that store values in memory, load them back, and use the stack for simple push/pop-style flows while keeping the implementation intentionally small, inspectable, and testable.
 
+## Current implementation status
+
+The v0.3 runtime implementation is present, including the required memory/stack examples and `dump` CLI command. Automated v0.3 tests have not been added yet.
+
+Implemented now:
+
+- `LDR` / `STR` unsigned-offset forms for 64-bit `X` and 32-bit `W` registers.
+- `LDUR` / `STUR` signed unscaled forms for 64-bit `X` and 32-bit `W` registers.
+- `LDR` / `STR` pre-index and post-index forms for 64-bit `X` and 32-bit `W` registers.
+- `STP` / `LDP` 64-bit pair forms for offset, pre-index, and post-index addressing.
+- `SP` as base register field `31` for memory addressing.
+- `XZR` / `WZR` as source/destination register field `31` for load/store data registers.
+- Unaligned data memory access is allowed; instruction fetch alignment is unchanged.
+- Failed loads/stores avoid partial destination, memory, and write-back updates.
+- CLI syntax: `./emulator dump <raw-binary> <address> <length>`.
+
 ## Scope
 
 ### In scope

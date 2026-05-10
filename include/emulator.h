@@ -28,7 +28,21 @@ typedef enum {
     EMU_INST_CBNZ,
     EMU_INST_CMP_IMM,
     EMU_INST_CMP_REG,
+    EMU_INST_LDR,
+    EMU_INST_STR,
+    EMU_INST_LDUR,
+    EMU_INST_STUR,
+    EMU_INST_LDP,
+    EMU_INST_STP,
 } EmuInstructionKind;
+
+typedef enum {
+    EMU_ADDR_UNSIGNED_OFFSET = 0,
+    EMU_ADDR_UNSCALED,
+    EMU_ADDR_PRE_INDEX,
+    EMU_ADDR_POST_INDEX,
+    EMU_ADDR_PAIR_OFFSET,
+} EmuAddressMode;
 
 typedef enum {
     EMU_COND_EQ = 0,
@@ -54,7 +68,10 @@ typedef struct {
     uint8_t rd;
     uint8_t rn;
     uint8_t rm;
+    uint8_t rt2;
     EmuCondition condition;
+    EmuAddressMode address_mode;
+    uint8_t access_size;
     uint64_t imm;
     int64_t offset;
 } EmuDecodedInstruction;
@@ -102,7 +119,7 @@ uint64_t cpu_read_register(const Cpu *cpu, uint8_t index);
 void cpu_write_register(Cpu *cpu, uint8_t index, bool is_64_bit, uint64_t value);
 bool cpu_fetch(const Cpu *cpu, const Memory *memory, uint32_t *opcode, char *error, size_t error_size);
 bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error, size_t error_size);
-EmuStatus cpu_step(Cpu *cpu, const Memory *memory, char *error, size_t error_size);
+EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size);
 bool cpu_condition_passed(EmuFlags flags, EmuCondition condition);
 bool cpu_calculate_branch_target(uint64_t pc, int64_t offset, const Memory *memory, uint64_t *target, char *error,
                                  size_t error_size);

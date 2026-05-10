@@ -11,6 +11,46 @@ static int64_t sign_extend(uint64_t value, unsigned bits) {
     return (int64_t)((value ^ sign_bit) - sign_bit);
 }
 
+static bool checked_add_signed(uint64_t base, int64_t offset, uint64_t *result) {
+    if (offset < 0) {
+        uint64_t magnitude = (uint64_t)(-(offset + 1)) + 1ull;
+        if (magnitude > base) {
+            return false;
+        }
+        *result = base - magnitude;
+        return true;
+    }
+
+    uint64_t magnitude = (uint64_t)offset;
+    if (magnitude > UINT64_MAX - base) {
+        return false;
+    }
+    *result = base + magnitude;
+    return true;
+}
+
+static bool check_data_range(const Memory *memory, uint64_t address, uint8_t width, char *error, size_t error_size) {
+    if (address > (uint64_t)memory->size || width > memory->size ||
+        address + width > (uint64_t)memory->size || address + width < address) {
+        snprintf(error, error_size, "memory access out of bounds: address=0x%016" PRIx64 " width=%u memory_size=0x%zx",
+                 address, (unsigned)width, memory->size);
+        return false;
+    }
+    return true;
+}
+
+static uint64_t cpu_read_base_register(const Cpu *cpu, uint8_t index) {
+    return index == 31 ? cpu->sp : cpu_read_register(cpu, index);
+}
+
+static void cpu_write_base_register(Cpu *cpu, uint8_t index, uint64_t value) {
+    if (index == 31) {
+        cpu->sp = value;
+        return;
+    }
+    cpu_write_register(cpu, index, true, value);
+}
+
 bool cpu_calculate_branch_target(uint64_t pc, int64_t offset, const Memory *memory, uint64_t *target, char *error,
                                  size_t error_size) {
     uint64_t result = 0;
@@ -222,6 +262,83 @@ bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error
         return true;
     }
 
+    if ((opcode & 0x3b000000u) == 0x39000000u) {
+        uint8_t size = (uint8_t)((opcode >> 30u) & 0x3u);
+        uint8_t opc = (uint8_t)((opcode >> 22u) & 0x3u);
+
+        if ((size != 2 && size != 3) || (opc != 0 && opc != 1)) {
+            snprintf(error, error_size, "unsupported LDR/STR unsigned-offset variant: opcode=0x%08x", opcode);
+            return false;
+        }
+
+        uint8_t access_size = (uint8_t)(1u << size);
+        uint64_t imm12 = (opcode >> 10u) & 0xfffu;
+
+        instruction->kind = opc == 1 ? EMU_INST_LDR : EMU_INST_STR;
+        instruction->is_64_bit = size == 3;
+        instruction->rd = (uint8_t)(opcode & 0x1fu);
+        instruction->rn = (uint8_t)((opcode >> 5u) & 0x1fu);
+        instruction->address_mode = EMU_ADDR_UNSIGNED_OFFSET;
+        instruction->access_size = access_size;
+        instruction->offset = (int64_t)(imm12 * access_size);
+        return true;
+    }
+
+    if ((opcode & 0x3b200000u) == 0x38000000u) {
+        uint8_t size = (uint8_t)((opcode >> 30u) & 0x3u);
+        uint8_t opc = (uint8_t)((opcode >> 22u) & 0x3u);
+        uint8_t mode = (uint8_t)((opcode >> 10u) & 0x3u);
+
+        if ((size != 2 && size != 3) || (opc != 0 && opc != 1) || mode == 2) {
+            snprintf(error, error_size, "unsupported LDR/STR unscaled/write-back variant: opcode=0x%08x", opcode);
+            return false;
+        }
+
+        instruction->kind = opc == 1 ? EMU_INST_LDUR : EMU_INST_STUR;
+        if (mode == 1) {
+            instruction->kind = opc == 1 ? EMU_INST_LDR : EMU_INST_STR;
+            instruction->address_mode = EMU_ADDR_POST_INDEX;
+        } else if (mode == 3) {
+            instruction->kind = opc == 1 ? EMU_INST_LDR : EMU_INST_STR;
+            instruction->address_mode = EMU_ADDR_PRE_INDEX;
+        } else {
+            instruction->address_mode = EMU_ADDR_UNSCALED;
+        }
+        instruction->is_64_bit = size == 3;
+        instruction->rd = (uint8_t)(opcode & 0x1fu);
+        instruction->rn = (uint8_t)((opcode >> 5u) & 0x1fu);
+        instruction->access_size = (uint8_t)(1u << size);
+        instruction->offset = sign_extend((opcode >> 12u) & 0x1ffu, 9u);
+        return true;
+    }
+
+    if ((opcode & 0x7e000000u) == 0x28000000u) {
+        uint8_t size = (uint8_t)((opcode >> 30u) & 0x3u);
+        uint8_t mode = (uint8_t)((opcode >> 23u) & 0x3u);
+        bool is_load = ((opcode >> 22u) & 0x1u) != 0;
+
+        if (size != 2 || mode == 0) {
+            snprintf(error, error_size, "unsupported LDP/STP variant: opcode=0x%08x", opcode);
+            return false;
+        }
+
+        instruction->kind = is_load ? EMU_INST_LDP : EMU_INST_STP;
+        instruction->is_64_bit = true;
+        instruction->rd = (uint8_t)(opcode & 0x1fu);
+        instruction->rt2 = (uint8_t)((opcode >> 10u) & 0x1fu);
+        instruction->rn = (uint8_t)((opcode >> 5u) & 0x1fu);
+        instruction->access_size = 8;
+        instruction->offset = sign_extend((opcode >> 15u) & 0x7fu, 7u) * 8;
+        if (mode == 1) {
+            instruction->address_mode = EMU_ADDR_POST_INDEX;
+        } else if (mode == 2) {
+            instruction->address_mode = EMU_ADDR_PAIR_OFFSET;
+        } else {
+            instruction->address_mode = EMU_ADDR_PRE_INDEX;
+        }
+        return true;
+    }
+
     snprintf(error, error_size, "unsupported instruction: opcode=0x%08x", opcode);
     return false;
 }
@@ -263,7 +380,57 @@ bool cpu_condition_passed(EmuFlags flags, EmuCondition condition) {
     return false;
 }
 
-EmuStatus cpu_step(Cpu *cpu, const Memory *memory, char *error, size_t error_size) {
+static bool calculate_memory_access(const Cpu *cpu, const EmuDecodedInstruction *instruction, const Memory *memory,
+                                    uint64_t *address, uint64_t *writeback_value, bool *has_writeback, char *error,
+                                    size_t error_size) {
+    uint64_t base = cpu_read_base_register(cpu, instruction->rn);
+    uint64_t access_address = base;
+    uint64_t updated_base = base;
+    bool writeback = false;
+
+    switch (instruction->address_mode) {
+    case EMU_ADDR_UNSIGNED_OFFSET:
+    case EMU_ADDR_UNSCALED:
+    case EMU_ADDR_PAIR_OFFSET:
+        if (!checked_add_signed(base, instruction->offset, &access_address)) {
+            snprintf(error, error_size, "memory address overflow: base=0x%016" PRIx64 " offset=%" PRId64, base,
+                     instruction->offset);
+            return false;
+        }
+        break;
+
+    case EMU_ADDR_PRE_INDEX:
+        if (!checked_add_signed(base, instruction->offset, &updated_base)) {
+            snprintf(error, error_size, "pre-index write-back overflow: base=0x%016" PRIx64 " offset=%" PRId64,
+                     base, instruction->offset);
+            return false;
+        }
+        access_address = updated_base;
+        writeback = true;
+        break;
+
+    case EMU_ADDR_POST_INDEX:
+        access_address = base;
+        if (!checked_add_signed(base, instruction->offset, &updated_base)) {
+            snprintf(error, error_size, "post-index write-back overflow: base=0x%016" PRIx64 " offset=%" PRId64,
+                     base, instruction->offset);
+            return false;
+        }
+        writeback = true;
+        break;
+    }
+
+    if (!check_data_range(memory, access_address, instruction->access_size, error, error_size)) {
+        return false;
+    }
+
+    *address = access_address;
+    *writeback_value = updated_base;
+    *has_writeback = writeback;
+    return true;
+}
+
+EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
     uint32_t opcode = 0;
     EmuDecodedInstruction instruction;
     uint64_t current_pc = cpu->pc;
@@ -360,6 +527,120 @@ EmuStatus cpu_step(Cpu *cpu, const Memory *memory, char *error, size_t error_siz
                       instruction.is_64_bit);
         cpu->pc += 4;
         break;
+
+    case EMU_INST_LDR:
+    case EMU_INST_LDUR: {
+        uint64_t address = 0;
+        uint64_t writeback_value = 0;
+        bool has_writeback = false;
+        uint64_t value64 = 0;
+        uint32_t value32 = 0;
+
+        if (!calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
+                                     error_size)) {
+            return EMU_ERROR;
+        }
+
+        if (instruction.access_size == 8) {
+            if (!memory_read64(memory, address, &value64, error, error_size)) {
+                return EMU_ERROR;
+            }
+            cpu_write_register(cpu, instruction.rd, true, value64);
+        } else {
+            if (!memory_read32(memory, address, &value32, error, error_size)) {
+                return EMU_ERROR;
+            }
+            cpu_write_register(cpu, instruction.rd, false, value32);
+        }
+
+        if (has_writeback) {
+            cpu_write_base_register(cpu, instruction.rn, writeback_value);
+        }
+        cpu->pc += 4;
+        break;
+    }
+
+    case EMU_INST_STR:
+    case EMU_INST_STUR: {
+        uint64_t address = 0;
+        uint64_t writeback_value = 0;
+        bool has_writeback = false;
+
+        if (!calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
+                                     error_size)) {
+            return EMU_ERROR;
+        }
+
+        if (instruction.access_size == 8) {
+            if (!memory_write64(memory, address, cpu_read_register(cpu, instruction.rd), error, error_size)) {
+                return EMU_ERROR;
+            }
+        } else {
+            if (!memory_write32(memory, address, (uint32_t)cpu_read_register(cpu, instruction.rd), error,
+                                error_size)) {
+                return EMU_ERROR;
+            }
+        }
+
+        if (has_writeback) {
+            cpu_write_base_register(cpu, instruction.rn, writeback_value);
+        }
+        cpu->pc += 4;
+        break;
+    }
+
+    case EMU_INST_LDP: {
+        uint64_t address = 0;
+        uint64_t writeback_value = 0;
+        bool has_writeback = false;
+        uint64_t first = 0;
+        uint64_t second = 0;
+
+        if (!calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
+                                     error_size)) {
+            return EMU_ERROR;
+        }
+        if (!check_data_range(memory, address, 16, error, error_size)) {
+            return EMU_ERROR;
+        }
+        if (!memory_read64(memory, address, &first, error, error_size) ||
+            !memory_read64(memory, address + 8u, &second, error, error_size)) {
+            return EMU_ERROR;
+        }
+
+        cpu_write_register(cpu, instruction.rd, true, first);
+        cpu_write_register(cpu, instruction.rt2, true, second);
+        if (has_writeback) {
+            cpu_write_base_register(cpu, instruction.rn, writeback_value);
+        }
+        cpu->pc += 4;
+        break;
+    }
+
+    case EMU_INST_STP: {
+        uint64_t address = 0;
+        uint64_t writeback_value = 0;
+        bool has_writeback = false;
+
+        if (!calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
+                                     error_size)) {
+            return EMU_ERROR;
+        }
+        if (!check_data_range(memory, address, 16, error, error_size)) {
+            return EMU_ERROR;
+        }
+
+        if (!memory_write64(memory, address, cpu_read_register(cpu, instruction.rd), error, error_size) ||
+            !memory_write64(memory, address + 8u, cpu_read_register(cpu, instruction.rt2), error, error_size)) {
+            return EMU_ERROR;
+        }
+
+        if (has_writeback) {
+            cpu_write_base_register(cpu, instruction.rn, writeback_value);
+        }
+        cpu->pc += 4;
+        break;
+    }
     }
 
     cpu->instructions_executed++;
