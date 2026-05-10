@@ -34,6 +34,10 @@ need_file examples/v1_0/smoke_manifest.txt
 need_file tests/v1_0/test_cli_release.sh
 need_file tests/v1_0/test_docs_release.sh
 need_file tests/v1_0/test_optional_release_examples.sh
+need_file scripts/release_clean_check.sh
+need_file scripts/release_archive_check.sh
+need_file scripts/optional_sanitizer_check.sh
+need_file scripts/optional_cc_matrix_check.sh
 
 README=README.md
 need_file "$README"
@@ -42,6 +46,8 @@ grep -q "v1.0 Test Plan" "$README" || fail "README does not link the v1.0 test p
 grep -q "v1.0 Lesson" "$README" || fail "README does not link the v1.0 lesson"
 grep -q "v0.1 through v1.0" "$README" || fail "README does not describe v0.1 through v1.0 tests"
 grep -q "make release-check" "$README" || fail "README does not document make release-check"
+grep -q "make test-asan" "$README" || fail "README does not document optional sanitizer checks"
+grep -q "fresh archive.*full deterministic test suite\|fresh-archive full deterministic-suite" "$README" || fail "README does not document full deterministic-suite archive validation"
 grep -q "raw.*ELF64" "$README" || fail "README does not describe raw and ELF64 program support"
 grep -q "dynamic linking" "$README" || fail "README does not list stable limitations"
 

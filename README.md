@@ -153,10 +153,10 @@ Implemented now:
   - `emulator help`, `emulator --help`, and `emulator -h` print the supported command surface successfully
   - public usage now describes `<program>` as either a raw `.bin` file or a supported ELF64 `ET_EXEC` executable
   - `dump` address and length parsing accepts decimal and `0x`-prefixed hexadecimal values, and rejects signed-looking values before they can wrap into huge unsigned ranges
-  - `make release-check` is a named release gate that runs the deterministic v0.1-v0.9 suite plus v1.0 docs, repository hygiene, and fresh-archive build checks
+  - `make release-check` is a named release gate that runs v1.0 docs, repository hygiene, clean-artifact, and fresh-archive full deterministic-suite checks
   - `make release-archive` creates an archive from the current git `HEAD` and includes `.git`
   - `examples/v1_0/` documents a representative release smoke path across raw, debugger, syscall, ELF, and tiny-C examples
-- Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v0.9.md`:
+- Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
   - v0.1 CLI tests for success, usage errors, loader errors, and decode errors
@@ -177,9 +177,9 @@ Implemented now:
   - v0.9 unit/integration tests for compiler-oriented decode/formatting, ALU/logical/shift/multiply/divide behavior, address generation, byte/halfword memory access, `sp` handling, and instruction-limit/error context
   - v0.9 CLI/C-program tests for generated ELF fixtures, `_start -> main -> exit`, stack locals, nested calls, global data, zero-filled storage, fake syscall wrappers, hosted/libc rejection, docs, and regressions
   - optional v0.9 real-toolchain smoke tests that build and run the actual freestanding C examples when `clang` and `ld.lld` are available, and skip clearly otherwise
-  - v1.0 release tests for CLI stability, docs consistency, optional release examples, repository hygiene, and fresh-archive validation
+  - v1.0 release tests for CLI stability, docs consistency, optional release examples, repository hygiene, clean-artifact validation, and fresh-archive full deterministic-suite validation
 
-The full v0.1 through v1.0 test suite runs with `make test`. The v1.0 release gate runs with `make release-check`; it includes the deterministic suite, v1.0 docs checks, repository hygiene checks, and a fresh-archive build/smoke check.
+The full v0.1 through v1.0 test suite runs with `make test`. The v1.0 release gate runs with `make release-check`; it checks v1.0 docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
 
 ## Build and Run
 
@@ -311,9 +311,19 @@ make release-check
 
 The test target builds the emulator, assembles the regression examples through v0.8, compiles the v0.1 through v0.9 C test runners, and runs all v0.1 through v1.0 CLI/release checks. The v0.9 and v1.0 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain.
 
-`make release-check` runs that deterministic suite, then checks v1.0 documentation links/status, repository hygiene, and whether a fresh archive built from `HEAD` can build and run a representative smoke command after extraction.
+`make release-check` checks v1.0 documentation links/status, repository hygiene, clean-artifact behavior after generating representative artifacts, and a fresh archive that runs the full deterministic suite after extraction. Use `make test` when you want to run the same deterministic suite directly in the current checkout.
 
 The v1.0 smoke manifest in `examples/v1_0/smoke_manifest.txt` lists representative raw, debugger, syscall, ELF, and tiny-C examples to try manually.
+
+Optional release-quality gates are available and skip clearly when unsupported:
+
+```sh
+make test-asan
+make test-ubsan
+make test-cc-matrix
+```
+
+These are not required for a normal local release check, but they give maintainers a standard way to run sanitizer and host-compiler checks before a handoff. The `/dev/full` host-stream failure check is treated as best-effort because not every platform exposes the same failing-stream behavior.
 
 Create a release archive from the current git `HEAD` using the project packaging convention:
 

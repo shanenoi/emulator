@@ -23,7 +23,7 @@ CORE_SRC := \
 	src/loader.c
 CORE_OBJ := $(CORE_SRC:.c=.o)
 
-.PHONY: all clean examples regression-examples run-demo test release-docs-check release-hygiene-check release-archive-check release-check release-archive
+.PHONY: all clean examples regression-examples run-demo test release-docs-check release-hygiene-check release-clean-check release-archive-check release-check release-archive test-asan test-ubsan test-cc-matrix
 
 all: $(TARGET)
 
@@ -230,11 +230,23 @@ release-docs-check:
 release-hygiene-check:
 	sh scripts/release_hygiene_check.sh
 
+release-clean-check:
+	sh scripts/release_clean_check.sh
+
 release-archive-check:
 	sh scripts/release_archive_check.sh
 
-release-check: test release-docs-check release-hygiene-check release-archive-check
-	@echo "v1.0 release gate passed: tests, docs, hygiene, and archive build checks completed successfully"
+release-check: release-docs-check release-hygiene-check release-clean-check release-archive-check
+	@echo "v1.0 release gate passed: tests, docs, hygiene, clean-artifact, and fresh-archive full-suite checks completed successfully"
+
+test-asan:
+	sh scripts/optional_sanitizer_check.sh asan
+
+test-ubsan:
+	sh scripts/optional_sanitizer_check.sh ubsan
+
+test-cc-matrix:
+	sh scripts/optional_cc_matrix_check.sh
 
 release-archive:
 	@set -eu; \

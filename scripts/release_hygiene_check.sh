@@ -20,7 +20,13 @@ for pattern in 'emulator' '*.o' '*.bin' '*.elf' 'tests/v0_9/tmp/' 'tests/v1_0/tm
 done
 
 # Helper scripts should be portable through explicit sh invocation from Makefile.
-for script in scripts/release_docs_check.sh scripts/release_hygiene_check.sh scripts/release_archive_check.sh; do
+for script in \
+    scripts/release_docs_check.sh \
+    scripts/release_hygiene_check.sh \
+    scripts/release_clean_check.sh \
+    scripts/release_archive_check.sh \
+    scripts/optional_sanitizer_check.sh \
+    scripts/optional_cc_matrix_check.sh; do
     [ -f "$script" ] || fail "missing helper script: $script"
     head -n 1 "$script" | grep -q '^#!/bin/sh' || fail "$script is not a POSIX sh script"
     grep -q 'set -eu' "$script" || fail "$script does not use strict shell mode"

@@ -4,6 +4,11 @@ set -eu
 TMP_DIR="tests/v1_0/tmp"
 mkdir -p "$TMP_DIR"
 
+if [ "${EMULATOR_SKIP_OPTIONAL_REAL_TOOLCHAIN:-0}" = "1" ]; then
+    echo "skipping optional v1.0 real-toolchain release examples: EMULATOR_SKIP_OPTIONAL_REAL_TOOLCHAIN=1"
+    exit 0
+fi
+
 if ! command -v clang >/dev/null 2>&1 || ! command -v ld.lld >/dev/null 2>&1; then
     echo "skipping optional v1.0 real-toolchain release examples: clang or ld.lld is not available"
     exit 0

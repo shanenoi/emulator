@@ -30,10 +30,10 @@ unzip -q "$archive" -d "$extract_dir"
 [ -d "$extract_dir/.git" ] || fail "archive does not contain .git"
 
 make -C "$extract_dir" clean >/dev/null
-make -C "$extract_dir" >/dev/null
-[ -x "$extract_dir/emulator" ] || fail "fresh archive did not build emulator"
-make -C "$extract_dir" regression-examples >/dev/null
+# Keep the nested test output visible. It gives release-check progress during the
+# longest v1.0 gate and makes archive failures easier to diagnose.
+EMULATOR_SKIP_OPTIONAL_REAL_TOOLCHAIN=1 make -C "$extract_dir" -j${RELEASE_ARCHIVE_JOBS:-4} test
+[ -x "$extract_dir/emulator" ] || fail "fresh archive did not build emulator through make test"
 "$extract_dir/emulator" help >/dev/null
-"$extract_dir/emulator" run "$extract_dir/examples/v0_1/add.bin" >/dev/null
 
-printf '%s\n' "v1.0 release archive check passed"
+printf '%s\n' "v1.0 release archive check passed: fresh archive ran the full deterministic test suite"

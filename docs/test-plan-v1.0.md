@@ -109,7 +109,7 @@ scripts/release_hygiene_check.sh
 scripts/release_archive_check.sh
 ```
 
-The implementation may choose different filenames, but it should keep release tests separate from feature tests so v1.0 remains clearly a stability milestone. Before the dedicated `tests/v1_0/` release tests are added, release helper scripts may live under `scripts/` and be invoked by `make release-check`; the later v1.0 test phase should either reuse those helpers or wrap them with stricter release tests.
+The implementation may choose different filenames, but it should keep release tests separate from feature tests so v1.0 remains clearly a stability milestone. Dedicated `tests/v1_0/` release tests should wrap the public CLI/documentation behavior. Reusable release helper scripts may also live under `scripts/` and be invoked by `make release-check` for checks that are naturally release-oriented rather than feature-specific, such as archive validation, clean-artifact validation, and optional sanitizer/compiler probes.
 
 ## Test Data Strategy
 
@@ -684,12 +684,12 @@ Representative instructions preserve the v0.9 policy:
 
 ### TC-V10-ERR-009 — Host stream write failure remains deterministic where testable
 
-Use a failing output stream such as `/dev/full` where available.
+Use a failing output stream such as `/dev/full` where available. This check is best-effort because host platforms differ in whether `/dev/full` exists and how stdio reports the failure.
 
 Expected:
 
-- fake `write` returns `-EIO`,
-- test skips on platforms without a suitable failing stream.
+- fake `write` returns `-EIO` where the host exposes a suitable deterministic failing stream,
+- test skips or degrades to an explicit best-effort message on platforms without a suitable failing stream.
 
 ### TC-V10-ERR-010 — Large output remains bounded by guest memory checks
 
