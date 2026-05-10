@@ -12,15 +12,19 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "       emulator regs <program>\n");
     fprintf(stream, "       emulator dump <program> <address> <length>\n");
     fprintf(stream, "       emulator debug <program>\n");
+    fprintf(stream, "       emulator help\n");
     fprintf(stream, "\n");
     fprintf(stream, "<program> may be a raw little-endian AArch64 binary loaded at 0x%llx\n",
             (unsigned long long)EMU_LOAD_ADDRESS);
     fprintf(stream, "or a supported little-endian AArch64 ELF64 ET_EXEC file.\n");
-    fprintf(stream, "legacy wording: usage: emulator run <raw-binary>\n");
-    fprintf(stream, "                 emulator trace <raw-binary>\n");
-    fprintf(stream, "                 emulator regs <raw-binary>\n");
-    fprintf(stream, "                 emulator dump <raw-binary> <address> <length>\n");
-    fprintf(stream, "                 emulator debug <raw-binary>\n");
+    fprintf(stream, "dump <address> and <length> accept decimal or 0x-prefixed hexadecimal values.\n");
+    fprintf(stream, "\n");
+    fprintf(stream, "Compatibility wording used by older raw-binary lessons/tests:\n");
+    fprintf(stream, "usage: emulator run <raw-binary>\n");
+    fprintf(stream, "       emulator trace <raw-binary>\n");
+    fprintf(stream, "       emulator regs <raw-binary>\n");
+    fprintf(stream, "       emulator dump <raw-binary> <address> <length>\n");
+    fprintf(stream, "       emulator debug <raw-binary>\n");
 }
 
 static int guest_or_success_status(const Emulator *emu) {
@@ -28,6 +32,9 @@ static int guest_or_success_status(const Emulator *emu) {
 }
 
 static bool parse_u64(const char *text, uint64_t *out) {
+    if (text == NULL || text[0] == '\0' || text[0] == '-' || text[0] == '+') {
+        return false;
+    }
     char *end = NULL;
     errno = 0;
     unsigned long long value = strtoull(text, &end, 0);
@@ -62,6 +69,12 @@ static bool dump_memory(const Memory *memory, uint64_t address, uint64_t length,
 int main(int argc, char **argv) {
     char error[512];
     Emulator emu;
+
+    if (argc == 2 && (strcmp(argv[1], "help") == 0 || strcmp(argv[1], "--help") == 0 ||
+                      strcmp(argv[1], "-h") == 0)) {
+        print_usage(stdout);
+        return 0;
+    }
 
     if (argc != 3 && argc != 5) {
         print_usage(stderr);

@@ -23,7 +23,7 @@ CORE_SRC := \
 	src/loader.c
 CORE_OBJ := $(CORE_SRC:.c=.o)
 
-.PHONY: all clean examples regression-examples run-demo test
+.PHONY: all clean examples regression-examples run-demo test release-check
 
 all: $(TARGET)
 
@@ -213,3 +213,6 @@ test: all $(TEST_EXAMPLES) tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/
 	./tests/v0_9/test_v0_9
 	./tests/v0_9/test_cli_c_programs.sh
 	./tests/v0_9/test_optional_c_examples.sh
+
+release-check: test
+	@echo "v1.0 release gate passed: make test completed successfully"

@@ -170,4 +170,7 @@ examples/v0_5/    debugger script examples
 examples/v0_7/    toy-syscall standalone examples
 examples/v0_8/    simple static ELF64 examples
 examples/v0_9/    tiny freestanding C ELF examples
+examples/v1_0/    release smoke manifest and stability notes
 ```
+
+`examples/v1_0/smoke_manifest.txt` is not a new program format. It is a compact checklist of representative examples that should keep working together for the stable v1.0 learning release.

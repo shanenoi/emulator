@@ -37,10 +37,11 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v0.7 Lesson — SVC, Write, Exit, and Toy Syscalls](lessons/v0.7-toy-syscalls.md)
 - [v0.8 Lesson — ELF64 Loader](lessons/v0.8-elf-loader.md)
 - [v0.9 Lesson — Tiny Freestanding C Programs](lessons/v0.9-tiny-c-programs.md)
+- [v1.0 Lesson — Stable Learning Emulator](lessons/v1.0-stable-learning-emulator.md)
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation for **v0.9 — Tiny Freestanding C Programs**.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, plus the development polish for **v1.0 — Stable Learning Emulator**. v1.0 is a stability/documentation/release-quality milestone; it intentionally does not add a new major CPU subsystem.
 
 Implemented now:
 
@@ -148,6 +149,12 @@ Implemented now:
   - `examples/v0_9/start.s` provides a tiny `_start` that calls C `main` and exits through fake syscall `93`
   - C examples are compiled with `clang --target=aarch64-none-elf -ffreestanding -nostdlib -fno-stack-protector -fno-pic -fno-pie -O0` and linked as static `ET_EXEC` ELF files
   - normal hosted/libc C programs remain out of scope
+- v1.0 stable learning release polish:
+  - `emulator help`, `emulator --help`, and `emulator -h` print the supported command surface successfully
+  - public usage now describes `<program>` as either a raw `.bin` file or a supported ELF64 `ET_EXEC` executable
+  - `dump` address and length parsing accepts decimal and `0x`-prefixed hexadecimal values, and rejects signed-looking values before they can wrap into huge unsigned ranges
+  - `make release-check` is a named release-gate alias for the current deterministic test suite
+  - `examples/v1_0/` documents a representative release smoke path across raw, debugger, syscall, ELF, and tiny-C examples
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v0.9.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -170,7 +177,7 @@ Implemented now:
   - v0.9 CLI/C-program tests for generated ELF fixtures, `_start -> main -> exit`, stack locals, nested calls, global data, zero-filled storage, fake syscall wrappers, hosted/libc rejection, docs, and regressions
   - optional v0.9 real-toolchain smoke tests that build and run the actual freestanding C examples when `clang` and `ld.lld` are available, and skip clearly otherwise
 
-The full v0.1 through v0.9 test suite runs with `make test`.
+The full v0.1 through v0.9 test suite runs with `make test`. Dedicated v1.0 release tests are planned in `docs/test-plan-v1.0.md` and have not been added yet.
 
 ## Build and Run
 
@@ -178,6 +185,12 @@ Build the emulator:
 
 ```sh
 make
+```
+
+Print the stable command surface:
+
+```sh
+./emulator help
 ```
 
 Build the example raw ARM64 binaries, v0.8 ELF demos, and v0.9 freestanding C demos:
@@ -288,7 +301,30 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, assembles the regression examples through v0.8, compiles the v0.1 through v0.9 C test runners, and runs all v0.1 through v0.9 CLI checks. The v0.9 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain.
+Run the named v1.0 release gate for the current deterministic suite:
+
+```sh
+make release-check
+```
+
+The test target currently builds the emulator, assembles the regression examples through v0.8, compiles the v0.1 through v0.9 C test runners, and runs all v0.1 through v0.9 CLI checks. The v0.9 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain. `make release-check` currently aliases that deterministic suite; the dedicated v1.0 release tests will be added in the v1.0 test phase.
+
+The v1.0 smoke manifest in `examples/v1_0/smoke_manifest.txt` lists representative raw, debugger, syscall, ELF, and tiny-C examples to try manually.
+
+## Known Limitations
+
+This is a stable learning emulator, not a complete ARM64/Linux emulator. The current project intentionally does not support:
+
+- dynamic linking or a dynamic loader,
+- PIE / `ET_DYN`,
+- relocations,
+- normal hosted C startup,
+- `printf`, `malloc`, or libc,
+- real Linux syscall handling beyond the fake `write = 64` and `exit = 93` ABI,
+- `argv`, `envp`, or auxiliary-vector setup,
+- MMU/page tables or memory protection enforcement,
+- floating point, SIMD, or NEON,
+- Mach-O loading.
 
 ## IDE and Language Server Setup
 
@@ -855,20 +891,13 @@ Definition of done:
 
 **Goal:** publish a polished first stable release for learning ARM64 emulation.
 
-Required features:
+Release focus:
 
-- Raw binary loader.
-- ELF64 loader.
-- Debugger REPL.
-- Breakpoints.
-- Register inspection.
-- Memory inspection.
-- Instruction tracing.
-- Fake syscalls for `exit` and `write`.
-- Example assembly programs.
-- Example freestanding C programs.
-- Automated tests for CPU, memory, loader, and syscall behavior.
-- Documentation for supported instructions and known limitations.
+- Keep raw binary loading, ELF64 loading, the debugger, instruction tracing, memory dumping, fake syscalls, and freestanding C examples stable.
+- Keep `make test` as the local deterministic release gate.
+- Add release-level tests for CLI stability, docs consistency, examples, packaging hygiene, and common learner mistakes.
+- Keep optional real-toolchain C smoke checks as pass-or-skip workflows.
+- Document supported behavior and known limitations in one place.
 
 Suggested demos:
 
@@ -884,7 +913,7 @@ Suggested demos:
 Definition of done:
 
 - A new user can clone the repository, build the emulator, run examples, debug a program, and understand what is happening from the docs.
-- CI or a local `make test` target verifies the supported instruction set.
+- CI or a local `make test` target verifies the supported instruction set and the v1.0 release-quality checks.
 
 ### v1.1 — Mach-O Loader
 

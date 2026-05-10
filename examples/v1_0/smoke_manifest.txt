@@ -1,0 +1,11 @@
+# v1.0 representative examples
+
+raw:v0.1:add:examples/v0_1/add.bin
+raw:v0.2:trace-loop:examples/v0_2/trace_loop.bin
+raw:v0.3:memory-dump:examples/v0_3/memory_store_load.bin
+raw:v0.4:function-call:examples/v0_4/simple_call.bin
+debug:v0.5:script:examples/v0_5/debug_add_script.txt
+raw:v0.7:syscall-hello:examples/v0_7/hello.bin
+elf:v0.8:hello:examples/v0_8/hello_elf.elf
+c:v0.9:return-42:examples/v0_9/return_42.elf
+c:v0.9:fib:examples/v0_9/fib.elf
