@@ -7,6 +7,8 @@ tests/v0_3/test_v0_3
 tests/v0_3/tmp/
 tests/v0_4/test_v0_4
 tests/v0_4/tmp/
+tests/v0_5/test_v0_5
+tests/v0_5/tmp/
 *.o
 *.bin
 *.dSYM/

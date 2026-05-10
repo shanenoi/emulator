@@ -3,4 +3,5 @@ break 0x1008
 run
 regs
 continue
+regs
 quit

@@ -76,7 +76,7 @@ printf 'break 0x1008\nrun\nregs\nquit\n' | ./emulator debug examples/v0_1/add.bi
 
 ## Implementation Assumptions
 
-Current v0.5 runtime implementation status: **implemented**, with automated v0.5 tests still pending. Debugger script examples are present in `examples/v0_5/`.
+Current v0.5 runtime implementation status: **implemented and tested**. Debugger script examples are present in `examples/v0_5/`, and the automated test pass is implemented in `tests/v0_5/`.
 
 These assumptions are now implementation decisions and should be tested during the v0.5 test pass.
 
@@ -1371,5 +1371,5 @@ v0.5 is complete when:
 8. Add `run` reset behavior.
 9. Add `trace on/off` in debug mode.
 10. Add robust invalid-input handling.
-11. Add automated v0.5 tests.
+11. Add automated v0.5 tests. **Done:** `tests/v0_5/test_v0_5.c` and `tests/v0_5/test_cli_debugger.sh`.
 12. Update docs and education guide.

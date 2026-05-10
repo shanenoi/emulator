@@ -4,4 +4,5 @@ break 0x100c
 run
 regs
 continue
+regs
 quit

@@ -104,7 +104,7 @@ Implemented now:
   - `debug_add_script.txt`
   - `debug_function_script.txt`
   - `debug_memory_script.txt`
-- Automated test suites following `docs/test-plan-v0.1.md`, `docs/test-plan-v0.2.md`, `docs/test-plan-v0.3.md`, and `docs/test-plan-v0.4.md`:
+- Automated test suites following `docs/test-plan-v0.1.md`, `docs/test-plan-v0.2.md`, `docs/test-plan-v0.3.md`, `docs/test-plan-v0.4.md`, and `docs/test-plan-v0.5.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
   - v0.1 CLI tests for success, usage errors, loader errors, and decode errors
@@ -114,7 +114,8 @@ Implemented now:
   - v0.3 CLI/memory tests for memory examples, invalid accesses, `dump`, decimal/hex dump arguments, out-of-bounds dump ranges, and trace output
   - v0.4 unit/integration tests for `BL`, `RET`, `RET Xn`, link-register behavior, nested calls, stack-frame calls, invalid return/call targets, recursion limits, and acceptance programs
   - v0.4 CLI/function tests for simple calls, sequential calls, nested calls, frame calls, invalid returns, unsaved nested-call behavior, and trace output
-- v0.5 automated tests are pending; `docs/test-plan-v0.5.md` is the source of truth for the upcoming debugger test pass.
+  - v0.5 unit/integration tests for debugger initialization, reset behavior, breakpoint helpers, stepping, continuing, runtime errors, and instruction limits
+  - v0.5 CLI/debugger tests for scripted REPL workflows, command parsing, aliases, breakpoints, register/memory inspection, trace toggling, EOF handling, and acceptance scripts
 
 ## Build and Run
 
@@ -198,7 +199,7 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, compiles the v0.1 through v0.4 C test runners, assembles examples, and runs all v0.1 through v0.4 CLI checks. v0.5 runtime support is implemented, but the v0.5 automated test suite has not been added yet.
+The test target currently builds the emulator, compiles the v0.1 through v0.5 C test runners, assembles examples, and runs all v0.1 through v0.5 CLI checks.
 
 ## IDE and Language Server Setup
 
