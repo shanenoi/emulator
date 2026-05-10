@@ -9,6 +9,7 @@
 #define EMU_MEMORY_SIZE (1024u * 1024u)
 #define EMU_LOAD_ADDRESS 0x1000ull
 #define EMU_DEFAULT_INSTRUCTION_LIMIT 1000000ull
+#define EMU_MAX_BREAKPOINTS 64u
 
 typedef enum {
     EMU_OK = 0,
@@ -107,6 +108,21 @@ typedef struct {
     FILE *trace_stream;
 } Emulator;
 
+typedef struct {
+    uint64_t address;
+    bool enabled;
+} DebugBreakpoint;
+
+typedef struct {
+    Emulator emu;
+    const char *path;
+    DebugBreakpoint breakpoints[EMU_MAX_BREAKPOINTS];
+    size_t breakpoint_count;
+    bool loaded;
+    bool stopped_at_breakpoint;
+    uint64_t stopped_breakpoint_address;
+} Debugger;
+
 bool memory_init(Memory *memory, size_t size, char *error, size_t error_size);
 void memory_free(Memory *memory);
 bool memory_read8(const Memory *memory, uint64_t address, uint8_t *out, char *error, size_t error_size);
@@ -135,5 +151,16 @@ bool load_raw_binary(Memory *memory, const char *path, uint64_t load_address, ch
 bool emulator_init(Emulator *emu, char *error, size_t error_size);
 void emulator_free(Emulator *emu);
 EmuStatus emulator_run(Emulator *emu, char *error, size_t error_size);
+
+bool debugger_init(Debugger *debugger, const char *path, char *error, size_t error_size);
+void debugger_free(Debugger *debugger);
+bool debugger_reset(Debugger *debugger, char *error, size_t error_size);
+bool debugger_add_breakpoint(Debugger *debugger, uint64_t address, char *error, size_t error_size);
+bool debugger_delete_breakpoint(Debugger *debugger, uint64_t address_or_id, char *error, size_t error_size);
+bool debugger_has_breakpoint(const Debugger *debugger, uint64_t address);
+void debugger_list_breakpoints(const Debugger *debugger, FILE *stream);
+EmuStatus debugger_step(Debugger *debugger, char *error, size_t error_size);
+EmuStatus debugger_continue(Debugger *debugger, char *error, size_t error_size);
+int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_stream);
 
 #endif

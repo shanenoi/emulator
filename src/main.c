@@ -10,8 +10,9 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "usage: emulator run <raw-binary>\n");
     fprintf(stream, "       emulator trace <raw-binary>\n");
     fprintf(stream, "       emulator dump <raw-binary> <address> <length>\n");
+    fprintf(stream, "       emulator debug <raw-binary>\n");
     fprintf(stream, "\n");
-    fprintf(stream, "v0.4 supports raw little-endian AArch64 binaries loaded at 0x%llx.\n",
+    fprintf(stream, "v0.5 supports raw little-endian AArch64 binaries loaded at 0x%llx.\n",
             (unsigned long long)EMU_LOAD_ADDRESS);
 }
 
@@ -54,6 +55,21 @@ int main(int argc, char **argv) {
     if (argc != 3 && argc != 5) {
         print_usage(stderr);
         return 2;
+    }
+
+    if (strcmp(argv[1], "debug") == 0) {
+        if (argc != 3) {
+            print_usage(stderr);
+            return 2;
+        }
+        Debugger debugger;
+        if (!debugger_init(&debugger, argv[2], error, sizeof(error))) {
+            fprintf(stderr, "error: %s\n", error);
+            return 1;
+        }
+        int status = debugger_repl(&debugger, stdin, stdout, stderr);
+        debugger_free(&debugger);
+        return status;
     }
 
     bool trace_enabled = false;

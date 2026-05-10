@@ -6,6 +6,7 @@ LDFLAGS ?=
 TARGET := emulator
 SRC := \
 	src/main.c \
+	src/debugger.c \
 	src/emulator.c \
 	src/cpu.c \
 	src/memory.c \
@@ -14,6 +15,7 @@ OBJ := $(SRC:.c=.o)
 
 CORE_SRC := \
 	src/emulator.c \
+	src/debugger.c \
 	src/cpu.c \
 	src/memory.c \
 	src/loader.c

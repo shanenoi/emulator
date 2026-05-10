@@ -76,7 +76,9 @@ printf 'break 0x1008\nrun\nregs\nquit\n' | ./emulator debug examples/v0_1/add.bi
 
 ## Implementation Assumptions
 
-These assumptions should be made explicit before implementation and updated if changed.
+Current v0.5 runtime implementation status: **implemented**, with automated v0.5 tests still pending.
+
+These assumptions are now implementation decisions and should be tested during the v0.5 test pass.
 
 1. `debug` loads the program once at startup.
 2. `run` starts from the initial reset state unless the program has already run.
@@ -91,6 +93,8 @@ run resets the emulator to the initial loaded program state and starts execution
 continue resumes from the current state.
 ```
 
+Current implementation: uses this recommended behavior. Breakpoints are preserved across `run` resets.
+
 4. Breakpoints trigger **before** executing the instruction at the breakpoint address.
 5. When execution stops at a breakpoint, `pc` should equal the breakpoint address.
 6. `step` executes exactly one instruction from the current `pc`, even if the current `pc` has a breakpoint.
@@ -102,6 +106,8 @@ Recommended v0.5 decision:
 ```text
 continue skips breakpoint checking for the current pc only once when execution is already stopped at that breakpoint.
 ```
+
+Current implementation: uses this recommended behavior. After a breakpoint hit, `continue` executes the instruction at the current `pc` once before checking future breakpoint stops.
 
 Alternative acceptable decision:
 
@@ -145,6 +151,32 @@ EmuStatus debugger_continue(Debugger *debugger, char *error, size_t error_size);
 ```
 
 Direct helper exposure is optional, but if helpers are not exposed, the CLI/script tests must cover equivalent behavior.
+
+Current implementation exposes the recommended `Debugger` type and helper functions through `include/emulator.h`, and the CLI uses those helpers.
+
+## Current Runtime Artifacts
+
+- `src/debugger.c`
+- `./emulator debug <raw-binary>`
+- `debugger_init()` / `debugger_free()` / `debugger_reset()`
+- `debugger_add_breakpoint()` / `debugger_delete_breakpoint()` / `debugger_has_breakpoint()`
+- `debugger_step()` / `debugger_continue()` / `debugger_repl()`
+- stdin-scriptable REPL commands:
+
+```text
+help
+run / r
+step / s
+continue / c
+regs
+mem / x <address> <length>
+break / b <address>
+delete <breakpoint-id-or-address>
+breakpoints
+trace on
+trace off
+quit / q
+```
 
 ## Test Categories
 

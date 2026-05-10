@@ -27,10 +27,11 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v0.2 Learning Guide — Branches, Flags, and Loops](education/v0.2-learning-guide.md)
 - [v0.3 Learning Guide — Memory and Stack](education/v0.3-learning-guide.md)
 - [v0.4 Learning Guide — Functions and Returns](education/v0.4-learning-guide.md)
+- [v0.5 Learning Guide — Debugger REPL](education/v0.5-learning-guide.md)
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation for **v0.4 — Functions**.
+The repository currently contains the runtime implementation for **v0.5 — Debugger REPL**.
 
 Implemented now:
 
@@ -41,6 +42,7 @@ Implemented now:
 ./emulator run <raw-binary>
 ./emulator trace <raw-binary>
 ./emulator dump <raw-binary> <address> <length>
+./emulator debug <raw-binary>
 ```
 
 - Fixed 1 MiB flat memory.
@@ -85,6 +87,18 @@ Implemented now:
   - stack-frame style `X29` / `X30` save and restore
   - invalid return target handling
   - unsaved nested-call negative example
+- Scriptable debugger REPL command:
+  - `help`
+  - `run` / `r`
+  - `step` / `s`
+  - `continue` / `c`
+  - `regs`
+  - `mem` / `x <address> <length>`
+  - `break` / `b <address>`
+  - `delete <breakpoint-id-or-address>`
+  - `breakpoints`
+  - `trace on` / `trace off`
+  - `quit` / `q`
 - Automated test suites following `docs/test-plan-v0.1.md`, `docs/test-plan-v0.2.md`, `docs/test-plan-v0.3.md`, and `docs/test-plan-v0.4.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -95,6 +109,7 @@ Implemented now:
   - v0.3 CLI/memory tests for memory examples, invalid accesses, `dump`, decimal/hex dump arguments, out-of-bounds dump ranges, and trace output
   - v0.4 unit/integration tests for `BL`, `RET`, `RET Xn`, link-register behavior, nested calls, stack-frame calls, invalid return/call targets, recursion limits, and acceptance programs
   - v0.4 CLI/function tests for simple calls, sequential calls, nested calls, frame calls, invalid returns, unsaved nested-call behavior, and trace output
+- v0.5 automated tests are pending; `docs/test-plan-v0.5.md` is the source of truth for the upcoming debugger test pass.
 
 ## Build and Run
 
@@ -146,6 +161,18 @@ Run the v0.4 simple-call demo:
 ./emulator run examples/v0_4/simple_call.bin
 ```
 
+Start the v0.5 debugger:
+
+```sh
+./emulator debug examples/v0_1/add.bin
+```
+
+The debugger is stdin-scriptable, so it can also be used non-interactively:
+
+```sh
+printf 'break 0x1008\nrun\nregs\ncontinue\nquit\n' | ./emulator debug examples/v0_1/add.bin
+```
+
 Or build and run the main demo in one command:
 
 ```sh
@@ -158,7 +185,7 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, compiles the v0.1 through v0.4 C test runners, assembles examples, and runs all v0.1 through v0.4 CLI checks.
+The test target currently builds the emulator, compiles the v0.1 through v0.4 C test runners, assembles examples, and runs all v0.1 through v0.4 CLI checks. v0.5 runtime support is implemented, but the v0.5 automated test suite has not been added yet.
 
 ## IDE and Language Server Setup
 
