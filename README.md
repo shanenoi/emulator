@@ -138,7 +138,7 @@ Implemented now:
   - keeps `sp` at the top of flat memory and does not reserve/protect a stack region from loaded segments yet
   - preserves raw `.bin` behavior for v0.1 through v0.7 examples
   - ELF examples live in `examples/v0_8/`
-- Automated test suites following `docs/test-plan-v0.1.md`, `docs/test-plan-v0.2.md`, `docs/test-plan-v0.3.md`, `docs/test-plan-v0.4.md`, and `docs/test-plan-v0.5.md`:
+- Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v0.8.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
   - v0.1 CLI tests for success, usage errors, loader errors, and decode errors
@@ -154,8 +154,10 @@ Implemented now:
   - v0.6 CLI/runtime tests for usage, examples, readable traces, `regs`, error messages, docs, lessons, and acceptance workflows
   - v0.7 unit/integration tests for `SVC` decode/formatting, fake syscall ABI, guest exit, write output, error cases, debugger stepping, and memory-boundary edge cases
   - v0.7 CLI/syscall tests for stdout, stderr, guest exit status propagation, trace ordering, dump compatibility, debugger workflows, docs, and regression commands
+  - v0.8 unit/integration tests for ELF detection, header validation, program-header validation, segment loading, `.bss` zero-fill, entry/stack initialization, ELF execution, syscalls from ELF, debugger behavior, and malformed-file edge cases
+  - v0.8 CLI/ELF tests for `run`, `regs`, `trace`, `dump`, `debug`, dynamic-file rejection, malformed-file errors, raw-binary compatibility, docs, and acceptance workflows
 
-The full v0.1 through v0.7 test suite still runs with `make test`. v0.8 development is implemented, but v0.8 tests are intentionally not added yet.
+The full v0.1 through v0.8 test suite runs with `make test`.
 
 ## Build and Run
 
@@ -273,7 +275,7 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, assembles all examples, links the v0.8 ELF examples, compiles the v0.1 through v0.7 C test runners, and runs all v0.1 through v0.7 CLI checks. v0.8 tests are the next step.
+The test target currently builds the emulator, assembles all examples, links the v0.8 ELF examples, compiles the v0.1 through v0.8 C test runners, and runs all v0.1 through v0.8 CLI checks.
 
 ## IDE and Language Server Setup
 
@@ -740,7 +742,7 @@ Implemented ELF support:
 Initial limitations:
 
 - Support static `ET_EXEC` first.
-- No dynamic linker.
+- No dynamic linker and no `PT_INTERP`.
 - No libc requirement.
 - No `ET_DYN`/PIE load-bias policy.
 - No relocations.

@@ -153,8 +153,17 @@ EmuStatus emulator_step(Emulator *emu, char *error, size_t error_size) {
 EmuStatus emulator_run(Emulator *emu, char *error, size_t error_size) {
     while (!emu->cpu.halted) {
         if (emu->cpu.instructions_executed >= emu->instruction_limit) {
-            snprintf(error, error_size, "execution error: instruction limit reached: 0x%016llx",
-                     (unsigned long long)emu->instruction_limit);
+            uint32_t opcode = 0;
+            char fetch_error[256];
+            if (cpu_fetch(&emu->cpu, &emu->memory, &opcode, fetch_error, sizeof(fetch_error))) {
+                snprintf(error, error_size,
+                         "execution error at pc=0x%016" PRIx64 " opcode=0x%08x: instruction limit reached: 0x%016llx",
+                         emu->cpu.pc, opcode, (unsigned long long)emu->instruction_limit);
+            } else {
+                snprintf(error, error_size,
+                         "execution error at pc=0x%016" PRIx64 ": instruction limit reached: 0x%016llx (%s)",
+                         emu->cpu.pc, (unsigned long long)emu->instruction_limit, fetch_error);
+            }
             return EMU_ERROR;
         }
 
