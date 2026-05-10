@@ -1,7 +1,22 @@
 #include "emulator.h"
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
+
+static void print_trace_line(const Cpu *cpu, const Memory *memory, FILE *stream) {
+    uint32_t opcode = 0;
+    char formatted[256];
+    char error[256];
+
+    if (!cpu_fetch(cpu, memory, &opcode, error, sizeof(error))) {
+        fprintf(stream, "trace pc=0x%016" PRIx64 " <fetch-error: %s>\n", cpu->pc, error);
+        return;
+    }
+
+    (void)cpu_format_instruction(opcode, cpu->pc, formatted, sizeof(formatted));
+    fprintf(stream, "trace pc=0x%016" PRIx64 " %s\n", cpu->pc, formatted);
+}
 
 bool emulator_init(Emulator *emu, char *error, size_t error_size) {
     memset(emu, 0, sizeof(*emu));
@@ -29,7 +44,7 @@ EmuStatus emulator_run(Emulator *emu, char *error, size_t error_size) {
 
         if (emu->trace_enabled) {
             FILE *stream = emu->trace_stream != NULL ? emu->trace_stream : stdout;
-            fprintf(stream, "trace pc=0x%016llx\n", (unsigned long long)emu->cpu.pc);
+            print_trace_line(&emu->cpu, &emu->memory, stream);
         }
 
         EmuStatus status = cpu_step(&emu->cpu, &emu->memory, error, error_size);

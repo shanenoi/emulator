@@ -39,6 +39,12 @@ static bool check_data_range(const Memory *memory, uint64_t address, uint8_t wid
     return true;
 }
 
+static void add_instruction_context(char *error, size_t error_size, uint64_t pc, uint32_t opcode) {
+    char detail[256];
+    snprintf(detail, sizeof(detail), "%s", error);
+    snprintf(error, error_size, "execution error at pc=0x%016" PRIx64 " opcode=0x%08x: %s", pc, opcode, detail);
+}
+
 static uint64_t cpu_read_base_register(const Cpu *cpu, uint8_t index) {
     return index == 31 ? cpu->sp : cpu_read_register(cpu, index);
 }
@@ -583,16 +589,19 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
 
         if (!cpu_calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
                                          error_size)) {
+            add_instruction_context(error, error_size, current_pc, opcode);
             return EMU_ERROR;
         }
 
         if (instruction.access_size == 8) {
             if (!memory_read64(memory, address, &value64, error, error_size)) {
+                add_instruction_context(error, error_size, current_pc, opcode);
                 return EMU_ERROR;
             }
             cpu_write_register(cpu, instruction.rd, true, value64);
         } else {
             if (!memory_read32(memory, address, &value32, error, error_size)) {
+                add_instruction_context(error, error_size, current_pc, opcode);
                 return EMU_ERROR;
             }
             cpu_write_register(cpu, instruction.rd, false, value32);
@@ -613,16 +622,19 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
 
         if (!cpu_calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
                                          error_size)) {
+            add_instruction_context(error, error_size, current_pc, opcode);
             return EMU_ERROR;
         }
 
         if (instruction.access_size == 8) {
             if (!memory_write64(memory, address, cpu_read_register(cpu, instruction.rd), error, error_size)) {
+                add_instruction_context(error, error_size, current_pc, opcode);
                 return EMU_ERROR;
             }
         } else {
             if (!memory_write32(memory, address, (uint32_t)cpu_read_register(cpu, instruction.rd), error,
                                 error_size)) {
+                add_instruction_context(error, error_size, current_pc, opcode);
                 return EMU_ERROR;
             }
         }
@@ -643,13 +655,16 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
 
         if (!cpu_calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
                                          error_size)) {
+            add_instruction_context(error, error_size, current_pc, opcode);
             return EMU_ERROR;
         }
         if (!check_data_range(memory, address, 16, error, error_size)) {
+            add_instruction_context(error, error_size, current_pc, opcode);
             return EMU_ERROR;
         }
         if (!memory_read64(memory, address, &first, error, error_size) ||
             !memory_read64(memory, address + 8u, &second, error, error_size)) {
+            add_instruction_context(error, error_size, current_pc, opcode);
             return EMU_ERROR;
         }
 
@@ -669,14 +684,17 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
 
         if (!cpu_calculate_memory_access(cpu, &instruction, memory, &address, &writeback_value, &has_writeback, error,
                                          error_size)) {
+            add_instruction_context(error, error_size, current_pc, opcode);
             return EMU_ERROR;
         }
         if (!check_data_range(memory, address, 16, error, error_size)) {
+            add_instruction_context(error, error_size, current_pc, opcode);
             return EMU_ERROR;
         }
 
         if (!memory_write64(memory, address, cpu_read_register(cpu, instruction.rd), error, error_size) ||
             !memory_write64(memory, address + 8u, cpu_read_register(cpu, instruction.rt2), error, error_size)) {
+            add_instruction_context(error, error_size, current_pc, opcode);
             return EMU_ERROR;
         }
 

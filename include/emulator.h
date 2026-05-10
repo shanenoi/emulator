@@ -144,6 +144,7 @@ bool cpu_calculate_branch_target(uint64_t pc, int64_t offset, const Memory *memo
 bool cpu_calculate_memory_access(const Cpu *cpu, const EmuDecodedInstruction *instruction, const Memory *memory,
                                  uint64_t *address, uint64_t *writeback_value, bool *has_writeback, char *error,
                                  size_t error_size);
+bool cpu_format_instruction(uint32_t opcode, uint64_t address, char *out, size_t out_size);
 void cpu_dump(const Cpu *cpu, FILE *stream);
 
 bool load_raw_binary(Memory *memory, const char *path, uint64_t load_address, char *error, size_t error_size);

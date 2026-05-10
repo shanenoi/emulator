@@ -123,6 +123,20 @@ static void debugger_print_stop(EmuStatus status, const char *error, FILE *outpu
     }
 }
 
+static void debugger_print_trace_line(const Debugger *debugger, FILE *stream) {
+    uint32_t opcode = 0;
+    char formatted[256];
+    char error[256];
+
+    if (!cpu_fetch(&debugger->emu.cpu, &debugger->emu.memory, &opcode, error, sizeof(error))) {
+        fprintf(stream, "trace pc=0x%016" PRIx64 " <fetch-error: %s>\n", debugger->emu.cpu.pc, error);
+        return;
+    }
+
+    (void)cpu_format_instruction(opcode, debugger->emu.cpu.pc, formatted, sizeof(formatted));
+    fprintf(stream, "trace pc=0x%016" PRIx64 " %s\n", debugger->emu.cpu.pc, formatted);
+}
+
 bool debugger_init(Debugger *debugger, const char *path, char *error, size_t error_size) {
     memset(debugger, 0, sizeof(*debugger));
     debugger->path = path;
@@ -253,7 +267,7 @@ EmuStatus debugger_step(Debugger *debugger, char *error, size_t error_size) {
     }
     if (debugger->emu.trace_enabled) {
         FILE *stream = debugger->emu.trace_stream != NULL ? debugger->emu.trace_stream : stdout;
-        fprintf(stream, "trace pc=0x%016" PRIx64 "\n", debugger->emu.cpu.pc);
+        debugger_print_trace_line(debugger, stream);
     }
     return cpu_step(&debugger->emu.cpu, &debugger->emu.memory, error, error_size);
 }

@@ -64,7 +64,7 @@ This version is still **not** an ELF/Mach-O loader, source-level debugger, or fu
 
 ## Implementation Assumptions
 
-Current v0.6 runtime implementation status: **not implemented yet**.
+Current v0.6 runtime implementation status: **runtime implemented; automated v0.6 tests pending**.
 
 These assumptions should become implementation decisions before tests are finalized:
 
@@ -116,7 +116,7 @@ The exact format must be documented and tested.
 Potential new or updated files:
 
 ```text
-src/disasm.c              optional instruction-formatting helper
+src/disasm.c              instruction-formatting helper
 src/main.c                CLI command routing and usage updates
 src/emulator.c            trace formatting integration
 src/debugger.c            debugger trace formatting integration

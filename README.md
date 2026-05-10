@@ -22,17 +22,18 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v0.5 Test Plan — Debugger REPL](docs/test-plan-v0.5.md)
 - [v0.6 Test Plan — Assembler-Friendly Runtime](docs/test-plan-v0.6.md)
 
-## Education
+## Lessons
 
 - [v0.1 Lesson — Instruction Sandbox](lessons/v0.1-instruction-sandbox.md)
 - [v0.2 Lesson — Branches and Loops](lessons/v0.2-branches-and-loops.md)
 - [v0.3 Lesson — Memory and Stack](lessons/v0.3-memory-and-stack.md)
 - [v0.4 Lesson — Functions and Returns](lessons/v0.4-functions-and-returns.md)
 - [v0.5 Lesson — Debugger REPL](lessons/v0.5-debugger-repl.md)
+- [v0.6 Lesson — Assembler-Friendly Runtime](lessons/v0.6-assembler-friendly-runtime.md)
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation for **v0.5 — Debugger REPL**.
+The repository currently contains the runtime implementation for **v0.6 — Assembler-Friendly Runtime**.
 
 Implemented now:
 
@@ -42,6 +43,7 @@ Implemented now:
 ```sh
 ./emulator run <raw-binary>
 ./emulator trace <raw-binary>
+./emulator regs <raw-binary>
 ./emulator dump <raw-binary> <address> <length>
 ./emulator debug <raw-binary>
 ```
@@ -105,6 +107,13 @@ Implemented now:
   - `debug_add_script.txt`
   - `debug_function_script.txt`
   - `debug_memory_script.txt`
+- v0.6 assembler-friendly runtime polish:
+  - readable trace lines include `pc`, raw opcode, and decoded instruction text
+  - CLI trace and debugger `trace on` share the same trace style
+  - `regs <raw-binary>` runs a program and prints only the final register state
+  - `cpu_format_instruction()` formats supported instructions for lessons and tests
+  - `examples/README.md` documents how example assembly is built and used
+  - memory-access runtime errors include instruction `pc` and raw opcode context
 - Automated test suites following `docs/test-plan-v0.1.md`, `docs/test-plan-v0.2.md`, `docs/test-plan-v0.3.md`, `docs/test-plan-v0.4.md`, and `docs/test-plan-v0.5.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -117,6 +126,8 @@ Implemented now:
   - v0.4 CLI/function tests for simple calls, sequential calls, nested calls, frame calls, invalid returns, unsaved nested-call behavior, and trace output
   - v0.5 unit/integration tests for debugger initialization, reset behavior, breakpoint helpers, stepping, continuing, runtime errors, and instruction limits
   - v0.5 CLI/debugger tests for scripted REPL workflows, command parsing, aliases, breakpoints, register/memory inspection, trace toggling, EOF handling, and acceptance scripts
+
+v0.6 automated tests are pending. Existing v0.1 through v0.5 tests still pass with the v0.6 runtime changes.
 
 ## Build and Run
 
@@ -148,6 +159,18 @@ Run the same style of program with trace output:
 
 ```sh
 ./emulator trace examples/v0_2/trace_loop.bin
+```
+
+v0.6 trace output includes address, opcode, and decoded instruction text:
+
+```text
+trace pc=0x0000000000001000 0x0000000000001000: 0xd2800040  movz x0, #0x2
+```
+
+Print only the final register state after running a program:
+
+```sh
+./emulator regs examples/v0_1/add.bin
 ```
 
 Run the v0.3 memory/stack demo:
@@ -200,7 +223,7 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, compiles the v0.1 through v0.5 C test runners, assembles examples, and runs all v0.1 through v0.5 CLI checks.
+The test target currently builds the emulator, assembles all examples, compiles the v0.1 through v0.5 C test runners, and runs all v0.1 through v0.5 CLI checks.
 
 ## IDE and Language Server Setup
 
@@ -276,7 +299,7 @@ These decisions come from the v0.2 test plan and current implementation pass:
 - `CMP` updates NZCV flags and does not write a general-purpose destination register.
 - Supported condition checks include the full common ARM64 condition set: `EQ`, `NE`, `CS`, `CC`, `MI`, `PL`, `VS`, `VC`, `HI`, `LS`, `GE`, `LT`, `GT`, `LE`, and `AL`.
 - `CBZ` and `CBNZ` support both 64-bit `x` and 32-bit `w` forms; 32-bit forms compare only the lower 32 bits.
-- Trace mode uses `./emulator trace <raw-binary>` and prints each executed `pc` before the final register dump.
+- Trace mode uses `./emulator trace <raw-binary>` and prints each executed `pc` before the final register dump. Starting in v0.6, each trace line also includes the raw opcode and decoded instruction text.
 - `ADD register` is intentionally deferred because v0.2 examples use immediate addition.
 - Full sum-loop acceptance using `add x1, x1, x0` is deferred with `ADD register`; v0.2 covers the immediate-counting loop variant instead.
 - `CMP` immediate supports the ARM64 immediate shift forms accepted by the decoder: unshifted and `lsl #12`.
@@ -313,7 +336,7 @@ These decisions come from the v0.4 test plan and current implementation pass:
 - Return targets must be 4-byte aligned and must point to a fetchable instruction inside emulator memory.
 - `RET` uses but does not modify `X30` by itself.
 - Nested functions must save/restore `X30` manually, usually with the existing v0.3 `STP` / `LDP` stack operations.
-- Trace mode remains unchanged: it prints each executed `pc`; this is the v0.4 call/return visibility mechanism. No symbolic function-name or call-stack tracing is added yet.
+- Trace mode prints each executed `pc`. Starting in v0.6, it also shows raw opcode and decoded instruction text. No symbolic function-name or call-stack tracing is added yet.
 - `ADD register` remains deferred. v0.4 examples use `ADD` immediate so function-call behavior does not depend on a new arithmetic form.
 
 ## Planned Versions
@@ -561,22 +584,28 @@ Add CLI polish:
 - `emulator run <program.bin>`
 - `emulator trace <program.bin>`
 - `emulator debug <program.bin>`
-- `emulator regs <program.bin>` or equivalent final-state view
+- `emulator regs <program.bin>` final-state view
 
 Add developer tooling:
 
 - `Makefile` targets for examples.
 - `examples/` organized by version.
-- Optional symbol map support from assembler/linker output.
+- `examples/README.md` for the raw-binary example workflow.
 - Better error messages with instruction address and raw opcode.
-- Disassembly text in traces, even if initially partial.
+- Decoded instruction text in traces for every currently supported instruction family.
+- `cpu_format_instruction()` for stable instruction formatting.
+
+Deferred:
+
+- Symbol map support.
+- Generated listing/disassembly files.
 
 Example trace output:
 
 ```text
-0x1000: mov x0, #5        x0: 0 -> 5
-0x1004: mov x1, #0        x1: 0 -> 0
-0x1008: add x1, x1, x0    x1: 0 -> 5
+trace pc=0x0000000000001000 0x0000000000001000: 0xd2800040  movz x0, #0x2
+trace pc=0x0000000000001004 0x0000000000001004: 0xd2800061  movz x1, #0x3
+trace pc=0x0000000000001008 0x0000000000001008: 0x91000c02  add x2, x0, #0x3
 ```
 
 Definition of done:

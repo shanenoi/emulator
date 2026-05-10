@@ -8,6 +8,7 @@ SRC := \
 	src/main.c \
 	src/debugger.c \
 	src/emulator.c \
+	src/disasm.c \
 	src/cpu.c \
 	src/memory.c \
 	src/loader.c
@@ -16,6 +17,7 @@ OBJ := $(SRC:.c=.o)
 CORE_SRC := \
 	src/emulator.c \
 	src/debugger.c \
+	src/disasm.c \
 	src/cpu.c \
 	src/memory.c \
 	src/loader.c
@@ -111,7 +113,7 @@ tests/v0_4/test_v0_4: tests/v0_4/test_v0_4.o $(CORE_OBJ)
 tests/v0_5/test_v0_5: tests/v0_5/test_v0_5.o $(CORE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^
 
-test: all tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_3 tests/v0_4/test_v0_4 tests/v0_5/test_v0_5
+test: all examples tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_3 tests/v0_4/test_v0_4 tests/v0_5/test_v0_5
 	./tests/v0_1/test_v0_1
 	./tests/v0_1/test_cli.sh
 	./tests/v0_2/test_v0_2

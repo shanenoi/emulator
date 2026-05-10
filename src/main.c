@@ -9,10 +9,11 @@
 static void print_usage(FILE *stream) {
     fprintf(stream, "usage: emulator run <raw-binary>\n");
     fprintf(stream, "       emulator trace <raw-binary>\n");
+    fprintf(stream, "       emulator regs <raw-binary>\n");
     fprintf(stream, "       emulator dump <raw-binary> <address> <length>\n");
     fprintf(stream, "       emulator debug <raw-binary>\n");
     fprintf(stream, "\n");
-    fprintf(stream, "v0.5 supports raw little-endian AArch64 binaries loaded at 0x%llx.\n",
+    fprintf(stream, "v0.6 supports raw little-endian AArch64 binaries loaded at 0x%llx.\n",
             (unsigned long long)EMU_LOAD_ADDRESS);
 }
 
@@ -74,6 +75,7 @@ int main(int argc, char **argv) {
 
     bool trace_enabled = false;
     bool dump_enabled = false;
+    bool regs_only = false;
     uint64_t dump_address = 0;
     uint64_t dump_length = 0;
     if (strcmp(argv[1], "trace") == 0) {
@@ -82,6 +84,12 @@ int main(int argc, char **argv) {
             return 2;
         }
         trace_enabled = true;
+    } else if (strcmp(argv[1], "regs") == 0) {
+        if (argc != 3) {
+            print_usage(stderr);
+            return 2;
+        }
+        regs_only = true;
     } else if (strcmp(argv[1], "dump") == 0) {
         if (argc != 5) {
             print_usage(stderr);
@@ -117,7 +125,9 @@ int main(int argc, char **argv) {
 
     EmuStatus status = emulator_run(&emu, error, sizeof(error));
     if (status == EMU_HALTED) {
-        printf("halted\n");
+        if (!regs_only) {
+            printf("halted\n");
+        }
         cpu_dump(&emu.cpu, stdout);
         if (dump_enabled && !dump_memory(&emu.memory, dump_address, dump_length, stdout, error, sizeof(error))) {
             fprintf(stderr, "error: %s\n", error);
