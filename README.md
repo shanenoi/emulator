@@ -19,6 +19,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v0.2 Test Plan — Branches and Loops](docs/test-plan-v0.2.md)
 - [v0.3 Test Plan — Memory and Stack](docs/test-plan-v0.3.md)
 - [v0.4 Test Plan — Functions](docs/test-plan-v0.4.md)
+- [v0.5 Test Plan — Debugger REPL](docs/test-plan-v0.5.md)
 
 ## Education
 
