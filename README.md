@@ -138,9 +138,10 @@ Implemented now:
   - v0.5 CLI/debugger tests for scripted REPL workflows, command parsing, aliases, breakpoints, register/memory inspection, trace toggling, EOF handling, and acceptance scripts
   - v0.6 unit/integration tests for instruction formatting, readable disassembly text, formatting edge cases, and improved error context
   - v0.6 CLI/runtime tests for usage, examples, readable traces, `regs`, error messages, docs, lessons, and acceptance workflows
+  - v0.7 unit/integration tests for `SVC` decode/formatting, fake syscall ABI, guest exit, write output, error cases, debugger stepping, and memory-boundary edge cases
+  - v0.7 CLI/syscall tests for stdout, stderr, guest exit status propagation, trace ordering, dump compatibility, debugger workflows, docs, and regression commands
 
-v0.7 development code is implemented, but v0.7 tests are intentionally not added yet. The full v0.1 through v0.6
-suite runs with `make test`.
+The full v0.1 through v0.7 suite runs with `make test`.
 
 ## Build and Run
 
@@ -243,7 +244,7 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, assembles all examples, compiles the v0.1 through v0.6 C test runners, and runs all v0.1 through v0.6 CLI checks. v0.7 implementation code and examples are present, but v0.7 automated tests have not been added yet.
+The test target currently builds the emulator, assembles all examples, compiles the v0.1 through v0.7 C test runners, and runs all v0.1 through v0.7 CLI checks.
 
 ## IDE and Language Server Setup
 
@@ -653,8 +654,8 @@ x0 = return value
 Implemented syscalls:
 
 ```text
-64 = write(fd, ptr, len)
-93 = exit(status)
+write = 64
+exit = 93
 ```
 
 `write` supports fd `1` for stdout and fd `2` for stderr. Unsupported fds return fake `-EBADF` in `x0`. Unknown syscall numbers return fake `-ENOSYS` in `x0`. Invalid guest write buffers are runtime errors because they are invalid emulated memory accesses rather than recoverable syscall failures.

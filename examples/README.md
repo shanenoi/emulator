@@ -89,6 +89,11 @@ make examples/v0_7/hello.bin
 
 v0.7 supports a tiny fake syscall ABI through `svc #0`:
 
+```text
+write = 64
+exit = 93
+```
+
 - `x8 = 64`: `write(fd, buffer, length)` with `x0 = fd`, `x1 = guest buffer address`, and `x2 = length`.
 - `x8 = 93`: `exit(status)` with `x0 = status`.
 - `fd = 1` writes to host stdout; `fd = 2` writes to host stderr.
