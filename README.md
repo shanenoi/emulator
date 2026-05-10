@@ -77,6 +77,7 @@ Implemented now:
 - Memory and stack examples in `examples/v0_3/`.
 - Function examples in `examples/v0_4/`, including:
   - simple function call and return
+  - multiple sequential calls to the same function
   - explicit `RET X30`
   - `RET Xn` through a custom register
   - nested calls with saved/restored `X30`
@@ -238,7 +239,7 @@ These decisions come from the v0.4 test plan and current implementation pass:
 - Return targets must be 4-byte aligned and must point to a fetchable instruction inside emulator memory.
 - `RET` uses but does not modify `X30` by itself.
 - Nested functions must save/restore `X30` manually, usually with the existing v0.3 `STP` / `LDP` stack operations.
-- Trace mode remains unchanged: it prints each executed `pc`; no symbolic function-name or call-stack tracing is added yet.
+- Trace mode remains unchanged: it prints each executed `pc`; this is the v0.4 call/return visibility mechanism. No symbolic function-name or call-stack tracing is added yet.
 - `ADD register` remains deferred. v0.4 examples use `ADD` immediate so function-call behavior does not depend on a new arithmetic form.
 
 ## Planned Versions

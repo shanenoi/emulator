@@ -17,6 +17,7 @@ Current runtime artifacts:
 ```text
 examples/v0_4/
 ├── simple_call.s
+├── sequential_calls.s
 ├── nested_calls.s
 ├── call_with_stack_frame.s
 ├── ret_x30.s
@@ -47,7 +48,8 @@ tests/v0_4/
 - Support simple nested calls.
 - Support simple stack-frame examples using existing `STP` / `LDP` behavior.
 - Add examples for simple call, nested call, stack-frame call, custom-register return, and invalid return.
-- Add trace output that is useful for observing calls and returns.
+- Add examples for sequential calls to the same function.
+- Use normal trace output as the v0.4 mechanism for observing calls and returns.
 - Add optional call-trace output if implemented as a separate CLI mode or trace enhancement.
 - Add automated tests for decode, execution, nested calls, stack-frame examples, invalid return targets, CLI behavior, and examples.
 

@@ -49,6 +49,7 @@ V0_3_EXAMPLES := \
 	examples/v0_3/invalid_memory_access.bin
 V0_4_EXAMPLES := \
 	examples/v0_4/simple_call.bin \
+	examples/v0_4/sequential_calls.bin \
 	examples/v0_4/nested_calls.bin \
 	examples/v0_4/call_with_stack_frame.bin \
 	examples/v0_4/ret_x30.bin \
