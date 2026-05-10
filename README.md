@@ -23,11 +23,11 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Education
 
-- [v0.1 Learning Guide — Understanding the Emulator](education/v0.1-learning-guide.md)
-- [v0.2 Learning Guide — Branches, Flags, and Loops](education/v0.2-learning-guide.md)
-- [v0.3 Learning Guide — Memory and Stack](education/v0.3-learning-guide.md)
-- [v0.4 Learning Guide — Functions and Returns](education/v0.4-learning-guide.md)
-- [v0.5 Learning Guide — Debugger REPL](education/v0.5-learning-guide.md)
+- [v0.1 Lesson — Instruction Sandbox](lessons/v0.1-instruction-sandbox.md)
+- [v0.2 Lesson — Branches and Loops](lessons/v0.2-branches-and-loops.md)
+- [v0.3 Lesson — Memory and Stack](lessons/v0.3-memory-and-stack.md)
+- [v0.4 Lesson — Functions and Returns](lessons/v0.4-functions-and-returns.md)
+- [v0.5 Lesson — Debugger REPL](lessons/v0.5-debugger-repl.md)
 
 ## Current Implementation Status
 

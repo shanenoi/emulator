@@ -637,7 +637,7 @@ ret
 **Expected result:**
 
 - Without saving `X30`, `first` cannot return to its caller correctly.
-- Test should either assert instruction-limit behavior or use this only as an education/example negative case.
+- Test should either assert instruction-limit behavior or use this only as a lesson/example negative case.
 - Documentation must explain why nested functions need to preserve `X30`.
 
 ## 8. Trace and call-trace tests
@@ -858,7 +858,7 @@ Before v0.4 is complete, update:
 - `docs/test-plan-v0.4.md`
   - Update current implementation status when runtime and tests land.
   - Mark any deferred optional items clearly.
-- `education/v0.4-learning-guide.md`
+- `lessons/v0.4-functions-and-returns.md`
   - Explain `BL`, `RET`, `X30` / `LR`, return addresses, and nested-call `X30` clobbering.
   - Explain why nested calls need stack saving of `X30`.
   - Walk through a simple call step-by-step.
@@ -898,4 +898,4 @@ Recommended order:
 10. Add invalid return example.
 11. Add trace/CLI coverage.
 12. Add v0.4 automated tests.
-13. Update README and education guide.
+13. Update README and lesson guide.

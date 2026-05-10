@@ -1390,8 +1390,8 @@ Before v0.2 is considered complete, update:
 - `docs/test-plan-v0.2.md`
   - mark any deferred optional tests clearly
   - record final implementation decisions
-- `education/`
-  - add or update a learning guide explaining branches, `pc`, labels, flags, and loops
+- `lessons/`
+  - add or update a lesson explaining branches, `pc`, labels, flags, and loops
 - `docs/instruction-support.md` if such a file exists by then
 
 ## Release checklist

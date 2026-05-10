@@ -1330,7 +1330,7 @@ Before v0.5 is accepted, update:
   - document breakpoint behavior.
   - document run/reset behavior.
   - document stdin script usage.
-- `education/v0.5-learning-guide.md`
+- `lessons/v0.5-debugger-repl.md`
   - explain why a debugger is useful for emulator learning.
   - explain `step`, `continue`, breakpoints, and register/memory inspection.
   - include at least one complete debugging session walkthrough.
@@ -1355,7 +1355,7 @@ v0.5 is complete when:
 - invalid commands do not crash or exit unexpectedly.
 - EOF exits cleanly.
 - all v0.1 through v0.5 tests pass.
-- README and education docs are current.
+- README and lesson docs are current.
 
 ---
 
@@ -1372,4 +1372,4 @@ v0.5 is complete when:
 9. Add `trace on/off` in debug mode.
 10. Add robust invalid-input handling.
 11. Add automated v0.5 tests. **Done:** `tests/v0_5/test_v0_5.c` and `tests/v0_5/test_cli_debugger.sh`.
-12. Update docs and education guide.
+12. Update docs and lesson guide.

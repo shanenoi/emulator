@@ -938,7 +938,7 @@ README documents:
 Add:
 
 ```text
-education/v0.3-learning-guide.md
+lessons/v0.3-memory-and-stack.md
 ```
 
 It should explain:
@@ -972,7 +972,7 @@ Before v0.3 is considered complete:
 - [x] `make clean && make test` passes.
 - [x] `make examples` builds v0.1, v0.2, and v0.3 examples.
 - [x] README documents v0.3 usage.
-- [x] `education/v0.3-learning-guide.md` exists.
+- [x] `lessons/v0.3-memory-and-stack.md` exists.
 - [x] Unsupported load/store variants are documented.
 - [x] At least one CLI command demonstrates memory dump output.
 - [x] Git status is clean after `make clean && make test`, excluding ignored generated build/test artifacts.
@@ -989,7 +989,7 @@ Before v0.3 is considered complete:
 8. Add v0.3 examples.
 9. Add CLI dump command.
 10. Add automated tests following this plan.
-11. Update README and education docs.
+11. Update README and lesson docs.
 
 ## 15. Non-goals for v0.3 release
 
