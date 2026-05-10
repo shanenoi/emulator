@@ -25,6 +25,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v0.8 Test Plan — ELF64 Loader](docs/test-plan-v0.8.md)
 - [v0.9 Test Plan — Tiny Freestanding C Programs](docs/test-plan-v0.9.md)
 - [v1.0 Test Plan — Stable Learning Emulator](docs/test-plan-v1.0.md)
+- [v1.1 Test Plan — Mach-O Loader](docs/test-plan-v1.1.md)
 
 ## Lessons
 
