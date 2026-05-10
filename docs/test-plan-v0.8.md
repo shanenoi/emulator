@@ -107,12 +107,14 @@ These assumptions should become implementation decisions before tests are finali
 10. Unknown non-load program header types are ignored unless they imply unsupported runtime behavior.
 11. `p_vaddr` is treated as the guest memory address in the emulator's flat memory model.
 12. v0.8 examples should be linked so all loaded virtual addresses fit inside `EMU_MEMORY_SIZE`.
-13. The initial `pc` becomes the ELF header's `e_entry`.
+13. The initial `pc` becomes the ELF header's `e_entry`, and `e_entry` must be 4-byte aligned.
 14. The initial `sp` remains the top of emulator memory unless a later version adds a real process stack layout.
 15. `HLT` and v0.7 fake syscalls remain valid ways to stop an ELF program.
 16. Segment permissions are recorded for inspection/future use but are not enforced in v0.8 unless explicitly documented.
-17. Tests should not require a cross compiler to be installed. Unit/CLI tests may generate tiny ELF files directly from byte arrays.
-18. Documentation may show an optional `aarch64-linux-gnu-as`/`ld` or `gcc -nostdlib -static` command, but automated tests should have a fallback that constructs minimal ELF fixtures directly.
+17. Segment virtual addresses do not have to be ELF page-aligned in v0.8 as long as the mapped ranges fit emulator memory and do not overlap.
+18. v0.8 does not reserve/protect a stack region from loaded segments; stack collision is the guest program's responsibility.
+19. Tests should not require a cross compiler to be installed. Unit/CLI tests may generate tiny ELF files directly from byte arrays.
+20. Documentation may show an optional `aarch64-linux-gnu-as`/`ld` or `gcc -nostdlib -static` command, but automated tests should have a fallback that constructs minimal ELF fixtures directly.
 
 Recommended constants:
 

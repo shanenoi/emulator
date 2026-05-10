@@ -319,6 +319,11 @@ static bool load_elf64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t fi
         snprintf(error, error_size, "ELF loader error: executable has no PT_LOAD segments");
         return false;
     }
+    if ((e_entry & 0x3u) != 0) {
+        snprintf(error, error_size, "ELF loader error: entry point is not 4-byte aligned: entry=0x%016" PRIx64,
+                 e_entry);
+        return false;
+    }
     if (!entry_is_mapped(program, e_entry)) {
         snprintf(error, error_size, "ELF loader error: entry point is not inside a loaded segment: entry=0x%016" PRIx64,
                  e_entry);

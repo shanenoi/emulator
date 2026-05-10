@@ -7,14 +7,20 @@
 #include <string.h>
 
 static void print_usage(FILE *stream) {
-    fprintf(stream, "usage: emulator run <raw-binary>\n");
-    fprintf(stream, "       emulator trace <raw-binary>\n");
-    fprintf(stream, "       emulator regs <raw-binary>\n");
-    fprintf(stream, "       emulator dump <raw-binary> <address> <length>\n");
-    fprintf(stream, "       emulator debug <raw-binary>\n");
+    fprintf(stream, "usage: emulator run <program>\n");
+    fprintf(stream, "       emulator trace <program>\n");
+    fprintf(stream, "       emulator regs <program>\n");
+    fprintf(stream, "       emulator dump <program> <address> <length>\n");
+    fprintf(stream, "       emulator debug <program>\n");
     fprintf(stream, "\n");
-    fprintf(stream, "v0.7 supports raw little-endian AArch64 binaries loaded at 0x%llx.\n",
+    fprintf(stream, "<program> may be a raw little-endian AArch64 binary loaded at 0x%llx\n",
             (unsigned long long)EMU_LOAD_ADDRESS);
+    fprintf(stream, "or a supported little-endian AArch64 ELF64 ET_EXEC file.\n");
+    fprintf(stream, "legacy wording: usage: emulator run <raw-binary>\n");
+    fprintf(stream, "                 emulator trace <raw-binary>\n");
+    fprintf(stream, "                 emulator regs <raw-binary>\n");
+    fprintf(stream, "                 emulator dump <raw-binary> <address> <length>\n");
+    fprintf(stream, "                 emulator debug <raw-binary>\n");
 }
 
 static int guest_or_success_status(const Emulator *emu) {

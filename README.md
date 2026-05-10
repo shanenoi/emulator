@@ -116,7 +116,7 @@ Implemented now:
 - v0.6 assembler-friendly runtime polish:
   - readable trace lines include `pc`, raw opcode, and decoded instruction text
   - CLI trace and debugger `trace on` share the same trace style
-  - `regs <raw-binary>` runs a program and prints only the final register state
+  - `regs <program>` runs a program and prints only the final register state
   - `cpu_format_instruction()` formats supported instructions for lessons and tests
   - `examples/README.md` documents how example assembly is built and used
   - memory-access runtime errors include instruction `pc` and raw opcode context
@@ -130,10 +130,12 @@ Implemented now:
 - v0.8 ELF64 loader:
   - loader auto-detects ELF files by `\x7fELF` magic and keeps non-ELF files on the raw-binary path
   - supports little-endian AArch64 `ET_EXEC` ELF64 files
-  - rejects `ET_DYN`/PIE, `PT_INTERP`, wrong architecture, wrong endian, truncated headers, invalid program-header tables, invalid segment ranges, overlapping `PT_LOAD` segments, and unmapped entry points
+  - rejects `ET_DYN`/PIE, `PT_INTERP`, wrong architecture, wrong endian, truncated headers, invalid program-header tables, invalid segment ranges, overlapping `PT_LOAD` segments, unmapped entry points, and misaligned entry points
   - loads `PT_LOAD` segments at their guest virtual addresses
   - zero-fills segment memory when `p_memsz > p_filesz`, which is how simple `.bss` works
   - records segment bounds and permissions for inspection/future versions, but does not enforce read/write/execute permissions yet
+  - accepts in-bounds `PT_LOAD` segment addresses without requiring ELF page alignment; instruction fetch still requires 4-byte-aligned `pc`
+  - keeps `sp` at the top of flat memory and does not reserve/protect a stack region from loaded segments yet
   - preserves raw `.bin` behavior for v0.1 through v0.7 examples
   - ELF examples live in `examples/v0_8/`
 - Automated test suites following `docs/test-plan-v0.1.md`, `docs/test-plan-v0.2.md`, `docs/test-plan-v0.3.md`, `docs/test-plan-v0.4.md`, and `docs/test-plan-v0.5.md`:
@@ -333,7 +335,7 @@ Known v0.1 limitations:
 - Branches are supported starting in v0.2.
 - No load/store ARM64 instructions yet.
 - No stack operations yet.
-- No ELF or Mach-O loader yet.
+- No ELF loader until v0.8, and no Mach-O loader yet.
 - No syscalls yet.
 - No debugger REPL yet.
 
@@ -347,7 +349,7 @@ These decisions come from the v0.2 test plan and current implementation pass:
 - `CMP` updates NZCV flags and does not write a general-purpose destination register.
 - Supported condition checks include the full common ARM64 condition set: `EQ`, `NE`, `CS`, `CC`, `MI`, `PL`, `VS`, `VC`, `HI`, `LS`, `GE`, `LT`, `GT`, `LE`, and `AL`.
 - `CBZ` and `CBNZ` support both 64-bit `x` and 32-bit `w` forms; 32-bit forms compare only the lower 32 bits.
-- Trace mode uses `./emulator trace <raw-binary>` and prints each executed `pc` before the final register dump. Starting in v0.6, each trace line also includes the raw opcode and decoded instruction text.
+- Trace mode uses `./emulator trace <program>` and prints each executed `pc` before the final register dump. Starting in v0.6, each trace line also includes the raw opcode and decoded instruction text; starting in v0.8, `<program>` may be either a raw binary or supported ELF64 file.
 - `ADD register` is intentionally deferred because v0.2 examples use immediate addition.
 - Full sum-loop acceptance using `add x1, x1, x0` is deferred with `ADD register`; v0.2 covers the immediate-counting loop variant instead.
 - `CMP` immediate supports the ARM64 immediate shift forms accepted by the decoder: unshifted and `lsl #12`.
@@ -368,7 +370,7 @@ These decisions come from the v0.3 test plan and current implementation pass:
 - Failed loads/stores do not update destination registers or write-back bases.
 - Failed stores and pair operations do not partially modify memory.
 - Data load/store operations allow unaligned addresses because memory is byte-addressed; instruction fetch remains 4-byte aligned.
-- Memory dump uses `./emulator dump <raw-binary> <address> <length>` and prints memory after successful program execution.
+- Memory dump uses `./emulator dump <program> <address> <length>` and prints memory after successful program execution.
 - Byte/halfword loads and stores, sign-extending loads, atomic/exclusive instructions, and unprivileged load/store variants remain out of scope.
 
 ## v0.4 Implementation Decisions
