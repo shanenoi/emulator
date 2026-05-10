@@ -10,7 +10,7 @@ The goal of v0.4 is to make the emulator capable of running small hand-written A
 
 ## Current implementation status
 
-v0.4 runtime code is implemented. v0.4 automated tests are not implemented yet.
+v0.4 runtime code is implemented. v0.4 automated tests are implemented and included in `make test`.
 
 Current runtime artifacts:
 
@@ -26,7 +26,7 @@ examples/v0_4/
 └── unsaved_nested_call.s
 ```
 
-Expected future test artifacts:
+Current test artifacts:
 
 ```text
 tests/v0_4/

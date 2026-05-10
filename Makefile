@@ -88,10 +88,10 @@ run-demo: all examples/v0_1/add.bin
 
 clean:
 	rm -f $(TARGET) $(OBJ) tests/v0_1/*.o tests/v0_1/test_v0_1 tests/v0_2/*.o tests/v0_2/test_v0_2 \
-		tests/v0_3/*.o tests/v0_3/test_v0_3 \
+		tests/v0_3/*.o tests/v0_3/test_v0_3 tests/v0_4/*.o tests/v0_4/test_v0_4 \
 		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
 		examples/v0_3/*.o examples/v0_3/*.bin examples/v0_4/*.o examples/v0_4/*.bin \
-		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/*
+		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/* tests/v0_4/tmp/*
 
 tests/v0_1/test_v0_1: tests/v0_1/test_v0_1.o $(CORE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^
@@ -102,10 +102,15 @@ tests/v0_2/test_v0_2: tests/v0_2/test_v0_2.o $(CORE_OBJ)
 tests/v0_3/test_v0_3: tests/v0_3/test_v0_3.o $(CORE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^
 
-test: all tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_3
+tests/v0_4/test_v0_4: tests/v0_4/test_v0_4.o $(CORE_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+test: all tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_3 tests/v0_4/test_v0_4
 	./tests/v0_1/test_v0_1
 	./tests/v0_1/test_cli.sh
 	./tests/v0_2/test_v0_2
 	./tests/v0_2/test_cli_trace.sh
 	./tests/v0_3/test_v0_3
 	./tests/v0_3/test_cli_memory.sh
+	./tests/v0_4/test_v0_4
+	./tests/v0_4/test_cli_functions.sh

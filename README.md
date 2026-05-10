@@ -84,7 +84,7 @@ Implemented now:
   - stack-frame style `X29` / `X30` save and restore
   - invalid return target handling
   - unsaved nested-call negative example
-- Automated test suites following `docs/test-plan-v0.1.md`, `docs/test-plan-v0.2.md`, and `docs/test-plan-v0.3.md`:
+- Automated test suites following `docs/test-plan-v0.1.md`, `docs/test-plan-v0.2.md`, `docs/test-plan-v0.3.md`, and `docs/test-plan-v0.4.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
   - v0.1 CLI tests for success, usage errors, loader errors, and decode errors
@@ -92,7 +92,8 @@ Implemented now:
   - v0.2 CLI/trace tests for loop examples, trace output, usage errors, and instruction-limit failures
   - v0.3 unit/integration tests for load/store decoding, memory execution, stack write-back behavior, pair operations, register-31 semantics, edge cases, and acceptance programs
   - v0.3 CLI/memory tests for memory examples, invalid accesses, `dump`, decimal/hex dump arguments, out-of-bounds dump ranges, and trace output
-- v0.4 automated tests are not implemented yet.
+  - v0.4 unit/integration tests for `BL`, `RET`, `RET Xn`, link-register behavior, nested calls, stack-frame calls, invalid return/call targets, recursion limits, and acceptance programs
+  - v0.4 CLI/function tests for simple calls, sequential calls, nested calls, frame calls, invalid returns, unsaved nested-call behavior, and trace output
 
 ## Build and Run
 
@@ -156,7 +157,7 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, compiles the v0.1, v0.2, and v0.3 C test runners, assembles examples, and runs all v0.1/v0.2/v0.3 CLI checks. v0.4 tests are planned but intentionally not added in the current development pass.
+The test target currently builds the emulator, compiles the v0.1 through v0.4 C test runners, assembles examples, and runs all v0.1 through v0.4 CLI checks.
 
 Expected result includes:
 
