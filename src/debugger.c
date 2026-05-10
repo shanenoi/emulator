@@ -115,9 +115,14 @@ static bool dump_memory_debug(const Memory *memory, uint64_t address, uint64_t l
     return true;
 }
 
-static void debugger_print_stop(EmuStatus status, const char *error, FILE *output, FILE *error_stream) {
+static void debugger_print_stop(const Debugger *debugger, EmuStatus status, const char *error, FILE *output,
+                                FILE *error_stream) {
     if (status == EMU_HALTED) {
-        fprintf(output, "halted\n");
+        if (debugger->emu.guest_exited) {
+            fprintf(output, "exited status=%u\n", (unsigned)debugger->emu.guest_exit_code);
+        } else {
+            fprintf(output, "halted\n");
+        }
     } else if (status == EMU_ERROR) {
         fprintf(error_stream, "error: %s\n", error);
     }
@@ -269,7 +274,7 @@ EmuStatus debugger_step(Debugger *debugger, char *error, size_t error_size) {
         FILE *stream = debugger->emu.trace_stream != NULL ? debugger->emu.trace_stream : stdout;
         debugger_print_trace_line(debugger, stream);
     }
-    return cpu_step(&debugger->emu.cpu, &debugger->emu.memory, error, error_size);
+    return emulator_step(&debugger->emu, error, error_size);
 }
 
 EmuStatus debugger_continue(Debugger *debugger, char *error, size_t error_size) {
@@ -425,7 +430,7 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
             }
             EmuStatus status = debugger_step(debugger, error, sizeof(error));
             fprintf(output, "pc=0x%016" PRIx64 "\n", debugger->emu.cpu.pc);
-            debugger_print_stop(status, error, output, error_stream);
+            debugger_print_stop(debugger, status, error, output, error_stream);
             continue;
         }
         if (strcmp(command, "continue") == 0 || strcmp(command, "c") == 0) {
@@ -436,7 +441,7 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
             if (status == EMU_OK && debugger->stopped_at_breakpoint) {
                 fprintf(output, "%s\n", error);
             } else {
-                debugger_print_stop(status, error, output, error_stream);
+                debugger_print_stop(debugger, status, error, output, error_stream);
             }
             continue;
         }
@@ -452,7 +457,7 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
             if (status == EMU_OK && debugger->stopped_at_breakpoint) {
                 fprintf(output, "%s\n", error);
             } else {
-                debugger_print_stop(status, error, output, error_stream);
+                debugger_print_stop(debugger, status, error, output, error_stream);
             }
             continue;
         }

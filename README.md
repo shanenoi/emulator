@@ -31,10 +31,11 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v0.4 Lesson — Functions and Returns](lessons/v0.4-functions-and-returns.md)
 - [v0.5 Lesson — Debugger REPL](lessons/v0.5-debugger-repl.md)
 - [v0.6 Lesson — Assembler-Friendly Runtime](lessons/v0.6-assembler-friendly-runtime.md)
+- [v0.7 Lesson — Toy Syscalls](lessons/v0.7-toy-syscalls.md)
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation for **v0.6 — Assembler-Friendly Runtime**.
+The repository currently contains the runtime implementation for **v0.7 — Toy Syscalls and Standalone Programs**.
 
 Implemented now:
 
@@ -73,6 +74,7 @@ Implemented now:
   - `BL`
   - `RET`
   - `RET Xn`
+  - `SVC #0` for the tiny fake-syscall runtime
 - Basic examples in `examples/v0_1/`.
 - Branch and loop examples in `examples/v0_2/`, including:
   - forward unconditional branch
@@ -115,6 +117,13 @@ Implemented now:
   - `cpu_format_instruction()` formats supported instructions for lessons and tests
   - `examples/README.md` documents how example assembly is built and used
   - memory-access runtime errors include instruction `pc` and raw opcode context
+- v0.7 toy syscall runtime:
+  - `x8 = 64` implements fake `write(fd, buffer, length)` for fd `1` and fd `2`
+  - `x8 = 93` implements fake `exit(status)` and maps the low 8 bits to the CLI exit status
+  - syscall arguments use `x0` through `x2`; return values are written to `x0`
+  - invalid write fds return fake `-EBADF`; unknown syscalls return fake `-ENOSYS`
+  - non-zero `SVC` immediates and invalid guest write buffers are emulator runtime errors
+  - standalone examples live in `examples/v0_7/`
 - Automated test suites following `docs/test-plan-v0.1.md`, `docs/test-plan-v0.2.md`, `docs/test-plan-v0.3.md`, `docs/test-plan-v0.4.md`, and `docs/test-plan-v0.5.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -130,7 +139,8 @@ Implemented now:
   - v0.6 unit/integration tests for instruction formatting, readable disassembly text, formatting edge cases, and improved error context
   - v0.6 CLI/runtime tests for usage, examples, readable traces, `regs`, error messages, docs, lessons, and acceptance workflows
 
-v0.6 automated tests are implemented. The full v0.1 through v0.6 suite runs with `make test`.
+v0.7 development code is implemented, but v0.7 tests are intentionally not added yet. The full v0.1 through v0.6
+suite runs with `make test`.
 
 ## Build and Run
 
@@ -164,7 +174,7 @@ Run the same style of program with trace output:
 ./emulator trace examples/v0_2/trace_loop.bin
 ```
 
-v0.6 trace output includes address, opcode, and decoded instruction text:
+v0.7 trace output includes address, opcode, and decoded instruction text:
 
 ```text
 trace pc=0x0000000000001000 0x0000000000001000: 0xd2800040  movz x0, #0x2
@@ -212,6 +222,13 @@ Run a checked-in debugger script:
 ./emulator debug examples/v0_1/add.bin < examples/v0_5/debug_add_script.txt
 ./emulator debug examples/v0_4/simple_call.bin < examples/v0_5/debug_function_script.txt
 ./emulator debug examples/v0_3/memory_store_load.bin < examples/v0_5/debug_memory_script.txt
+```
+
+Run the v0.7 toy-syscall hello demo:
+
+```sh
+make examples/v0_7/hello.bin
+./emulator run examples/v0_7/hello.bin
 ```
 
 Or build and run the main demo in one command:

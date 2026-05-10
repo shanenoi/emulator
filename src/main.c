@@ -13,8 +13,12 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "       emulator dump <raw-binary> <address> <length>\n");
     fprintf(stream, "       emulator debug <raw-binary>\n");
     fprintf(stream, "\n");
-    fprintf(stream, "v0.6 supports raw little-endian AArch64 binaries loaded at 0x%llx.\n",
+    fprintf(stream, "v0.7 supports raw little-endian AArch64 binaries loaded at 0x%llx.\n",
             (unsigned long long)EMU_LOAD_ADDRESS);
+}
+
+static int guest_or_success_status(const Emulator *emu) {
+    return emu->guest_exited ? (int)emu->guest_exit_code : 0;
 }
 
 static bool parse_u64(const char *text, uint64_t *out) {
@@ -125,17 +129,20 @@ int main(int argc, char **argv) {
 
     EmuStatus status = emulator_run(&emu, error, sizeof(error));
     if (status == EMU_HALTED) {
-        if (!regs_only) {
+        if (!regs_only && !emu.guest_exited) {
             printf("halted\n");
         }
-        cpu_dump(&emu.cpu, stdout);
+        if (!emu.guest_exited || regs_only) {
+            cpu_dump(&emu.cpu, stdout);
+        }
         if (dump_enabled && !dump_memory(&emu.memory, dump_address, dump_length, stdout, error, sizeof(error))) {
             fprintf(stderr, "error: %s\n", error);
             emulator_free(&emu);
             return 1;
         }
+        int cli_status = guest_or_success_status(&emu);
         emulator_free(&emu);
-        return 0;
+        return cli_status;
     }
 
     fprintf(stderr, "error: %s\n", error);

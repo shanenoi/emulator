@@ -17,6 +17,13 @@ typedef enum {
     EMU_HALTED = 2,
 } EmuStatus;
 
+#define EMU_SYSCALL_WRITE 64ull
+#define EMU_SYSCALL_EXIT 93ull
+
+#define EMU_SYSCALL_EIO (-5ll)
+#define EMU_SYSCALL_EBADF (-9ll)
+#define EMU_SYSCALL_ENOSYS (-38ll)
+
 typedef enum {
     EMU_INST_NOP = 0,
     EMU_INST_HLT,
@@ -37,6 +44,7 @@ typedef enum {
     EMU_INST_LDP,
     EMU_INST_STP,
     EMU_INST_RET,
+    EMU_INST_SVC,
 } EmuInstructionKind;
 
 typedef enum {
@@ -106,6 +114,10 @@ typedef struct {
     uint64_t instruction_limit;
     bool trace_enabled;
     FILE *trace_stream;
+    FILE *stdout_stream;
+    FILE *stderr_stream;
+    uint8_t guest_exit_code;
+    bool guest_exited;
 } Emulator;
 
 typedef struct {
@@ -151,6 +163,9 @@ bool load_raw_binary(Memory *memory, const char *path, uint64_t load_address, ch
 
 bool emulator_init(Emulator *emu, char *error, size_t error_size);
 void emulator_free(Emulator *emu);
+EmuStatus emulator_handle_syscall(Emulator *emu, const EmuDecodedInstruction *instruction, char *error,
+                                  size_t error_size);
+EmuStatus emulator_step(Emulator *emu, char *error, size_t error_size);
 EmuStatus emulator_run(Emulator *emu, char *error, size_t error_size);
 
 bool debugger_init(Debugger *debugger, const char *path, char *error, size_t error_size);

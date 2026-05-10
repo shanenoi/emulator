@@ -60,8 +60,13 @@ V0_4_EXAMPLES := \
 	examples/v0_4/ret_custom_register.bin \
 	examples/v0_4/invalid_return.bin \
 	examples/v0_4/unsaved_nested_call.bin
+V0_7_EXAMPLES := \
+	examples/v0_7/hello.bin \
+	examples/v0_7/stderr.bin \
+	examples/v0_7/exit_status.bin \
+	examples/v0_7/bad_fd.bin
 
-examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES)
+examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES)
 
 examples/v0_1/%.o: examples/v0_1/%.s
 	clang --target=aarch64-none-elf -c $< -o $@
@@ -87,6 +92,12 @@ examples/v0_4/%.o: examples/v0_4/%.s
 examples/v0_4/%.bin: examples/v0_4/%.o
 	llvm-objcopy -O binary -j .text $< $@
 
+examples/v0_7/%.o: examples/v0_7/%.s
+	clang --target=aarch64-none-elf -c $< -o $@
+
+examples/v0_7/%.bin: examples/v0_7/%.o
+	llvm-objcopy -O binary -j .text $< $@
+
 run-demo: all examples/v0_1/add.bin
 	./$(TARGET) run examples/v0_1/add.bin
 
@@ -96,6 +107,7 @@ clean:
 		tests/v0_5/*.o tests/v0_5/test_v0_5 tests/v0_6/*.o tests/v0_6/test_v0_6 \
 		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
 		examples/v0_3/*.o examples/v0_3/*.bin examples/v0_4/*.o examples/v0_4/*.bin \
+		examples/v0_7/*.o examples/v0_7/*.bin \
 		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/* tests/v0_4/tmp/* tests/v0_5/tmp/* \
 		tests/v0_6/tmp/*
 

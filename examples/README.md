@@ -22,7 +22,7 @@ example.o
 example.bin
 ```
 
-The emulator v0.6 still runs **raw binary instruction bytes**. It does not load ELF, Mach-O, DWARF, or source-level debug information.
+The emulator v0.7 still runs **raw binary instruction bytes**. It does not load ELF, Mach-O, DWARF, or source-level debug information.
 
 ## Run an example
 
@@ -38,7 +38,7 @@ The emulator v0.6 still runs **raw binary instruction bytes**. It does not load 
 ./emulator trace examples/v0_1/add.bin
 ```
 
-v0.6 trace lines show:
+v0.7 trace lines show:
 
 ```text
 trace pc=<current-pc> <address>: <raw-opcode>  <decoded-instruction>
@@ -80,6 +80,19 @@ The debugger can also run script files:
 ./emulator debug examples/v0_1/add.bin < examples/v0_5/debug_add_script.txt
 ```
 
+## Run a toy-syscall example
+
+```sh
+make examples/v0_7/hello.bin
+./emulator run examples/v0_7/hello.bin
+```
+
+v0.7 supports a tiny fake syscall ABI through `svc #0`:
+
+- `x8 = 64`: `write(fd, buffer, length)` with `x0 = fd`, `x1 = guest buffer address`, and `x2 = length`.
+- `x8 = 93`: `exit(status)` with `x0 = status`.
+- `fd = 1` writes to host stdout; `fd = 2` writes to host stderr.
+
 ## Versioned layout
 
 ```text
@@ -88,4 +101,5 @@ examples/v0_2/    branch and loop examples
 examples/v0_3/    memory and stack examples
 examples/v0_4/    function-call examples
 examples/v0_5/    debugger script examples
+examples/v0_7/    toy-syscall standalone examples
 ```

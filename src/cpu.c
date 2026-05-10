@@ -161,6 +161,12 @@ bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error
         return true;
     }
 
+    if ((opcode & 0xffe0001fu) == 0xd4000001u) {
+        instruction->kind = EMU_INST_SVC;
+        instruction->imm = (opcode >> 5u) & 0xffffu;
+        return true;
+    }
+
     if ((opcode & 0x7f800000u) == 0x52800000u) {
         uint8_t sf = (uint8_t)((opcode >> 31u) & 0x1u);
         uint8_t hw = (uint8_t)((opcode >> 21u) & 0x3u);
@@ -474,6 +480,10 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
     case EMU_INST_HLT:
         cpu->halted = true;
         break;
+
+    case EMU_INST_SVC:
+        snprintf(error, error_size, "svc requires emulator syscall dispatcher");
+        return EMU_ERROR;
 
     case EMU_INST_MOVZ:
         cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, instruction.imm);
