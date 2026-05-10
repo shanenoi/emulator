@@ -148,11 +148,15 @@ typedef struct {
     size_t segment_count;
 } EmuLoadedProgram;
 
-bool load_program(Emulator *emu, const char *path, EmuLoadedProgram *program,
-                  char *error, size_t error_size);
+bool emulator_load_program(Emulator *emu, const char *path, EmuLoadedProgram *program,
+                           char *error, size_t error_size);
 ```
 
-Acceptable alternative: keep separate raw/ELF functions internally, as long as CLI/debugger behavior exercises the same public program-loading behavior.
+`emulator_load_program()` is the preferred v0.8+ loader entry point. The older
+`load_raw_binary()` helper may remain public for v0.1-v0.7 behavior and tests,
+but new CLI/debugger flows should go through the format-selecting loader.
+
+Acceptable alternative: keep separate raw/ELF helpers internally, as long as CLI/debugger behavior exercises the same public program-loading behavior.
 
 ## Required Test Artifacts
 

@@ -198,6 +198,12 @@ bool cpu_calculate_memory_access(const Cpu *cpu, const EmuDecodedInstruction *in
 bool cpu_format_instruction(uint32_t opcode, uint64_t address, char *out, size_t out_size);
 void cpu_dump(const Cpu *cpu, FILE *stream);
 
+/*
+ * Legacy raw-only loader retained for v0.1-v0.7 behavior and tests.
+ * New v0.8+ call sites should prefer emulator_load_program(), which
+ * auto-detects supported ELF64 files and falls back to the raw loader for
+ * non-ELF input.
+ */
 bool load_raw_binary(Memory *memory, const char *path, uint64_t load_address, char *error, size_t error_size);
 bool emulator_load_program(Emulator *emu, const char *path, EmuLoadedProgram *program, char *error, size_t error_size);
 

@@ -243,7 +243,7 @@ static bool load_program_path(Emulator *emu, const char *path, EmuLoadedProgram 
 }
 
 static void test_header_detection_and_validation(void) {
-    /* TC-V08-HDR-001 through TC-V08-HDR-017. */
+    /* TC-V08-HDR-001 through TC-V08-HDR-017: ELF detection and header validation. */
     char error[512];
     Emulator emu;
     EmuLoadedProgram program;
@@ -254,6 +254,7 @@ static void test_header_detection_and_validation(void) {
     make_code_bytes(raw_bytes, raw_ops, sizeof(raw_ops) / sizeof(raw_ops[0]));
     write_file_or_die("tests/v0_8/tmp/raw.bin", raw_bytes, sizeof(raw_bytes));
     init_emulator_or_die(&emu);
+    /* TC-V08-HDR-003: non-ELF input keeps the raw-binary path. */
     EXPECT_TRUE(load_program_path(&emu, "tests/v0_8/tmp/raw.bin", &program, error, sizeof(error)));
     EXPECT_U64_EQ(program.format, EMU_PROGRAM_RAW);
     EXPECT_U64_EQ(emu.cpu.pc, EMU_LOAD_ADDRESS);
@@ -267,6 +268,7 @@ static void test_header_detection_and_validation(void) {
         snprintf(path, sizeof(path), "tests/v0_8/tmp/tiny_%zu.bin", len);
         write_file_or_die(path, tiny, len);
         init_emulator_or_die(&emu);
+        /* TC-V08-HDR-003: incomplete magic bytes are not treated as ELF. */
         EXPECT_TRUE(load_program_path(&emu, path, &program, error, sizeof(error)));
         EXPECT_U64_EQ(program.format, EMU_PROGRAM_RAW);
         emulator_free(&emu);
@@ -275,6 +277,7 @@ static void test_header_detection_and_validation(void) {
     const uint32_t elf_ops[] = {encode_movz(0, 7, 0, true), OP_HLT_0};
     write_minimal_elf("tests/v0_8/tmp/minimal.elf", 0x4000, 0x4000, elf_ops, 2);
     init_emulator_or_die(&emu);
+    /* TC-V08-HDR-001/002: supported ELF64 AArch64 executable is detected and loaded. */
     EXPECT_TRUE(load_program_path(&emu, "tests/v0_8/tmp/minimal.elf", &program, error, sizeof(error)));
     EXPECT_U64_EQ(program.format, EMU_PROGRAM_ELF64);
     EXPECT_U64_EQ(emu.cpu.pc, 0x4000u);
@@ -283,6 +286,7 @@ static void test_header_detection_and_validation(void) {
     const uint8_t truncated_elf[] = {0x7f, 'E', 'L', 'F', EMU_ELF_CLASS_64};
     write_file_or_die("tests/v0_8/tmp/truncated.elf", truncated_elf, sizeof(truncated_elf));
     init_emulator_or_die(&emu);
+    /* TC-V08-HDR-004: truncated ELF header is rejected. */
     EXPECT_FALSE(load_program_path(&emu, "tests/v0_8/tmp/truncated.elf", &program, error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "ELF header is truncated");
     emulator_free(&emu);
@@ -330,6 +334,7 @@ static void test_header_detection_and_validation(void) {
         }
         write_fixture_or_die(patches[i].path, &patched);
         init_emulator_or_die(&emu);
+        /* TC-V08-HDR-005 through TC-V08-HDR-017: each malformed header field is rejected. */
         EXPECT_FALSE(load_program_path(&emu, patches[i].path, &program, error, sizeof(error)));
         EXPECT_STR_CONTAINS(error, patches[i].needle);
         emulator_free(&emu);
@@ -355,6 +360,7 @@ static void test_program_headers_and_segments(void) {
     write_fixture_or_die("tests/v0_8/tmp/two_segments.elf", &fixture);
 
     init_emulator_or_die(&emu);
+    /* TC-V08-PH-001/003 and TC-V08-SEG-001/002/004: PT_LOAD segments are copied and tracked. */
     EXPECT_TRUE(load_program_path(&emu, "tests/v0_8/tmp/two_segments.elf", &program, error, sizeof(error)));
     EXPECT_U64_EQ(program.segment_count, 2u);
     EXPECT_U64_EQ(program.segments[0].vaddr, 0x1000u);
@@ -366,6 +372,7 @@ static void test_program_headers_and_segments(void) {
     EXPECT_MEM_EQ(&emu.memory.bytes[0x1000], text, 8);
     EXPECT_MEM_EQ(&emu.memory.bytes[0x2000], data, sizeof(data));
     for (size_t i = sizeof(data); i < 16u; i++) {
+        /* TC-V08-SEG-003: bytes between p_filesz and p_memsz are zero-filled. */
         EXPECT_U64_EQ(emu.memory.bytes[0x2000u + i], 0u);
     }
     EXPECT_STATUS(emulator_run(&emu, error, sizeof(error)), EMU_HALTED);
@@ -397,6 +404,7 @@ static void test_program_headers_and_segments(void) {
         }
         write_fixture_or_die(failures[i].path, &fixture);
         init_emulator_or_die(&emu);
+        /* TC-V08-PH-002/005/006/008/009/010/011: invalid program-header fields are rejected. */
         EXPECT_FALSE(load_program_path(&emu, failures[i].path, &program, error, sizeof(error)));
         EXPECT_STR_CONTAINS(error, failures[i].needle);
         emulator_free(&emu);
@@ -408,6 +416,7 @@ static void test_program_headers_and_segments(void) {
                    sizeof(data), 1, data);
     write_fixture_or_die("tests/v0_8/tmp/overlap.elf", &fixture);
     init_emulator_or_die(&emu);
+    /* TC-V08-PH-012: overlapping PT_LOAD memory ranges are rejected. */
     EXPECT_FALSE(load_program_path(&emu, "tests/v0_8/tmp/overlap.elf", &program, error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "overlapping PT_LOAD");
     emulator_free(&emu);
@@ -418,6 +427,7 @@ static void test_program_headers_and_segments(void) {
                    sizeof(data), 1, data);
     write_fixture_or_die("tests/v0_8/tmp/adjacent.elf", &fixture);
     init_emulator_or_die(&emu);
+    /* TC-V08-PH-013: adjacent, non-overlapping PT_LOAD ranges are allowed. */
     EXPECT_TRUE(load_program_path(&emu, "tests/v0_8/tmp/adjacent.elf", &program, error, sizeof(error)));
     EXPECT_U64_EQ(program.segment_count, 2u);
     emulator_free(&emu);
@@ -430,6 +440,7 @@ static void test_program_headers_and_segments(void) {
     write_fixture_or_die("tests/v0_8/tmp/zero_size.elf", &fixture);
     init_emulator_or_die(&emu);
     memset(&emu.memory.bytes[0x3000], 0xcc, 16);
+    /* TC-V08-PH-014: zero-sized PT_LOAD segments are accepted and do not overwrite memory. */
     EXPECT_TRUE(load_program_path(&emu, "tests/v0_8/tmp/zero_size.elf", &program, error, sizeof(error)));
     for (size_t i = 0; i < 16u; i++) {
         EXPECT_U64_EQ(emu.memory.bytes[0x3000u + i], 0xccu);
@@ -442,6 +453,7 @@ static void test_program_headers_and_segments(void) {
     write_fixture_or_die("tests/v0_8/tmp/pure_bss.elf", &fixture);
     init_emulator_or_die(&emu);
     memset(&emu.memory.bytes[0x4000], 0xdd, 32);
+    /* TC-V08-SEG-003: pure BSS PT_LOAD segments zero-fill memory without file bytes. */
     EXPECT_TRUE(load_program_path(&emu, "tests/v0_8/tmp/pure_bss.elf", &program, error, sizeof(error)));
     for (size_t i = 0; i < 32u; i++) {
         EXPECT_U64_EQ(emu.memory.bytes[0x4000u + i], 0u);
@@ -455,6 +467,7 @@ static void test_program_headers_and_segments(void) {
                    &last_byte);
     write_fixture_or_die("tests/v0_8/tmp/final_byte.elf", &fixture);
     init_emulator_or_die(&emu);
+    /* TC-V08-SEG-005: a segment ending exactly at the top of guest memory is valid. */
     EXPECT_TRUE(load_program_path(&emu, "tests/v0_8/tmp/final_byte.elf", &program, error, sizeof(error)));
     EXPECT_U64_EQ(emu.memory.bytes[EMU_MEMORY_SIZE - 1u], 0x5au);
     emulator_free(&emu);
@@ -467,6 +480,7 @@ static void test_program_headers_and_segments(void) {
                    sizeof(large), sizeof(large), 1, large);
     write_fixture_or_die("tests/v0_8/tmp/near_max.elf", &fixture);
     init_emulator_or_die(&emu);
+    /* TC-V08-SEG-009: large valid segments near the memory limit are copied exactly. */
     EXPECT_TRUE(load_program_path(&emu, "tests/v0_8/tmp/near_max.elf", &program, error, sizeof(error)));
     EXPECT_MEM_EQ(&emu.memory.bytes[EMU_MEMORY_SIZE - sizeof(large)], large, sizeof(large));
     emulator_free(&emu);
@@ -476,8 +490,23 @@ static void test_program_headers_and_segments(void) {
     fixture_set_ph(&fixture, 1, EMU_ELF_PT_LOAD, EMU_ELF_PF_R, 0x200, EMU_MEMORY_SIZE - 1u, 2, 2, 1, large);
     write_fixture_or_die("tests/v0_8/tmp/one_past.elf", &fixture);
     init_emulator_or_die(&emu);
+    /* TC-V08-SEG-006: one-past-end guest memory ranges are rejected. */
     EXPECT_FALSE(load_program_path(&emu, "tests/v0_8/tmp/one_past.elf", &program, error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "memory range");
+    emulator_free(&emu);
+
+    fixture_init(&fixture, 0x1000, EMU_MAX_ELF_SEGMENTS + 1u);
+    uint8_t hlt[4];
+    make_code_bytes(hlt, (const uint32_t[]){OP_HLT_0}, 1);
+    for (uint16_t i = 0; i < EMU_MAX_ELF_SEGMENTS + 1u; i++) {
+        fixture_set_ph(&fixture, i, EMU_ELF_PT_LOAD, EMU_ELF_PF_R | EMU_ELF_PF_X, 0x400u + (uint64_t)i * 4u,
+                       0x1000u + (uint64_t)i * 0x10u, sizeof(hlt), sizeof(hlt), 1, hlt);
+    }
+    write_fixture_or_die("tests/v0_8/tmp/too_many_loads.elf", &fixture);
+    init_emulator_or_die(&emu);
+    /* Extra defensive regression: the documented PT_LOAD bookkeeping limit is enforced. */
+    EXPECT_FALSE(load_program_path(&emu, "tests/v0_8/tmp/too_many_loads.elf", &program, error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "too many PT_LOAD segments");
     emulator_free(&emu);
 }
 

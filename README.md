@@ -129,6 +129,7 @@ Implemented now:
   - standalone examples live in `examples/v0_7/`
 - v0.8 ELF64 loader:
   - loader auto-detects ELF files by `\x7fELF` magic and keeps non-ELF files on the raw-binary path
+  - `emulator_load_program()` is the preferred v0.8+ loader entry point for CLI/debugger code; `load_raw_binary()` remains as the legacy raw-only helper for older behavior and tests
   - supports little-endian AArch64 `ET_EXEC` ELF64 files
   - rejects `ET_DYN`/PIE, `PT_INTERP`, wrong architecture, wrong endian, truncated headers, invalid program-header tables, invalid segment ranges, overlapping `PT_LOAD` segments, unmapped entry points, and misaligned entry points
   - loads `PT_LOAD` segments at their guest virtual addresses
