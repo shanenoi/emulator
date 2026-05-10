@@ -19,7 +19,7 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "or a supported little-endian AArch64 ELF64 ET_EXEC file.\n");
     fprintf(stream, "dump <address> and <length> accept decimal or 0x-prefixed hexadecimal values.\n");
     fprintf(stream, "\n");
-    fprintf(stream, "Compatibility wording used by older raw-binary lessons/tests:\n");
+    fprintf(stream, "Older raw-only lessons also describe the same commands as:\n");
     fprintf(stream, "usage: emulator run <raw-binary>\n");
     fprintf(stream, "       emulator trace <raw-binary>\n");
     fprintf(stream, "       emulator regs <raw-binary>\n");

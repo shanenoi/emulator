@@ -41,7 +41,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, plus the development polish for **v1.0 — Stable Learning Emulator**. v1.0 is a stability/documentation/release-quality milestone; it intentionally does not add a new major CPU subsystem.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, plus **v1.0 — Stable Learning Emulator** release polish. v1.0 is a stability/documentation/release-quality milestone; it intentionally does not add a new major CPU subsystem.
 
 Implemented now:
 
@@ -153,7 +153,8 @@ Implemented now:
   - `emulator help`, `emulator --help`, and `emulator -h` print the supported command surface successfully
   - public usage now describes `<program>` as either a raw `.bin` file or a supported ELF64 `ET_EXEC` executable
   - `dump` address and length parsing accepts decimal and `0x`-prefixed hexadecimal values, and rejects signed-looking values before they can wrap into huge unsigned ranges
-  - `make release-check` is a named release-gate alias for the current deterministic test suite
+  - `make release-check` is a named release gate that runs the deterministic v0.1-v0.9 suite plus v1.0 docs, repository hygiene, and fresh-archive build checks
+  - `make release-archive` creates an archive from the current git `HEAD` and includes `.git`
   - `examples/v1_0/` documents a representative release smoke path across raw, debugger, syscall, ELF, and tiny-C examples
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v0.9.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
@@ -177,7 +178,7 @@ Implemented now:
   - v0.9 CLI/C-program tests for generated ELF fixtures, `_start -> main -> exit`, stack locals, nested calls, global data, zero-filled storage, fake syscall wrappers, hosted/libc rejection, docs, and regressions
   - optional v0.9 real-toolchain smoke tests that build and run the actual freestanding C examples when `clang` and `ld.lld` are available, and skip clearly otherwise
 
-The full v0.1 through v0.9 test suite runs with `make test`. Dedicated v1.0 release tests are planned in `docs/test-plan-v1.0.md` and have not been added yet.
+The full v0.1 through v0.9 feature test suite runs with `make test`. The v1.0 development release gate runs with `make release-check`; it adds release-level docs, repository hygiene, and fresh-archive build checks. Dedicated `tests/v1_0/` release tests are still planned in `docs/test-plan-v1.0.md` and will be added in the v1.0 test phase.
 
 ## Build and Run
 
@@ -307,9 +308,19 @@ Run the named v1.0 release gate for the current deterministic suite:
 make release-check
 ```
 
-The test target currently builds the emulator, assembles the regression examples through v0.8, compiles the v0.1 through v0.9 C test runners, and runs all v0.1 through v0.9 CLI checks. The v0.9 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain. `make release-check` currently aliases that deterministic suite; the dedicated v1.0 release tests will be added in the v1.0 test phase.
+The test target builds the emulator, assembles the regression examples through v0.8, compiles the v0.1 through v0.9 C test runners, and runs all v0.1 through v0.9 CLI checks. The v0.9 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain.
+
+`make release-check` runs that deterministic suite, then checks v1.0 documentation links/status, repository hygiene, and whether a fresh archive built from `HEAD` can build the emulator. The dedicated `tests/v1_0/` release tests will be added later during the v1.0 test phase.
 
 The v1.0 smoke manifest in `examples/v1_0/smoke_manifest.txt` lists representative raw, debugger, syscall, ELF, and tiny-C examples to try manually.
+
+Create a release archive from the current git `HEAD` using the project packaging convention:
+
+```sh
+make release-archive
+```
+
+This target writes `emulator_<timestamp>.zip` and includes `.git`. It intentionally packages committed `HEAD`, so commit your changes before using it as a handoff archive.
 
 ## Known Limitations
 

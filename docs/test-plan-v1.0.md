@@ -104,9 +104,12 @@ Optional supporting files:
 lessons/v1.0-stable-learning-emulator.md
 examples/v1_0/README.md
 examples/v1_0/smoke_manifest.txt
+scripts/release_docs_check.sh
+scripts/release_hygiene_check.sh
+scripts/release_archive_check.sh
 ```
 
-The implementation may choose different filenames, but it should keep release tests separate from feature tests so v1.0 remains clearly a stability milestone.
+The implementation may choose different filenames, but it should keep release tests separate from feature tests so v1.0 remains clearly a stability milestone. Before the dedicated `tests/v1_0/` release tests are added, release helper scripts may live under `scripts/` and be invoked by `make release-check`; the later v1.0 test phase should either reuse those helpers or wrap them with stricter release tests.
 
 ## Test Data Strategy
 

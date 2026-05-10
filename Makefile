@@ -23,7 +23,7 @@ CORE_SRC := \
 	src/loader.c
 CORE_OBJ := $(CORE_SRC:.c=.o)
 
-.PHONY: all clean examples regression-examples run-demo test release-check
+.PHONY: all clean examples regression-examples run-demo test release-docs-check release-hygiene-check release-archive-check release-check release-archive
 
 all: $(TARGET)
 
@@ -214,5 +214,22 @@ test: all $(TEST_EXAMPLES) tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/
 	./tests/v0_9/test_cli_c_programs.sh
 	./tests/v0_9/test_optional_c_examples.sh
 
-release-check: test
-	@echo "v1.0 release gate passed: make test completed successfully"
+release-docs-check:
+	sh scripts/release_docs_check.sh
+
+release-hygiene-check:
+	sh scripts/release_hygiene_check.sh
+
+release-archive-check:
+	sh scripts/release_archive_check.sh
+
+release-check: test release-docs-check release-hygiene-check release-archive-check
+	@echo "v1.0 release gate passed: tests, docs, hygiene, and archive build checks completed successfully"
+
+release-archive:
+	@set -eu; \
+		timestamp=$${SOURCE_DATE_EPOCH:-$$(date +%s)}; \
+		archive="emulator_$${timestamp}.zip"; \
+		git archive --format=zip HEAD -o "$$archive"; \
+		zip -qr "$$archive" .git; \
+		echo "created $$archive"
