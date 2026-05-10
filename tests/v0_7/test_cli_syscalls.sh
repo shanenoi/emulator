@@ -109,6 +109,23 @@ run_expect_status 247 ./emulator run examples/v0_7/bad_fd.bin
 require_exact_file "$TMP_DIR/stdout.txt" ""
 require_exact_file "$TMP_DIR/stderr.txt" ""
 
+# TC-V07-ERR-001 and TC-V07-CLI-007: unknown syscalls are recoverable and return -ENOSYS.
+python3 - <<'PY' >"$TMP_DIR/unknown_syscall.bin"
+import sys
+ops = [
+    0xd2807ce8,  # movz x8, #999
+    0xd4000001,  # svc #0 => x0 = -ENOSYS
+    0xd2800ba8,  # movz x8, #93
+    0xd4000001,  # svc #0 => exit(low8(x0))
+]
+for op in ops:
+    sys.stdout.buffer.write(op.to_bytes(4, 'little'))
+PY
+run_expect_status 218 ./emulator regs "$TMP_DIR/unknown_syscall.bin"
+require_contains "$TMP_DIR/stdout.txt" "x0  = 0xffffffffffffffda"
+require_contains "$TMP_DIR/stdout.txt" "x8  = 0x000000000000005d"
+require_exact_file "$TMP_DIR/stderr.txt" ""
+
 # TC-V07-TRACE-003 and TC-V07-DEBUG-003.
 printf 'trace on\nrun\nregs\nquit\n' | ./emulator debug examples/v0_7/hello.bin >"$TMP_DIR/debug_trace.out" 2>"$TMP_DIR/debug_trace.err"
 require_contains "$TMP_DIR/debug_trace.out" "trace enabled"
@@ -153,6 +170,12 @@ require_contains "$TMP_DIR/stdout.txt" "svc #0x0"
 require_contains "$TMP_DIR/stderr.txt" "syscall write buffer out of bounds"
 require_contains "$TMP_DIR/stderr.txt" "pc=0x0000000000001010"
 require_contains "$TMP_DIR/stderr.txt" "opcode=0xd4000001"
+
+# TC-V07-DEBUG-004: debugger reports runtime errors around a syscall with context.
+printf 'run\nquit\n' | ./emulator debug "$TMP_DIR/bad_memory.bin" >"$TMP_DIR/debug_bad_memory.out" 2>"$TMP_DIR/debug_bad_memory.err"
+require_contains "$TMP_DIR/debug_bad_memory.err" "syscall write buffer out of bounds"
+require_contains "$TMP_DIR/debug_bad_memory.err" "pc=0x0000000000001010"
+require_contains "$TMP_DIR/debug_bad_memory.err" "opcode=0xd4000001"
 
 # TC-V07-REGRESS-002 representative older commands remain compatible.
 run_expect_status 0 ./emulator run examples/v0_1/add.bin

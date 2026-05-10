@@ -327,6 +327,50 @@ static void test_write_syscall_outputs_and_abi(void) {
     out = tmpfile_or_die();
     init_emulator_or_die(&emu);
     emu.stdout_stream = out;
+    const unsigned char wargs[] = {'W', '!'};
+    put_bytes(&emu, 0x2500, wargs, sizeof(wargs));
+    const uint32_t w_register_args[] = {
+        encode_movz(0, 1, 0, false),
+        encode_movz(1, 0x2500, 0, false),
+        encode_movz(2, 2, 0, false),
+        encode_movz(8, EMU_SYSCALL_WRITE, 0, false),
+        OP_SVC_0,
+        OP_HLT_0,
+    };
+    load_program(&emu, w_register_args, sizeof(w_register_args) / sizeof(w_register_args[0]));
+    EXPECT_STATUS(emulator_run(&emu, error, sizeof(error)), EMU_HALTED);
+    EXPECT_U64_EQ(read_stream(out, buffer, sizeof(buffer)), sizeof(wargs));
+    EXPECT_MEM_EQ(buffer, wargs, sizeof(wargs));
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 1), 0x2500u);
+    emulator_free(&emu);
+    fclose(out);
+
+    out = tmpfile_or_die();
+    init_emulator_or_die(&emu);
+    emu.stdout_stream = out;
+    const unsigned char xzr_msg[] = {'Z', 'R'};
+    put_bytes(&emu, 0x2510, xzr_msg, sizeof(xzr_msg));
+    const uint32_t xzr_does_not_shadow_syscall_args[] = {
+        encode_movz(0, 1, 0, true),
+        encode_movz(1, 0x2510, 0, true),
+        encode_movz(2, 2, 0, true),
+        encode_movz(31, 0xffff, 0, true),
+        encode_movz(8, EMU_SYSCALL_WRITE, 0, true),
+        OP_SVC_0,
+        OP_HLT_0,
+    };
+    load_program(&emu, xzr_does_not_shadow_syscall_args,
+                 sizeof(xzr_does_not_shadow_syscall_args) / sizeof(xzr_does_not_shadow_syscall_args[0]));
+    EXPECT_STATUS(emulator_run(&emu, error, sizeof(error)), EMU_HALTED);
+    EXPECT_U64_EQ(read_stream(out, buffer, sizeof(buffer)), sizeof(xzr_msg));
+    EXPECT_MEM_EQ(buffer, xzr_msg, sizeof(xzr_msg));
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 31), 0u);
+    emulator_free(&emu);
+    fclose(out);
+
+    out = tmpfile_or_die();
+    init_emulator_or_die(&emu);
+    emu.stdout_stream = out;
     const unsigned char z = 'Z';
     put_bytes(&emu, 0, &z, 1);
     const uint32_t addr_zero[] = {
@@ -353,6 +397,20 @@ static void test_write_syscall_outputs_and_abi(void) {
     EXPECT_STATUS(emulator_run(&emu, error, sizeof(error)), EMU_HALTED);
     EXPECT_U64_EQ(read_stream(out, buffer, sizeof(buffer)), sizeof(end_bytes));
     EXPECT_MEM_EQ(buffer, end_bytes, sizeof(end_bytes));
+    emulator_free(&emu);
+    fclose(out);
+
+    out = tmpfile_or_die();
+    init_emulator_or_die(&emu);
+    emu.stdout_stream = out;
+    cpu_write_register(&emu.cpu, 0, true, 1);
+    cpu_write_register(&emu.cpu, 1, true, EMU_MEMORY_SIZE);
+    cpu_write_register(&emu.cpu, 2, true, 0);
+    cpu_write_register(&emu.cpu, 8, true, EMU_SYSCALL_WRITE);
+    load_program(&emu, (const uint32_t[]){OP_SVC_0, OP_HLT_0}, 2);
+    EXPECT_STATUS(emulator_run(&emu, error, sizeof(error)), EMU_HALTED);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 0), 0u);
+    EXPECT_U64_EQ(read_stream(out, buffer, sizeof(buffer)), 0u);
     emulator_free(&emu);
     fclose(out);
 
@@ -501,6 +559,23 @@ static void test_syscall_errors_and_edges(void) {
     EXPECT_STR_CONTAINS(error, "instruction limit reached");
     EXPECT_FALSE(emu.guest_exited);
     emulator_free(&emu);
+
+    out = fopen("/dev/full", "wb");
+    if (out != NULL) {
+        init_emulator_or_die(&emu);
+        emu.stdout_stream = out;
+        setvbuf(out, NULL, _IONBF, 0);
+        put_bytes(&emu, 0x2600, &byte, 1);
+        cpu_write_register(&emu.cpu, 0, true, 1);
+        cpu_write_register(&emu.cpu, 1, true, 0x2600);
+        cpu_write_register(&emu.cpu, 2, true, 1);
+        cpu_write_register(&emu.cpu, 8, true, EMU_SYSCALL_WRITE);
+        load_program(&emu, (const uint32_t[]){OP_SVC_0, OP_HLT_0}, 2);
+        EXPECT_STATUS(emulator_run(&emu, error, sizeof(error)), EMU_HALTED);
+        EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 0), (uint64_t)EMU_SYSCALL_EIO);
+        emulator_free(&emu);
+        fclose(out);
+    }
 }
 
 static void test_debugger_syscall_behavior(void) {

@@ -85,12 +85,11 @@ EmuStatus emulator_handle_syscall(Emulator *emu, const EmuDecodedInstruction *in
 
         if (length > 0) {
             size_t written = fwrite(&emu->memory.bytes[address], 1, (size_t)length, stream);
-            if (written != (size_t)length) {
+            if (written != (size_t)length || fflush(stream) != 0) {
                 cpu_write_register(&emu->cpu, 0, true, (uint64_t)EMU_SYSCALL_EIO);
                 emu->cpu.pc += 4;
                 return EMU_OK;
             }
-            fflush(stream);
         }
 
         cpu_write_register(&emu->cpu, 0, true, length);

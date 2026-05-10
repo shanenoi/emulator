@@ -121,7 +121,7 @@ Implemented now:
   - `x8 = 64` implements fake `write(fd, buffer, length)` for fd `1` and fd `2`
   - `x8 = 93` implements fake `exit(status)` and maps the low 8 bits to the CLI exit status
   - syscall arguments use `x0` through `x2`; return values are written to `x0`
-  - invalid write fds return fake `-EBADF`; unknown syscalls return fake `-ENOSYS`
+  - invalid write fds return fake `-EBADF`; host stream write failures return fake `-EIO`; unknown syscalls return fake `-ENOSYS`
   - non-zero `SVC` immediates and invalid guest write buffers are emulator runtime errors
   - standalone examples live in `examples/v0_7/`
 - Automated test suites following `docs/test-plan-v0.1.md`, `docs/test-plan-v0.2.md`, `docs/test-plan-v0.3.md`, `docs/test-plan-v0.4.md`, and `docs/test-plan-v0.5.md`:
@@ -658,7 +658,7 @@ write = 64
 exit = 93
 ```
 
-`write` supports fd `1` for stdout and fd `2` for stderr. Unsupported fds return fake `-EBADF` in `x0`. Unknown syscall numbers return fake `-ENOSYS` in `x0`. Invalid guest write buffers are runtime errors because they are invalid emulated memory accesses rather than recoverable syscall failures.
+`write` supports fd `1` for stdout and fd `2` for stderr. Unsupported fds return fake `-EBADF` in `x0`. Host stream write or flush failures return fake `-EIO` in `x0`. Unknown syscall numbers return fake `-ENOSYS` in `x0`. Invalid guest write buffers are runtime errors because they are invalid emulated memory accesses rather than recoverable syscall failures.
 
 Demo program idea:
 

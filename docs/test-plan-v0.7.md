@@ -539,10 +539,10 @@ svc #0
 
 **Expected:**
 
-- Behavior is documented as either recoverable syscall error or emulator runtime error.
-- Recommended behavior: runtime error with message `unsupported syscall: 999`.
-- CLI exits non-zero.
-- Error includes `pc` and raw opcode context, matching v0.6 error-quality goals.
+- Behavior is a documented recoverable syscall failure.
+- `x0` becomes fake `-ENOSYS`.
+- Program continues after the syscall.
+- No host output side effect occurs.
 
 ## TC-V07-ERR-002 — Unsupported file descriptor
 
@@ -724,16 +724,16 @@ svc #0
 - Test captures status without aborting the shell script unexpectedly.
 - Any final output is stable.
 
-## TC-V07-CLI-007 — Unsupported syscall reports clear error
+## TC-V07-CLI-007 — Unsupported syscall reports recoverable `-ENOSYS`
 
 **Command:** run a binary that calls unknown syscall.
 
 **Expected:**
 
-- CLI exits non-zero.
-- stderr includes unsupported syscall number.
-- stderr includes runtime context.
-- stdout does not contain misleading success output.
+- Unknown syscall does not crash the emulator.
+- The syscall return value is fake `-ENOSYS` in `x0`.
+- If the program exits using that return value, CLI status follows the documented low-8-bit guest-status rule.
+- stderr does not contain a runtime-error report.
 
 ---
 
@@ -1043,11 +1043,11 @@ printf 'break <svc-address>\nrun\nregs\nstep\nregs\nquit\n' | ./emulator debug e
 
 ## TC-V07-ACC-004 — Error workflow is understandable
 
-**Command:** run invalid syscall example.
+**Command:** run invalid guest-memory syscall example.
 
 **Expected:**
 
-- Error message names unsupported syscall or invalid memory range.
+- Error message names invalid memory range.
 - Error includes instruction context.
 - CLI exits non-zero.
 - User can identify what to fix in assembly.
