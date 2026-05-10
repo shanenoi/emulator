@@ -39,15 +39,16 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v0.8 Lesson — ELF64 Loader](lessons/v0.8-elf-loader.md)
 - [v0.9 Lesson — Tiny Freestanding C Programs](lessons/v0.9-tiny-c-programs.md)
 - [v1.0 Lesson — Stable Learning Emulator](lessons/v1.0-stable-learning-emulator.md)
+- [v1.1 Lesson — Mach-O Loader](lessons/v1.1-mach-o-loader.md)
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, plus **v1.0 — Stable Learning Emulator** release polish. v1.0 is a stability/documentation/release-quality milestone; it intentionally does not add a new major CPU subsystem.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, and initial **v1.1 — Mach-O Loader** development groundwork. v1.1 starts a new executable-format milestone; deterministic v1.1 tests are still pending.
 
 Implemented now:
 
 - C-based emulator core.
-- Program runner CLI for both raw `.bin` files and supported ELF64 executables:
+- Program runner CLI for raw `.bin` files, supported ELF64 executables, and the initial supported Mach-O profile:
 
 ```sh
 ./emulator run <program>
@@ -61,6 +62,7 @@ Implemented now:
 - Raw binary load address: `0x1000`.
 - Raw binary initial `pc`: `0x1000`.
 - ELF64 initial `pc`: the ELF header entry point.
+- Mach-O initial `pc`: the `LC_MAIN` entry offset resolved through a mapped `LC_SEGMENT_64` file range.
 - Initial `sp`: top of memory, currently `0x100000`.
 - Stable final register dump.
 - Instruction execution limit to avoid accidental infinite runs.
@@ -157,6 +159,16 @@ Implemented now:
   - `make release-check` is a named release gate that runs v1.0 docs, repository hygiene, clean-artifact, and fresh-archive full deterministic-suite checks
   - `make release-archive` creates an archive from the current git `HEAD` and includes `.git`
   - `examples/v1_0/` documents a representative release smoke path across raw, debugger, syscall, ELF, and tiny-C examples
+- v1.1 Mach-O loader groundwork:
+  - loader auto-detects 64-bit Mach-O files by magic number after checking the ELF path
+  - supports the initial little-endian arm64 `MH_EXECUTE` profile
+  - parses and validates the Mach-O header and load-command table
+  - maps `LC_SEGMENT_64` segments into the existing 1 MiB flat memory model
+  - zero-fills segment memory when `vmsize > filesize`
+  - resolves `LC_MAIN` `entryoff` through mapped segment file ranges to initialize `pc`
+  - records segment file offsets and permission bits for inspection/future versions, but does not enforce memory permissions yet
+  - rejects big-endian Mach-O, wrong CPU type, non-executable file types, malformed command tables, invalid segment ranges, overlapping mapped segments, missing `LC_MAIN`, unmapped/misaligned entries, and dynamic-linking commands such as `LC_LOAD_DYLINKER`, `LC_LOAD_DYLIB`, and `LC_DYLD_INFO`
+  - normal macOS/iOS applications, `dyld`, shared libraries, Apple process setup, code signing, Objective-C/Swift runtimes, and real Darwin syscalls remain out of scope
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -180,7 +192,7 @@ Implemented now:
   - optional v0.9 real-toolchain smoke tests that build and run the actual freestanding C examples when `clang` and `ld.lld` are available, and skip clearly otherwise
   - v1.0 release tests for CLI stability, docs consistency, optional release examples, repository hygiene, clean-artifact validation, and fresh-archive full deterministic-suite validation
 
-The full v0.1 through v1.0 test suite runs with `make test`. The v1.0 release gate runs with `make release-check`; it checks v1.0 docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
+The full v0.1 through v1.0 test suite runs with `make test`. v1.1 implementation groundwork is present, but v1.1 deterministic tests have not been added yet. The v1.0 release gate runs with `make release-check`; it checks v1.0 docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
 
 ## Build and Run
 
@@ -284,7 +296,7 @@ make examples/v0_8/hello_elf.elf
 ./emulator run examples/v0_8/hello_elf.elf
 ```
 
-The same CLI commands work for raw binaries and supported ELF64 executables:
+The same CLI commands work for raw binaries, supported ELF64 executables, and the initial supported Mach-O profile:
 
 ```sh
 ./emulator trace examples/v0_8/hello_elf.elf

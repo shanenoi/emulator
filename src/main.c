@@ -16,7 +16,8 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "\n");
     fprintf(stream, "<program> may be a raw little-endian AArch64 binary loaded at 0x%llx\n",
             (unsigned long long)EMU_LOAD_ADDRESS);
-    fprintf(stream, "or a supported little-endian AArch64 ELF64 ET_EXEC file.\n");
+    fprintf(stream, "or a supported little-endian AArch64 ELF64 ET_EXEC file,\n");
+    fprintf(stream, "or a supported little-endian arm64 Mach-O MH_EXECUTE file.\n");
     fprintf(stream, "dump <address> and <length> accept decimal or 0x-prefixed hexadecimal values.\n");
     fprintf(stream, "\n");
     fprintf(stream, "Older raw-only lessons also describe the same commands as:\n");

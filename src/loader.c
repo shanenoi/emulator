@@ -30,6 +30,27 @@
 #define ELF_P_FILESZ 32u
 #define ELF_P_MEMSZ 40u
 
+#define MACHO64_HEADER_SIZE 32u
+#define MACHO64_MIN_LOAD_COMMAND_SIZE 8u
+#define MACHO64_SEGMENT_COMMAND_SIZE 72u
+#define MACHO64_MAIN_COMMAND_SIZE 24u
+
+#define MACHO_CPUTYPE 4u
+#define MACHO_FILETYPE 12u
+#define MACHO_NCMDS 16u
+#define MACHO_SIZEOFCMDS 20u
+
+#define MACHO_LC_CMD 0u
+#define MACHO_LC_CMDSIZE 4u
+
+#define MACHO_SEG_VMADDR 24u
+#define MACHO_SEG_VMSIZE 32u
+#define MACHO_SEG_FILEOFF 40u
+#define MACHO_SEG_FILESIZE 48u
+#define MACHO_SEG_INITPROT 60u
+
+#define MACHO_MAIN_ENTRYOFF 8u
+
 static bool read_file(const char *path, uint8_t **out_bytes, size_t *out_size, char *error, size_t error_size) {
     *out_bytes = NULL;
     *out_size = 0;
@@ -134,6 +155,14 @@ static bool is_elf_magic(const uint8_t *bytes, size_t file_size) {
            bytes[2] == EMU_ELF_MAGIC2 && bytes[3] == EMU_ELF_MAGIC3;
 }
 
+static bool is_macho_magic(const uint8_t *bytes, size_t file_size) {
+    if (file_size < 4u) {
+        return false;
+    }
+    uint32_t magic = read_le32(bytes, 0);
+    return magic == EMU_MACHO_MAGIC_64 || magic == EMU_MACHO_CIGAM_64;
+}
+
 bool load_raw_binary(Memory *memory, const char *path, uint64_t load_address, char *error, size_t error_size) {
     uint8_t *bytes = NULL;
     size_t file_size = 0;
@@ -155,10 +184,12 @@ bool load_raw_binary(Memory *memory, const char *path, uint64_t load_address, ch
     return true;
 }
 
-static bool record_segment(EmuLoadedProgram *program, uint64_t vaddr, uint64_t mem_size, uint64_t file_size,
-                           uint32_t flags, char *error, size_t error_size) {
-    if (program->segment_count >= EMU_MAX_ELF_SEGMENTS) {
-        snprintf(error, error_size, "ELF loader error: too many PT_LOAD segments; max=%u", EMU_MAX_ELF_SEGMENTS);
+static bool record_segment(EmuLoadedProgram *program, const char *error_prefix, const char *segment_kind,
+                           uint64_t vaddr, uint64_t file_offset, uint64_t mem_size, uint64_t file_size, uint32_t flags,
+                           char *error, size_t error_size) {
+    if (program->segment_count >= EMU_MAX_LOAD_SEGMENTS) {
+        snprintf(error, error_size, "%s: too many %s segments; max=%u", error_prefix, segment_kind,
+                 EMU_MAX_LOAD_SEGMENTS);
         return false;
     }
 
@@ -166,14 +197,15 @@ static bool record_segment(EmuLoadedProgram *program, uint64_t vaddr, uint64_t m
         const EmuLoadedSegment *existing = &program->segments[i];
         if (ranges_overlap(vaddr, mem_size, existing->vaddr, existing->mem_size)) {
             snprintf(error, error_size,
-                     "ELF loader error: overlapping PT_LOAD segments: 0x%016" PRIx64 "+0x%016" PRIx64
+                     "%s: overlapping %s segments: 0x%016" PRIx64 "+0x%016" PRIx64
                      " overlaps 0x%016" PRIx64 "+0x%016" PRIx64,
-                     vaddr, mem_size, existing->vaddr, existing->mem_size);
+                     error_prefix, segment_kind, vaddr, mem_size, existing->vaddr, existing->mem_size);
             return false;
         }
     }
 
     program->segments[program->segment_count].vaddr = vaddr;
+    program->segments[program->segment_count].file_offset = file_offset;
     program->segments[program->segment_count].mem_size = mem_size;
     program->segments[program->segment_count].file_size = file_size;
     program->segments[program->segment_count].flags = flags;
@@ -310,7 +342,8 @@ static bool load_elf64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t fi
                      p_vaddr, p_memsz, emu->memory.size);
             return false;
         }
-        if (!record_segment(program, p_vaddr, p_memsz, p_filesz, p_flags, error, error_size)) {
+        if (!record_segment(program, "ELF loader error", "PT_LOAD", p_vaddr, p_offset, p_memsz, p_filesz, p_flags,
+                            error, error_size)) {
             return false;
         }
     }
@@ -354,6 +387,223 @@ static bool load_elf64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t fi
     return true;
 }
 
+static bool command_range_is_valid(uint64_t offset, uint64_t size, size_t file_size) {
+    return size >= MACHO64_MIN_LOAD_COMMAND_SIZE && range_fits_file(offset, size, file_size);
+}
+
+static bool macho_command_requires_runtime(uint32_t cmd, const char **reason) {
+    switch (cmd) {
+    case EMU_MACHO_LC_LOAD_DYLINKER:
+        *reason = "LC_LOAD_DYLINKER/dyld is unsupported in v1.1";
+        return true;
+    case EMU_MACHO_LC_LOAD_DYLIB:
+        *reason = "LC_LOAD_DYLIB/shared libraries are unsupported in v1.1";
+        return true;
+    case EMU_MACHO_LC_DYLD_INFO:
+    case EMU_MACHO_LC_DYLD_INFO_ONLY:
+        *reason = "LC_DYLD_INFO/rebasing and binding metadata is unsupported in v1.1";
+        return true;
+    default:
+        *reason = NULL;
+        return false;
+    }
+}
+
+static bool resolve_macho_entry_from_lc_main(const EmuLoadedProgram *program, uint64_t entryoff, uint64_t *entry) {
+    for (size_t i = 0; i < program->segment_count; i++) {
+        const EmuLoadedSegment *segment = &program->segments[i];
+        uint64_t file_end = 0;
+        if (segment->file_size == 0 || !checked_u64_add(segment->file_offset, segment->file_size, &file_end)) {
+            continue;
+        }
+        if (entryoff >= segment->file_offset && entryoff < file_end) {
+            *entry = segment->vaddr + (entryoff - segment->file_offset);
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t file_size, EmuLoadedProgram *program,
+                                    char *error, size_t error_size) {
+    memset(program, 0, sizeof(*program));
+    program->format = EMU_PROGRAM_MACHO64;
+    program->stack_pointer = emu->memory.size;
+
+    if (file_size < MACHO64_HEADER_SIZE) {
+        snprintf(error, error_size, "Mach-O loader error: Mach-O header is truncated: file_size=0x%zx", file_size);
+        return false;
+    }
+
+    uint32_t magic = read_le32(bytes, 0);
+    if (magic == EMU_MACHO_CIGAM_64) {
+        snprintf(error, error_size, "Mach-O loader error: big-endian Mach-O is unsupported in v1.1");
+        return false;
+    }
+    if (magic != EMU_MACHO_MAGIC_64) {
+        snprintf(error, error_size, "Mach-O loader error: unsupported Mach-O magic 0x%08" PRIx32, magic);
+        return false;
+    }
+
+    uint32_t cputype = read_le32(bytes, MACHO_CPUTYPE);
+    uint32_t filetype = read_le32(bytes, MACHO_FILETYPE);
+    uint32_t ncmds = read_le32(bytes, MACHO_NCMDS);
+    uint32_t sizeofcmds = read_le32(bytes, MACHO_SIZEOFCMDS);
+
+    if (cputype != EMU_MACHO_CPU_TYPE_ARM64) {
+        snprintf(error, error_size, "Mach-O loader error: unsupported CPU type 0x%08" PRIx32 "; expected arm64",
+                 cputype);
+        return false;
+    }
+    if (filetype != EMU_MACHO_FILETYPE_EXECUTE) {
+        snprintf(error, error_size, "Mach-O loader error: unsupported file type %u; expected MH_EXECUTE", filetype);
+        return false;
+    }
+    if (ncmds == 0) {
+        snprintf(error, error_size, "Mach-O loader error: executable has no load commands");
+        return false;
+    }
+    if (!range_fits_file(MACHO64_HEADER_SIZE, sizeofcmds, file_size)) {
+        snprintf(error, error_size,
+                 "Mach-O loader error: load-command table outside file: offset=0x%08x size=0x%08" PRIx32
+                 " file_size=0x%zx",
+                 MACHO64_HEADER_SIZE, sizeofcmds, file_size);
+        return false;
+    }
+
+    bool saw_lc_main = false;
+    uint64_t entryoff = 0;
+    uint64_t command_offset = MACHO64_HEADER_SIZE;
+    uint64_t commands_end = 0;
+    if (!checked_u64_add(MACHO64_HEADER_SIZE, sizeofcmds, &commands_end)) {
+        snprintf(error, error_size, "Mach-O loader error: load-command table size overflow");
+        return false;
+    }
+
+    for (uint32_t i = 0; i < ncmds; i++) {
+        if (command_offset >= commands_end || !range_fits_file(command_offset, MACHO64_MIN_LOAD_COMMAND_SIZE, file_size)) {
+            snprintf(error, error_size, "Mach-O loader error: load command %u is outside the command table", i);
+            return false;
+        }
+
+        uint32_t cmd = read_le32(bytes, (size_t)command_offset + MACHO_LC_CMD);
+        uint32_t cmdsize = read_le32(bytes, (size_t)command_offset + MACHO_LC_CMDSIZE);
+        uint64_t next_command_offset = 0;
+        if (!checked_u64_add(command_offset, cmdsize, &next_command_offset) ||
+            !command_range_is_valid(command_offset, cmdsize, file_size) || next_command_offset > commands_end) {
+            snprintf(error, error_size,
+                     "Mach-O loader error: invalid load command %u size: offset=0x%016" PRIx64
+                     " cmdsize=0x%08" PRIx32 " sizeofcmds=0x%08" PRIx32,
+                     i, command_offset, cmdsize, sizeofcmds);
+            return false;
+        }
+
+        const char *unsupported_reason = NULL;
+        if (macho_command_requires_runtime(cmd, &unsupported_reason)) {
+            snprintf(error, error_size, "Mach-O loader error: %s", unsupported_reason);
+            return false;
+        }
+
+        if (cmd == EMU_MACHO_LC_SEGMENT_64) {
+            if (cmdsize < MACHO64_SEGMENT_COMMAND_SIZE) {
+                snprintf(error, error_size, "Mach-O loader error: LC_SEGMENT_64 command is truncated: cmdsize=0x%08" PRIx32,
+                         cmdsize);
+                return false;
+            }
+
+            uint64_t vmaddr = read_le64(bytes, (size_t)command_offset + MACHO_SEG_VMADDR);
+            uint64_t vmsize = read_le64(bytes, (size_t)command_offset + MACHO_SEG_VMSIZE);
+            uint64_t fileoff = read_le64(bytes, (size_t)command_offset + MACHO_SEG_FILEOFF);
+            uint64_t filesize = read_le64(bytes, (size_t)command_offset + MACHO_SEG_FILESIZE);
+            uint32_t initprot = read_le32(bytes, (size_t)command_offset + MACHO_SEG_INITPROT);
+
+            if (filesize > vmsize) {
+                snprintf(error, error_size,
+                         "Mach-O loader error: LC_SEGMENT_64 filesize exceeds vmsize: filesize=0x%016" PRIx64
+                         " vmsize=0x%016" PRIx64,
+                         filesize, vmsize);
+                return false;
+            }
+            if (!range_fits_file(fileoff, filesize, file_size)) {
+                snprintf(error, error_size,
+                         "Mach-O loader error: LC_SEGMENT_64 file range outside file: fileoff=0x%016" PRIx64
+                         " filesize=0x%016" PRIx64 " file_size=0x%zx",
+                         fileoff, filesize, file_size);
+                return false;
+            }
+            if (!range_fits_memory(vmaddr, vmsize, &emu->memory)) {
+                snprintf(error, error_size,
+                         "Mach-O loader error: LC_SEGMENT_64 memory range outside emulator memory: vmaddr=0x%016" PRIx64
+                         " vmsize=0x%016" PRIx64 " memory_size=0x%zx",
+                         vmaddr, vmsize, emu->memory.size);
+                return false;
+            }
+            if (vmsize > 0 && !record_segment(program, "Mach-O loader error", "LC_SEGMENT_64", vmaddr, fileoff,
+                                              vmsize, filesize, initprot, error, error_size)) {
+                return false;
+            }
+        } else if (cmd == EMU_MACHO_LC_MAIN) {
+            if (cmdsize < MACHO64_MAIN_COMMAND_SIZE) {
+                snprintf(error, error_size, "Mach-O loader error: LC_MAIN command is truncated: cmdsize=0x%08" PRIx32,
+                         cmdsize);
+                return false;
+            }
+            saw_lc_main = true;
+            entryoff = read_le64(bytes, (size_t)command_offset + MACHO_MAIN_ENTRYOFF);
+        }
+
+        command_offset = next_command_offset;
+    }
+
+    if (command_offset != commands_end) {
+        snprintf(error, error_size,
+                 "Mach-O loader error: load-command walk ended at 0x%016" PRIx64 " but expected 0x%016" PRIx64,
+                 command_offset, commands_end);
+        return false;
+    }
+    if (program->segment_count == 0) {
+        snprintf(error, error_size, "Mach-O loader error: executable has no LC_SEGMENT_64 segments");
+        return false;
+    }
+    if (!saw_lc_main) {
+        snprintf(error, error_size, "Mach-O loader error: LC_MAIN is required in v1.1");
+        return false;
+    }
+
+    uint64_t entry = 0;
+    if (!resolve_macho_entry_from_lc_main(program, entryoff, &entry)) {
+        snprintf(error, error_size,
+                 "Mach-O loader error: LC_MAIN entryoff is not inside a mapped file range: entryoff=0x%016" PRIx64,
+                 entryoff);
+        return false;
+    }
+    if ((entry & 0x3u) != 0) {
+        snprintf(error, error_size, "Mach-O loader error: entry point is not 4-byte aligned: entry=0x%016" PRIx64,
+                 entry);
+        return false;
+    }
+    if (!entry_is_mapped(program, entry)) {
+        snprintf(error, error_size, "Mach-O loader error: entry point is not inside a loaded segment: entry=0x%016" PRIx64,
+                 entry);
+        return false;
+    }
+
+    for (size_t i = 0; i < program->segment_count; i++) {
+        const EmuLoadedSegment *segment = &program->segments[i];
+        if (segment->file_size > 0) {
+            memcpy(&emu->memory.bytes[segment->vaddr], &bytes[segment->file_offset], (size_t)segment->file_size);
+        }
+        if (segment->mem_size > segment->file_size) {
+            memset(&emu->memory.bytes[segment->vaddr + segment->file_size], 0,
+                   (size_t)(segment->mem_size - segment->file_size));
+        }
+    }
+
+    program->entry = entry;
+    cpu_init(&emu->cpu, program->entry, program->stack_pointer);
+    return true;
+}
+
 bool emulator_load_program(Emulator *emu, const char *path, EmuLoadedProgram *program, char *error, size_t error_size) {
     uint8_t *bytes = NULL;
     size_t file_size = 0;
@@ -364,6 +614,8 @@ bool emulator_load_program(Emulator *emu, const char *path, EmuLoadedProgram *pr
     bool ok = false;
     if (is_elf_magic(bytes, file_size)) {
         ok = load_elf64_from_bytes(emu, bytes, file_size, program, error, error_size);
+    } else if (is_macho_magic(bytes, file_size)) {
+        ok = load_macho64_from_bytes(emu, bytes, file_size, program, error, error_size);
     } else {
         memset(program, 0, sizeof(*program));
         program->format = EMU_PROGRAM_RAW;

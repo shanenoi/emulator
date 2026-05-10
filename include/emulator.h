@@ -24,7 +24,8 @@ typedef enum {
 #define EMU_SYSCALL_EBADF (-9ll)
 #define EMU_SYSCALL_ENOSYS (-38ll)
 
-#define EMU_MAX_ELF_SEGMENTS 16u
+#define EMU_MAX_LOAD_SEGMENTS 16u
+#define EMU_MAX_ELF_SEGMENTS EMU_MAX_LOAD_SEGMENTS
 
 #define EMU_ELF_MAGIC0 0x7fu
 #define EMU_ELF_MAGIC1 'E'
@@ -42,6 +43,17 @@ typedef enum {
 #define EMU_ELF_PF_X 1u
 #define EMU_ELF_PF_W 2u
 #define EMU_ELF_PF_R 4u
+
+#define EMU_MACHO_MAGIC_64 0xfeedfacfu
+#define EMU_MACHO_CIGAM_64 0xcffaedfeu
+#define EMU_MACHO_CPU_TYPE_ARM64 0x0100000cu
+#define EMU_MACHO_FILETYPE_EXECUTE 2u
+#define EMU_MACHO_LC_SEGMENT_64 0x19u
+#define EMU_MACHO_LC_LOAD_DYLIB 0x0cu
+#define EMU_MACHO_LC_LOAD_DYLINKER 0x0eu
+#define EMU_MACHO_LC_DYLD_INFO 0x22u
+#define EMU_MACHO_LC_MAIN 0x80000028u
+#define EMU_MACHO_LC_DYLD_INFO_ONLY 0x80000022u
 
 typedef enum {
     EMU_INST_NOP = 0,
@@ -148,10 +160,12 @@ typedef struct {
 typedef enum {
     EMU_PROGRAM_RAW = 0,
     EMU_PROGRAM_ELF64,
+    EMU_PROGRAM_MACHO64,
 } EmuProgramFormat;
 
 typedef struct {
     uint64_t vaddr;
+    uint64_t file_offset;
     uint64_t mem_size;
     uint64_t file_size;
     uint32_t flags;
@@ -162,7 +176,7 @@ typedef struct {
     uint64_t entry;
     uint64_t stack_pointer;
     size_t segment_count;
-    EmuLoadedSegment segments[EMU_MAX_ELF_SEGMENTS];
+    EmuLoadedSegment segments[EMU_MAX_LOAD_SEGMENTS];
 } EmuLoadedProgram;
 
 typedef struct {
