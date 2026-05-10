@@ -125,6 +125,7 @@ examples/v0_9/hello_c.c
 examples/v0_9/nested_calls.c
 examples/v0_9/stack_locals.c
 examples/v0_9/byte_copy.c
+examples/v0_9/static_local.c
 examples/v0_9/stderr_c.c
 examples/v0_9/bad_fd_c.c
 examples/v0_9/unknown_syscall_c.c
@@ -133,6 +134,7 @@ examples/v0_9/hosted_printf.c
 examples/v0_9/linker.ld
 tests/v0_9/test_v0_9.c
 tests/v0_9/test_cli_c_programs.sh
+tests/v0_9/test_optional_c_examples.sh
 lessons/v0.9-tiny-c-programs.md
 ```
 
@@ -143,6 +145,8 @@ Tests should separate three kinds of evidence:
 1. **Instruction fixtures:** raw 32-bit opcodes generated directly in tests to validate decode/execute/formatting for every new instruction.
 2. **Tiny ELF fixtures:** minimal ELF files generated directly, reusing the v0.8 strategy, to validate loader + new instructions without a cross compiler dependency.
 3. **Optional real compiler smoke tests:** run only when a supported cross compiler is detected. These should be skipped, not failed, when unavailable.
+   - The optional smoke script should build and run the actual `examples/v0_9/*.c` programs when `clang` and `ld.lld` are available.
+   - If an example recipe prints a skip message, the `.elf` target was not produced and should not be executed.
 
 Recommended CLI fixture programs:
 
@@ -414,9 +418,9 @@ C reads a zero-initialized global; value is zero through v0.8 `.bss` zero-fill.
 
 Static local state loads or zero-fills correctly within a single run.
 
-### TC-V09-CRT-011 — Simple array index loop works
+### TC-V09-CRT-011 — Simple array traversal loop works
 
-Sum an array with an index loop; result is correct and trace shows loop branch behavior.
+Sum an array with the selected v0.9 compiler profile; result is correct and trace shows loop branch behavior. The real C smoke example may use a pointer-increment loop when index-based code would require register-offset addressing outside the selected profile.
 
 ### TC-V09-CRT-012 — Simple pointer loop works
 

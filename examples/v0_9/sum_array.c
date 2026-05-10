@@ -3,10 +3,11 @@ static volatile int zeroes[4];
 
 int main(void) {
     int sum = zeroes[0];
-    sum += values[0];
-    sum += values[1];
-    sum += values[2];
-    sum += values[3];
-    sum += values[4];
+    volatile int *p = values;
+    volatile int *end = values + 5;
+    while (p != end) {
+        sum += *p;
+        p++;
+    }
     return sum;
 }

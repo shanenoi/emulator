@@ -147,7 +147,7 @@ Implemented now:
   - `examples/v0_9/start.s` provides a tiny `_start` that calls C `main` and exits through fake syscall `93`
   - C examples are compiled with `clang --target=aarch64-none-elf -ffreestanding -nostdlib -fno-stack-protector -fno-pic -fno-pie -O0` and linked as static `ET_EXEC` ELF files
   - normal hosted/libc C programs remain out of scope
-- Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v0.8.md`:
+- Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v0.9.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
   - v0.1 CLI tests for success, usage errors, loader errors, and decode errors
@@ -165,6 +165,9 @@ Implemented now:
   - v0.7 CLI/syscall tests for stdout, stderr, guest exit status propagation, trace ordering, dump compatibility, debugger workflows, docs, and regression commands
   - v0.8 unit/integration tests for ELF detection, header validation, program-header validation, segment loading, `.bss` zero-fill, entry/stack initialization, ELF execution, syscalls from ELF, debugger behavior, and malformed-file edge cases
   - v0.8 CLI/ELF tests for `run`, `regs`, `trace`, `dump`, `debug`, dynamic-file rejection, malformed-file errors, raw-binary compatibility, docs, and acceptance workflows
+  - v0.9 unit/integration tests for compiler-oriented decode/formatting, ALU/logical/shift/multiply/divide behavior, address generation, byte/halfword memory access, `sp` handling, and instruction-limit/error context
+  - v0.9 CLI/C-program tests for generated ELF fixtures, `_start -> main -> exit`, stack locals, nested calls, global data, zero-filled storage, fake syscall wrappers, hosted/libc rejection, docs, and regressions
+  - optional v0.9 real-toolchain smoke tests that build and run the actual freestanding C examples when `clang` and `ld.lld` are available, and skip clearly otherwise
 
 The full v0.1 through v0.9 test suite runs with `make test`.
 
@@ -801,6 +804,7 @@ Implemented development support:
   - `nested_calls.c`
   - `stack_locals.c`
   - `byte_copy.c`
+  - `static_local.c`
   - `stderr_c.c`
   - `bad_fd_c.c`
   - `unknown_syscall_c.c`
@@ -837,11 +841,14 @@ Important limitation: v0.9 is still freestanding C only. It does not run normal 
 
 Build behavior: v0.9 example targets use `clang --target=aarch64-none-elf` and `ld.lld` when they are available. If those tools are missing, the v0.9 example recipes print a clear skip message instead of failing the build. Older raw/assembly examples still use the pre-existing toolchain path.
 
-Definition of done for the later v0.9 test phase:
+If a v0.9 example recipe prints a skip message, the requested `.elf` was not produced. Install or expose `clang` plus `ld.lld`, then rerun the `make examples/v0_9/<name>.elf` command before trying to execute that example.
 
-- Add the dedicated v0.9 automated tests from `docs/test-plan-v0.9.md`.
-- Lock down the exact instruction subset and edge-case behavior.
-- Keep v0.1 through v0.9 behavior passing unchanged.
+Definition of done:
+
+- Dedicated v0.9 automated tests from `docs/test-plan-v0.9.md` are included in `make test`.
+- The optional real-toolchain C smoke tests run when the toolchain is available and skip clearly otherwise.
+- The exact v0.9 instruction subset and edge-case behavior are documented.
+- v0.1 through v0.9 behavior passes unchanged.
 
 ### v1.0 — Stable Learning Emulator
 

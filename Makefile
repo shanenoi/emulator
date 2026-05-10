@@ -78,6 +78,7 @@ V0_9_EXAMPLES := \
 	examples/v0_9/nested_calls.elf \
 	examples/v0_9/stack_locals.elf \
 	examples/v0_9/byte_copy.elf \
+	examples/v0_9/static_local.elf \
 	examples/v0_9/stderr_c.elf \
 	examples/v0_9/bad_fd_c.elf \
 	examples/v0_9/unknown_syscall_c.elf \
@@ -211,3 +212,4 @@ test: all $(TEST_EXAMPLES) tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/
 	mkdir -p tests/v0_9/tmp
 	./tests/v0_9/test_v0_9
 	./tests/v0_9/test_cli_c_programs.sh
+	./tests/v0_9/test_optional_c_examples.sh

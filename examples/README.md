@@ -10,7 +10,7 @@ From the repository root:
 make examples
 ```
 
-This assembles the raw-binary examples, links the v0.8 ELF examples, and builds the v0.9 freestanding C ELF examples. Generated `.bin`, `.o`, and `.elf` files are ignored by Git. v0.9 C examples use `clang --target=aarch64-none-elf` and `ld.lld` when available; if those tools are missing, their recipes print a skip message instead of failing.
+This assembles the raw-binary examples, links the v0.8 ELF examples, and builds the v0.9 freestanding C ELF examples. Generated `.bin`, `.o`, and `.elf` files are ignored by Git. v0.9 C examples use `clang --target=aarch64-none-elf` and `ld.lld` when available; if those tools are missing, their recipes print a skip message instead of failing. A skip message means the requested v0.9 `.elf` file was **not** produced, so install or expose the tools before running that particular example.
 
 The build flow is:
 

@@ -190,6 +190,24 @@ make('byte_copy.elf', start_to_main([
     ldrstr(3, 1, 2, True, 1), ldrstr(3, 2, 2, False, 1),
     movz(0, 0), ret()
 ]), b'ABC\x00' + b'\x00' * 16, memsz=32)
+# TC-V09-CRT-008: global initialized int data.
+make('global_sum.elf', start_to_main([
+    movz(1, 0x2000),
+    ldrstr(0, 1, 0, True, 4),
+    ldrstr(2, 1, 4, True, 4),
+    add_reg(0, 0, 2, False),
+    ldrstr(2, 1, 8, True, 4),
+    add_reg(0, 0, 2, False),
+    ret()
+]), struct.pack('<III', 1, 2, 3))
+# TC-V09-CRT-009 and TC-V09-CRT-010: zero-filled global/static storage.
+make('static_bss.elf', start_to_main([
+    movz(1, 0x2000),
+    ldrstr(0, 1, 0, True, 4),
+    addsub_imm(0, 0, 7, False, False),
+    ldrstr(0, 1, 0, False, 4),
+    ret()
+]), b'', memsz=16)
 make('bad_fd.elf', start_to_main([
     movz(0, 99), movz(1, 0x2000), movz(2, 1), movz(8, EMU_SYSCALL_WRITE), SVC0, ret()
 ]), b'X')
@@ -201,6 +219,7 @@ make('invalid_write.elf', start_to_main([
 ]))
 make('unsupported.elf', code(UNSUPPORTED, HLT))
 make('infinite.elf', code(b(0)))
+make('recursive_limit.elf', code(bl(0)))
 # Hosted/libc-like dynamic/interpreter rejection fixture.
 elf(TMP / 'hosted_interp.elf', 0x1000, [textseg(code(HLT))], extra_ph=[{'type': PT_INTERP, 'flags': PF_R, 'offset': 0x80, 'vaddr': 0, 'data': b'/lib/ld-linux-aarch64.so.1\0'}])
 PY
@@ -240,6 +259,16 @@ run_expect_status 10 ./emulator trace "$TMP_DIR/nested_calls.elf"
 require_contains "$TMP_DIR/stdout.txt" "bl 0x0000000000001010"
 require_contains "$TMP_DIR/stdout.txt" "bl 0x0000000000001020"
 require_contains "$TMP_DIR/stdout.txt" "bl 0x0000000000001030"
+
+# TC-V09-CRT-008, TC-V09-CRT-009, and TC-V09-CRT-010.
+run_expect_status 6 ./emulator run "$TMP_DIR/global_sum.elf"
+run_expect_status 7 ./emulator run "$TMP_DIR/static_bss.elf"
+
+# TC-V09-CRT-007: recursion-like self-call reaches the instruction limit with context.
+run_expect_status 1 ./emulator run "$TMP_DIR/recursive_limit.elf"
+require_contains "$TMP_DIR/stderr.txt" "instruction limit reached"
+require_contains "$TMP_DIR/stderr.txt" "pc=0x0000000000001000"
+require_contains "$TMP_DIR/stderr.txt" "opcode=0x94000000"
 
 # TC-V09-CLI-004 and TC-V09-CRT-014.
 run_expect_status 0 ./emulator dump "$TMP_DIR/byte_copy.elf" 0x2010 4
@@ -284,6 +313,7 @@ run_expect_status 1 ./emulator run "$TMP_DIR/invalid_write.elf"
 require_contains "$TMP_DIR/stderr.txt" "syscall write buffer out of bounds"
 
 # TC-V09-BUILD-001 is exercised by the top-level make test dependency on examples.
+# TC-V09-BUILD-002 is exercised by tests/v0_9/test_optional_c_examples.sh when tools exist.
 
 # TC-V09-BUILD-003 and TC-V09-BUILD-004.
 require_contains README.md "-ffreestanding -nostdlib -fno-stack-protector -fno-pic -fno-pie -O0"
