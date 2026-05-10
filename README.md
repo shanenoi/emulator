@@ -177,8 +177,9 @@ Implemented now:
   - v0.9 unit/integration tests for compiler-oriented decode/formatting, ALU/logical/shift/multiply/divide behavior, address generation, byte/halfword memory access, `sp` handling, and instruction-limit/error context
   - v0.9 CLI/C-program tests for generated ELF fixtures, `_start -> main -> exit`, stack locals, nested calls, global data, zero-filled storage, fake syscall wrappers, hosted/libc rejection, docs, and regressions
   - optional v0.9 real-toolchain smoke tests that build and run the actual freestanding C examples when `clang` and `ld.lld` are available, and skip clearly otherwise
+  - v1.0 release tests for CLI stability, docs consistency, optional release examples, repository hygiene, and fresh-archive validation
 
-The full v0.1 through v0.9 feature test suite runs with `make test`. The v1.0 development release gate runs with `make release-check`; it adds release-level docs, repository hygiene, and fresh-archive build checks. Dedicated `tests/v1_0/` release tests are still planned in `docs/test-plan-v1.0.md` and will be added in the v1.0 test phase.
+The full v0.1 through v1.0 test suite runs with `make test`. The v1.0 release gate runs with `make release-check`; it includes the deterministic suite, v1.0 docs checks, repository hygiene checks, and a fresh-archive build/smoke check.
 
 ## Build and Run
 
@@ -308,9 +309,9 @@ Run the named v1.0 release gate for the current deterministic suite:
 make release-check
 ```
 
-The test target builds the emulator, assembles the regression examples through v0.8, compiles the v0.1 through v0.9 C test runners, and runs all v0.1 through v0.9 CLI checks. The v0.9 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain.
+The test target builds the emulator, assembles the regression examples through v0.8, compiles the v0.1 through v0.9 C test runners, and runs all v0.1 through v1.0 CLI/release checks. The v0.9 and v1.0 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain.
 
-`make release-check` runs that deterministic suite, then checks v1.0 documentation links/status, repository hygiene, and whether a fresh archive built from `HEAD` can build the emulator. The dedicated `tests/v1_0/` release tests will be added later during the v1.0 test phase.
+`make release-check` runs that deterministic suite, then checks v1.0 documentation links/status, repository hygiene, and whether a fresh archive built from `HEAD` can build and run a representative smoke command after extraction.
 
 The v1.0 smoke manifest in `examples/v1_0/smoke_manifest.txt` lists representative raw, debugger, syscall, ELF, and tiny-C examples to try manually.
 
@@ -906,7 +907,7 @@ Release focus:
 
 - Keep raw binary loading, ELF64 loading, the debugger, instruction tracing, memory dumping, fake syscalls, and freestanding C examples stable.
 - Keep `make test` as the local deterministic release gate.
-- Add release-level tests for CLI stability, docs consistency, examples, packaging hygiene, and common learner mistakes.
+- Include release-level tests for CLI stability, docs consistency, examples, packaging hygiene, and common learner mistakes.
 - Keep optional real-toolchain C smoke checks as pass-or-skip workflows.
 - Document supported behavior and known limitations in one place.
 

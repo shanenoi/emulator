@@ -76,6 +76,13 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    if (argc >= 2 && strcmp(argv[1], "run") != 0 && strcmp(argv[1], "trace") != 0 &&
+        strcmp(argv[1], "regs") != 0 && strcmp(argv[1], "dump") != 0 && strcmp(argv[1], "debug") != 0) {
+        fprintf(stderr, "error: unknown command: %s\n", argv[1]);
+        print_usage(stderr);
+        return 2;
+    }
+
     if (argc != 3 && argc != 5) {
         print_usage(stderr);
         return 2;

@@ -21,3 +21,4 @@ tests/v0_9/tmp/
 *.bin
 *.elf
 *.dSYM/
+tests/v1_0/tmp/

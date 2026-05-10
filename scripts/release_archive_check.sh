@@ -29,10 +29,11 @@ unzip -q "$archive" -d "$extract_dir"
 [ -f "$extract_dir/Makefile" ] || fail "archive does not contain Makefile"
 [ -d "$extract_dir/.git" ] || fail "archive does not contain .git"
 
-# Keep this development-phase release check fast: prove a fresh archive builds.
-# Dedicated v1.0 tests will later extend this to a full fresh-archive test run.
 make -C "$extract_dir" clean >/dev/null
 make -C "$extract_dir" >/dev/null
 [ -x "$extract_dir/emulator" ] || fail "fresh archive did not build emulator"
+make -C "$extract_dir" regression-examples >/dev/null
+"$extract_dir/emulator" help >/dev/null
+"$extract_dir/emulator" run "$extract_dir/examples/v0_1/add.bin" >/dev/null
 
 printf '%s\n' "v1.0 release archive check passed"

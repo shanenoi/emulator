@@ -15,7 +15,7 @@ if [ -n "$tracked_generated" ]; then
     fail "generated build outputs are tracked"
 fi
 
-for pattern in 'emulator' '*.o' '*.bin' '*.elf' 'tests/v0_9/tmp/'; do
+for pattern in 'emulator' '*.o' '*.bin' '*.elf' 'tests/v0_9/tmp/' 'tests/v1_0/tmp/'; do
     grep -Fq "$pattern" .gitignore || fail ".gitignore does not cover $pattern"
 done
 

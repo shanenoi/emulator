@@ -150,6 +150,12 @@ examples/v0_9/%.elf: examples/v0_9/start.o examples/v0_9/%.o examples/v0_9/linke
 run-demo: all examples/v0_1/add.bin
 	./$(TARGET) run examples/v0_1/add.bin
 
+
+V1_0_RELEASE_TESTS := \
+	tests/v1_0/test_cli_release.sh \
+	tests/v1_0/test_docs_release.sh \
+	tests/v1_0/test_optional_release_examples.sh
+
 clean:
 	rm -f $(TARGET) $(OBJ) tests/v0_1/*.o tests/v0_1/test_v0_1 tests/v0_2/*.o tests/v0_2/test_v0_2 \
 		tests/v0_3/*.o tests/v0_3/test_v0_3 tests/v0_4/*.o tests/v0_4/test_v0_4 \
@@ -161,7 +167,7 @@ clean:
 		examples/v0_7/*.o examples/v0_7/*.bin examples/v0_8/*.o examples/v0_8/*.elf \
 		examples/v0_9/*.o examples/v0_9/*.elf \
 		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/* tests/v0_4/tmp/* tests/v0_5/tmp/* \
-		tests/v0_6/tmp/* tests/v0_7/tmp/* tests/v0_8/tmp/* tests/v0_9/tmp/*
+		tests/v0_6/tmp/* tests/v0_7/tmp/* tests/v0_8/tmp/* tests/v0_9/tmp/* tests/v1_0/tmp/*
 
 tests/v0_1/test_v0_1: tests/v0_1/test_v0_1.o $(CORE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^
@@ -213,6 +219,10 @@ test: all $(TEST_EXAMPLES) tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/
 	./tests/v0_9/test_v0_9
 	./tests/v0_9/test_cli_c_programs.sh
 	./tests/v0_9/test_optional_c_examples.sh
+	mkdir -p tests/v1_0/tmp
+	./tests/v1_0/test_cli_release.sh
+	./tests/v1_0/test_docs_release.sh
+	./tests/v1_0/test_optional_release_examples.sh
 
 release-docs-check:
 	sh scripts/release_docs_check.sh
