@@ -65,8 +65,12 @@ V0_7_EXAMPLES := \
 	examples/v0_7/stderr.bin \
 	examples/v0_7/exit_status.bin \
 	examples/v0_7/bad_fd.bin
+V0_8_EXAMPLES := \
+	examples/v0_8/hello_elf.elf \
+	examples/v0_8/exit_status_elf.elf \
+	examples/v0_8/bss_elf.elf
 
-examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES)
+examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES)
 
 examples/v0_1/%.o: examples/v0_1/%.s
 	clang --target=aarch64-none-elf -c $< -o $@
@@ -98,6 +102,12 @@ examples/v0_7/%.o: examples/v0_7/%.s
 examples/v0_7/%.bin: examples/v0_7/%.o
 	llvm-objcopy -O binary -j .text $< $@
 
+examples/v0_8/%.o: examples/v0_8/%.s
+	clang --target=aarch64-none-elf -c $< -o $@
+
+examples/v0_8/%.elf: examples/v0_8/%.o examples/v0_8/linker.ld
+	ld.lld -static -nostdlib -T examples/v0_8/linker.ld $< -o $@
+
 run-demo: all examples/v0_1/add.bin
 	./$(TARGET) run examples/v0_1/add.bin
 
@@ -108,7 +118,7 @@ clean:
 		tests/v0_7/*.o tests/v0_7/test_v0_7 \
 		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
 		examples/v0_3/*.o examples/v0_3/*.bin examples/v0_4/*.o examples/v0_4/*.bin \
-		examples/v0_7/*.o examples/v0_7/*.bin \
+		examples/v0_7/*.o examples/v0_7/*.bin examples/v0_8/*.o examples/v0_8/*.elf \
 		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/* tests/v0_4/tmp/* tests/v0_5/tmp/* \
 		tests/v0_6/tmp/* tests/v0_7/tmp/*
 

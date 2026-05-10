@@ -10,7 +10,7 @@ From the repository root:
 make examples
 ```
 
-This assembles every checked-in `.s` file into a raw `.bin` file. The `.bin` files are generated artifacts and are ignored by Git.
+This assembles the raw-binary examples and links the v0.8 ELF examples. Generated `.bin`, `.o`, and `.elf` files are ignored by Git.
 
 The build flow is:
 
@@ -20,9 +20,22 @@ example.s
 example.o
   -> llvm-objcopy -O binary -j .text
 example.bin
+
+v0.8 ELF example.s
+  -> clang --target=aarch64-none-elf
+example.o
+  -> ld.lld -static -nostdlib -T examples/v0_8/linker.ld
+example.elf
 ```
 
-The emulator v0.7 still runs **raw binary instruction bytes**. It does not load ELF, Mach-O, DWARF, or source-level debug information.
+The emulator supports two input formats:
+
+```text
+raw .bin files      loaded at 0x1000
+ELF64 ET_EXEC files loaded from PT_LOAD program headers
+```
+
+It still does not load Mach-O, DWARF, source-level debug information, dynamically linked Linux programs, shared libraries, or PIE executables.
 
 ## Run an example
 
@@ -38,7 +51,7 @@ The emulator v0.7 still runs **raw binary instruction bytes**. It does not load 
 ./emulator trace examples/v0_1/add.bin
 ```
 
-v0.7 trace lines show:
+Trace lines show:
 
 ```text
 trace pc=<current-pc> <address>: <raw-opcode>  <decoded-instruction>
@@ -98,6 +111,23 @@ exit = 93
 - `x8 = 93`: `exit(status)` with `x0 = status`.
 - `fd = 1` writes to host stdout; `fd = 2` writes to host stderr.
 
+## Run an ELF example
+
+```sh
+make examples/v0_8/hello_elf.elf
+./emulator run examples/v0_8/hello_elf.elf
+```
+
+v0.8 detects ELF files by their `\x7fELF` magic bytes. For supported ELF files, the loader:
+
+- validates the ELF64 little-endian AArch64 header,
+- rejects unsupported dynamic-linking features such as `PT_INTERP`,
+- loads each `PT_LOAD` segment at its guest virtual address,
+- zero-fills `.bss` bytes when segment memory size is larger than file size,
+- starts execution at `e_entry` instead of forcing `pc = 0x1000`.
+
+The v0.8 examples are intentionally tiny freestanding ELF executables. They use the same supported instructions and v0.7 fake syscalls; they do not require libc.
+
 ## Versioned layout
 
 ```text
@@ -107,4 +137,5 @@ examples/v0_3/    memory and stack examples
 examples/v0_4/    function-call examples
 examples/v0_5/    debugger script examples
 examples/v0_7/    toy-syscall standalone examples
+examples/v0_8/    simple static ELF64 examples
 ```

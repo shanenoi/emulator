@@ -24,6 +24,25 @@ typedef enum {
 #define EMU_SYSCALL_EBADF (-9ll)
 #define EMU_SYSCALL_ENOSYS (-38ll)
 
+#define EMU_MAX_ELF_SEGMENTS 16u
+
+#define EMU_ELF_MAGIC0 0x7fu
+#define EMU_ELF_MAGIC1 'E'
+#define EMU_ELF_MAGIC2 'L'
+#define EMU_ELF_MAGIC3 'F'
+#define EMU_ELF_CLASS_64 2u
+#define EMU_ELF_DATA_LSB 1u
+#define EMU_ELF_VERSION_CURRENT 1u
+#define EMU_ELF_ET_EXEC 2u
+#define EMU_ELF_ET_DYN 3u
+#define EMU_ELF_EM_AARCH64 183u
+#define EMU_ELF_PT_LOAD 1u
+#define EMU_ELF_PT_INTERP 3u
+
+#define EMU_ELF_PF_X 1u
+#define EMU_ELF_PF_W 2u
+#define EMU_ELF_PF_R 4u
+
 typedef enum {
     EMU_INST_NOP = 0,
     EMU_INST_HLT,
@@ -108,6 +127,26 @@ typedef struct {
     size_t size;
 } Memory;
 
+typedef enum {
+    EMU_PROGRAM_RAW = 0,
+    EMU_PROGRAM_ELF64,
+} EmuProgramFormat;
+
+typedef struct {
+    uint64_t vaddr;
+    uint64_t mem_size;
+    uint64_t file_size;
+    uint32_t flags;
+} EmuLoadedSegment;
+
+typedef struct {
+    EmuProgramFormat format;
+    uint64_t entry;
+    uint64_t stack_pointer;
+    size_t segment_count;
+    EmuLoadedSegment segments[EMU_MAX_ELF_SEGMENTS];
+} EmuLoadedProgram;
+
 typedef struct {
     Cpu cpu;
     Memory memory;
@@ -160,6 +199,7 @@ bool cpu_format_instruction(uint32_t opcode, uint64_t address, char *out, size_t
 void cpu_dump(const Cpu *cpu, FILE *stream);
 
 bool load_raw_binary(Memory *memory, const char *path, uint64_t load_address, char *error, size_t error_size);
+bool emulator_load_program(Emulator *emu, const char *path, EmuLoadedProgram *program, char *error, size_t error_size);
 
 bool emulator_init(Emulator *emu, char *error, size_t error_size);
 void emulator_free(Emulator *emu);

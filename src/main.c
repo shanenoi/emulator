@@ -121,7 +121,8 @@ int main(int argc, char **argv) {
     emu.trace_enabled = trace_enabled;
     emu.trace_stream = stdout;
 
-    if (!load_raw_binary(&emu.memory, argv[2], EMU_LOAD_ADDRESS, error, sizeof(error))) {
+    EmuLoadedProgram program;
+    if (!emulator_load_program(&emu, argv[2], &program, error, sizeof(error))) {
         fprintf(stderr, "error: %s\n", error);
         emulator_free(&emu);
         return 1;

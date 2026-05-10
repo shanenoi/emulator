@@ -148,7 +148,8 @@ bool debugger_init(Debugger *debugger, const char *path, char *error, size_t err
     if (!emulator_init(&debugger->emu, error, error_size)) {
         return false;
     }
-    if (!load_raw_binary(&debugger->emu.memory, path, EMU_LOAD_ADDRESS, error, error_size)) {
+    EmuLoadedProgram program;
+    if (!emulator_load_program(&debugger->emu, path, &program, error, error_size)) {
         emulator_free(&debugger->emu);
         return false;
     }
@@ -178,7 +179,8 @@ bool debugger_reset(Debugger *debugger, char *error, size_t error_size) {
     debugger->emu.trace_enabled = trace_enabled;
     debugger->emu.trace_stream = trace_stream;
 
-    if (!load_raw_binary(&debugger->emu.memory, path, EMU_LOAD_ADDRESS, error, error_size)) {
+    EmuLoadedProgram program;
+    if (!emulator_load_program(&debugger->emu, path, &program, error, error_size)) {
         return false;
     }
 
@@ -311,7 +313,7 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
     char error[512];
 
     fprintf(output, "tiny-aarch64 debugger v0.5\n");
-    fprintf(output, "loaded %s at 0x%016llx\n", debugger->path, (unsigned long long)EMU_LOAD_ADDRESS);
+    fprintf(output, "loaded %s at 0x%016" PRIx64 "\n", debugger->path, debugger->emu.cpu.pc);
 
     while (true) {
         fprintf(output, "emu> ");

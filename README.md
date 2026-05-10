@@ -31,29 +31,31 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v0.3 Lesson — Memory and Stack](lessons/v0.3-memory-and-stack.md)
 - [v0.4 Lesson — Functions and Returns](lessons/v0.4-functions-and-returns.md)
 - [v0.5 Lesson — Debugger REPL](lessons/v0.5-debugger-repl.md)
-- [v0.6 Lesson — Assembler-Friendly Runtime](lessons/v0.6-assembler-friendly-runtime.md)
-- [v0.7 Lesson — Toy Syscalls](lessons/v0.7-toy-syscalls.md)
+- [v0.6 Lesson — Readable Traces and Disassembly](lessons/v0.6-assembler-friendly-runtime.md)
+- [v0.7 Lesson — SVC, Write, Exit, and Toy Syscalls](lessons/v0.7-toy-syscalls.md)
+- [v0.8 Lesson — ELF64 Loader](lessons/v0.8-elf-loader.md)
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation for **v0.7 — Toy Syscalls and Standalone Programs**.
+The repository currently contains the runtime implementation for **v0.8 — ELF64 Loader**.
 
 Implemented now:
 
 - C-based emulator core.
-- Raw binary runner CLI:
+- Program runner CLI for both raw `.bin` files and supported ELF64 executables:
 
 ```sh
-./emulator run <raw-binary>
-./emulator trace <raw-binary>
-./emulator regs <raw-binary>
-./emulator dump <raw-binary> <address> <length>
-./emulator debug <raw-binary>
+./emulator run <program>
+./emulator trace <program>
+./emulator regs <program>
+./emulator dump <program> <address> <length>
+./emulator debug <program>
 ```
 
 - Fixed 1 MiB flat memory.
 - Raw binary load address: `0x1000`.
-- Initial `pc`: `0x1000`.
+- Raw binary initial `pc`: `0x1000`.
+- ELF64 initial `pc`: the ELF header entry point.
 - Initial `sp`: top of memory, currently `0x100000`.
 - Stable final register dump.
 - Instruction execution limit to avoid accidental infinite runs.
@@ -125,6 +127,15 @@ Implemented now:
   - invalid write fds return fake `-EBADF`; host stream write failures return fake `-EIO`; unknown syscalls return fake `-ENOSYS`
   - non-zero `SVC` immediates and invalid guest write buffers are emulator runtime errors
   - standalone examples live in `examples/v0_7/`
+- v0.8 ELF64 loader:
+  - loader auto-detects ELF files by `\x7fELF` magic and keeps non-ELF files on the raw-binary path
+  - supports little-endian AArch64 `ET_EXEC` ELF64 files
+  - rejects `ET_DYN`/PIE, `PT_INTERP`, wrong architecture, wrong endian, truncated headers, invalid program-header tables, invalid segment ranges, overlapping `PT_LOAD` segments, and unmapped entry points
+  - loads `PT_LOAD` segments at their guest virtual addresses
+  - zero-fills segment memory when `p_memsz > p_filesz`, which is how simple `.bss` works
+  - records segment bounds and permissions for inspection/future versions, but does not enforce read/write/execute permissions yet
+  - preserves raw `.bin` behavior for v0.1 through v0.7 examples
+  - ELF examples live in `examples/v0_8/`
 - Automated test suites following `docs/test-plan-v0.1.md`, `docs/test-plan-v0.2.md`, `docs/test-plan-v0.3.md`, `docs/test-plan-v0.4.md`, and `docs/test-plan-v0.5.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -142,7 +153,7 @@ Implemented now:
   - v0.7 unit/integration tests for `SVC` decode/formatting, fake syscall ABI, guest exit, write output, error cases, debugger stepping, and memory-boundary edge cases
   - v0.7 CLI/syscall tests for stdout, stderr, guest exit status propagation, trace ordering, dump compatibility, debugger workflows, docs, and regression commands
 
-The full v0.1 through v0.7 suite runs with `make test`.
+The full v0.1 through v0.7 test suite still runs with `make test`. v0.8 development is implemented, but v0.8 tests are intentionally not added yet.
 
 ## Build and Run
 
@@ -152,7 +163,7 @@ Build the emulator:
 make
 ```
 
-Build the example raw ARM64 binaries:
+Build the example raw ARM64 binaries and v0.8 ELF demos:
 
 ```sh
 make examples
@@ -176,7 +187,7 @@ Run the same style of program with trace output:
 ./emulator trace examples/v0_2/trace_loop.bin
 ```
 
-v0.7 trace output includes address, opcode, and decoded instruction text:
+Trace output includes address, opcode, and decoded instruction text:
 
 ```text
 trace pc=0x0000000000001000 0x0000000000001000: 0xd2800040  movz x0, #0x2
@@ -233,6 +244,21 @@ make examples/v0_7/hello.bin
 ./emulator run examples/v0_7/hello.bin
 ```
 
+Run the v0.8 ELF hello demo:
+
+```sh
+make examples/v0_8/hello_elf.elf
+./emulator run examples/v0_8/hello_elf.elf
+```
+
+The same CLI commands work for raw binaries and supported ELF64 executables:
+
+```sh
+./emulator trace examples/v0_8/hello_elf.elf
+./emulator regs examples/v0_8/exit_status_elf.elf
+./emulator dump examples/v0_8/hello_elf.elf 0x2000 13
+```
+
 Or build and run the main demo in one command:
 
 ```sh
@@ -245,7 +271,7 @@ Run the current automated test suite:
 make test
 ```
 
-The test target currently builds the emulator, assembles all examples, compiles the v0.1 through v0.7 C test runners, and runs all v0.1 through v0.7 CLI checks.
+The test target currently builds the emulator, assembles all examples, links the v0.8 ELF examples, compiles the v0.1 through v0.7 C test runners, and runs all v0.1 through v0.7 CLI checks. v0.8 tests are the next step.
 
 ## IDE and Language Server Setup
 
@@ -696,7 +722,7 @@ Definition of done:
 
 **Goal:** load real AArch64 ELF64 executable files instead of only raw binaries.
 
-Add ELF support:
+Implemented ELF support:
 
 - Validate ELF magic.
 - Validate class is ELF64.
@@ -705,20 +731,24 @@ Add ELF support:
 - Load `PT_LOAD` segments into emulator memory.
 - Respect entry point from ELF header.
 - Zero-fill `.bss` through segment memory size handling.
-- Create initial stack.
+- Initialize `sp` to the same top-of-memory stack used by raw programs.
+- Preserve all raw `.bin` loading behavior.
+- Reject unsupported dynamic-linking features clearly.
 
 Initial limitations:
 
 - Support static `ET_EXEC` first.
 - No dynamic linker.
 - No libc requirement.
-- No relocations unless a later example needs a small subset.
+- No `ET_DYN`/PIE load-bias policy.
+- No relocations.
+- Segment permissions are represented but not enforced yet.
 
 Example command:
 
 ```sh
-aarch64-linux-gnu-gcc -nostdlib -static examples/v0_7_hello.s -o hello.elf
-./emulator run hello.elf
+make examples/v0_8/hello_elf.elf
+./emulator run examples/v0_8/hello_elf.elf
 ```
 
 Definition of done:
@@ -726,6 +756,7 @@ Definition of done:
 - The emulator can load a simple static AArch64 ELF.
 - The emulator starts at the ELF entry point.
 - Segment bounds and permissions are represented internally, even if permissions are not enforced yet.
+- Raw v0.1 through v0.7 binaries still load exactly as before.
 
 ### v0.9 — Tiny C Programs
 
