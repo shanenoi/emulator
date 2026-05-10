@@ -900,17 +900,17 @@ printf 'trace on\nbreak 0x1008\nrun\nstep\nregs\nquit\n' | ./emulator debug exam
 
 Before v0.6 is considered complete, verify these explicitly:
 
-- [ ] Existing commands still reject wrong argument counts.
-- [ ] Trace formatting handles every currently supported instruction family.
-- [ ] Unsupported opcodes do not crash formatting.
-- [ ] Formatting helper handles tiny buffers safely.
-- [ ] Error messages include enough context without breaking previous tests unnecessarily.
-- [ ] Debugger trace and CLI trace are consistent or intentionally documented as different.
-- [ ] `make clean` removes v0.6 generated test artifacts.
-- [ ] `.gitignore` ignores v0.6 generated test artifacts.
-- [ ] README links this test plan.
-- [ ] No stale `education/` references remain.
-- [ ] Optional symbol-map tests are either implemented or explicitly marked deferred.
+- [x] Existing commands still reject wrong argument counts.
+- [x] Trace formatting handles every currently supported instruction family.
+- [x] Unsupported opcodes do not crash formatting.
+- [x] Formatting helper handles tiny buffers safely.
+- [x] Error messages include enough context without breaking previous tests unnecessarily.
+- [x] Debugger trace and CLI trace are consistent or intentionally documented as different.
+- [x] `make clean` removes v0.6 generated test artifacts.
+- [x] `.gitignore` ignores v0.6 generated test artifacts.
+- [x] README links this test plan.
+- [x] No stale `education/` references remain.
+- [x] Optional symbol-map tests are explicitly deferred because symbol-map support is out of scope for v0.6.
 
 # Suggested Implementation Order
 
