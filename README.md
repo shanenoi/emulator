@@ -126,8 +126,10 @@ Implemented now:
   - v0.4 CLI/function tests for simple calls, sequential calls, nested calls, frame calls, invalid returns, unsaved nested-call behavior, and trace output
   - v0.5 unit/integration tests for debugger initialization, reset behavior, breakpoint helpers, stepping, continuing, runtime errors, and instruction limits
   - v0.5 CLI/debugger tests for scripted REPL workflows, command parsing, aliases, breakpoints, register/memory inspection, trace toggling, EOF handling, and acceptance scripts
+  - v0.6 unit/integration tests for instruction formatting, readable disassembly text, formatting edge cases, and improved error context
+  - v0.6 CLI/runtime tests for usage, examples, readable traces, `regs`, error messages, docs, lessons, and acceptance workflows
 
-v0.6 automated tests are pending. Existing v0.1 through v0.5 tests still pass with the v0.6 runtime changes.
+v0.6 automated tests are implemented. The full v0.1 through v0.6 suite runs with `make test`.
 
 ## Build and Run
 

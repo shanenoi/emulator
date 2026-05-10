@@ -64,7 +64,7 @@ This version is still **not** an ELF/Mach-O loader, source-level debugger, or fu
 
 ## Implementation Assumptions
 
-Current v0.6 runtime implementation status: **runtime implemented; automated v0.6 tests pending**.
+Current v0.6 implementation status: **implemented and tested**.
 
 These assumptions should become implementation decisions before tests are finalized:
 
