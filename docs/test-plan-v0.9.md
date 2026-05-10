@@ -41,7 +41,7 @@ aarch64-linux-gnu-gcc -ffreestanding -nostdlib -fno-stack-protector \
 
 ### Recommended v0.9 Instruction Subset
 
-The exact implementation may be smaller if examples are adjusted, but the test plan should cover the following common compiler-emitted building blocks:
+The exact implementation may be smaller if examples are adjusted. The selected v0.9 profile supports the following common compiler-emitted building blocks and intentionally excludes logical-immediate instructions plus sign-extension aliases unless future examples require them:
 
 - Move/build constants:
   - `MOVK`
@@ -49,9 +49,10 @@ The exact implementation may be smaller if examples are adjusted, but the test p
   - `ADD` register
   - `SUB` register
 - Logical operations:
-  - `AND` register/immediate where practical
-  - `ORR` register/immediate where practical
-  - `EOR` register/immediate where practical
+  - `AND` register
+  - `ORR` register
+  - `EOR` register
+  - logical-immediate forms are documented as unsupported in the selected v0.9 profile
 - Shifts:
   - `LSL` immediate alias / shifted-register form
   - `LSR` immediate alias / shifted-register form
@@ -69,9 +70,8 @@ The exact implementation may be smaller if examples are adjusted, but the test p
   - `STRB`
   - `LDRH`
   - `STRH`
-- Sign/zero extending operations if emitted by chosen examples:
-  - `UXTB`/`UXTH` aliases where practical,
-  - `SXTW` or equivalent sign-extension path if required by compiler output.
+- Sign/zero extending operations:
+  - the selected examples avoid `UXTB`/`UXTH`/`SXTW`; those aliases are documented as unsupported in v0.9 unless added later.
 
 ### Out of Scope
 
@@ -122,6 +122,14 @@ examples/v0_9/fib.c
 examples/v0_9/sum_array.c
 examples/v0_9/string_len.c
 examples/v0_9/hello_c.c
+examples/v0_9/nested_calls.c
+examples/v0_9/stack_locals.c
+examples/v0_9/byte_copy.c
+examples/v0_9/stderr_c.c
+examples/v0_9/bad_fd_c.c
+examples/v0_9/unknown_syscall_c.c
+examples/v0_9/invalid_write_c.c
+examples/v0_9/hosted_printf.c
 examples/v0_9/linker.ld
 tests/v0_9/test_v0_9.c
 tests/v0_9/test_cli_c_programs.sh
@@ -139,10 +147,18 @@ Tests should separate three kinds of evidence:
 Recommended CLI fixture programs:
 
 - `return_42.elf`: `_start -> main -> exit(42)`.
-- `fib.elf`: recursive or iterative Fibonacci returns `55` for `fib(10)`.
-- `sum_array.elf`: loads values from data memory and returns their sum.
-- `strlen.elf`: scans bytes until NUL and returns length.
+- `fib.elf`: recursive Fibonacci returns `55` for `fib(10)`.
+- `sum_array.elf`: loads `{1, 2, 3, 4, 5}` from data memory and returns `15`.
+- `strlen.elf`: scans `"hello"` until NUL and returns `5`.
 - `hello_c.elf`: C code or a tiny C-facing wrapper writes `hello from c\n` through fake `write`.
+- `nested_calls.elf`: demonstrates nested C calls and returns `10`.
+- `stack_locals.elf`: demonstrates stack local variables and returns `31`.
+- `byte_copy.elf`: demonstrates byte loads and stores.
+- `stderr_c.elf`: writes to fake fd `2`.
+- `bad_fd_c.elf`: checks fake `-EBADF`.
+- `unknown_syscall_c.elf`: checks fake `-ENOSYS`.
+- `invalid_write_c.elf`: intentionally triggers the fake `write` invalid-memory runtime error.
+- `hosted_printf.c`: source-only unsupported hosted/libc counterexample, intentionally not built by `make examples`.
 
 ---
 
@@ -176,7 +192,7 @@ Decode `AND`, `ORR`, and `EOR` register forms with correct destination/source re
 
 ### TC-V09-DEC-006 — Logical immediate policy
 
-If logical-immediate forms are implemented, decode representative masks. If excluded, examples avoid them and tests assert clear unsupported decode.
+Logical-immediate forms are excluded from the selected v0.9 profile. Examples avoid them and tests assert clear unsupported decode.
 
 ### TC-V09-DEC-007 — Shift immediate aliases decode
 

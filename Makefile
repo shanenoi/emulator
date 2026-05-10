@@ -74,7 +74,14 @@ V0_9_EXAMPLES := \
 	examples/v0_9/fib.elf \
 	examples/v0_9/sum_array.elf \
 	examples/v0_9/string_len.elf \
-	examples/v0_9/hello_c.elf
+	examples/v0_9/hello_c.elf \
+	examples/v0_9/nested_calls.elf \
+	examples/v0_9/stack_locals.elf \
+	examples/v0_9/byte_copy.elf \
+	examples/v0_9/stderr_c.elf \
+	examples/v0_9/bad_fd_c.elf \
+	examples/v0_9/unknown_syscall_c.elf \
+	examples/v0_9/invalid_write_c.elf
 
 examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES) $(V0_9_EXAMPLES)
 
@@ -115,13 +122,25 @@ examples/v0_8/%.elf: examples/v0_8/%.o examples/v0_8/linker.ld
 	ld.lld -static -nostdlib -T examples/v0_8/linker.ld $< -o $@
 
 examples/v0_9/start.o: examples/v0_9/start.s
-	clang --target=aarch64-none-elf -c $< -o $@
+	@if command -v clang >/dev/null 2>&1; then \
+		clang --target=aarch64-none-elf -c $< -o $@; \
+	else \
+		echo "skipping v0.9 example build: clang is not available"; \
+	fi
 
 examples/v0_9/%.o: examples/v0_9/%.c
-	clang --target=aarch64-none-elf -ffreestanding -nostdlib -fno-stack-protector -fno-pic -fno-pie -O2 -c $< -o $@
+	@if command -v clang >/dev/null 2>&1; then \
+		clang --target=aarch64-none-elf -ffreestanding -nostdlib -fno-stack-protector -fno-pic -fno-pie -O0 -c $< -o $@; \
+	else \
+		echo "skipping v0.9 example build: clang is not available"; \
+	fi
 
 examples/v0_9/%.elf: examples/v0_9/start.o examples/v0_9/%.o examples/v0_9/linker.ld
-	ld.lld -static -nostdlib -T examples/v0_9/linker.ld examples/v0_9/start.o examples/v0_9/$*.o -o $@
+	@if command -v ld.lld >/dev/null 2>&1 && [ -f examples/v0_9/start.o ] && [ -f examples/v0_9/$*.o ]; then \
+		ld.lld -static -nostdlib -T examples/v0_9/linker.ld examples/v0_9/start.o examples/v0_9/$*.o -o $@; \
+	else \
+		echo "skipping v0.9 example link for $@: clang/ld.lld outputs are not available"; \
+	fi
 
 run-demo: all examples/v0_1/add.bin
 	./$(TARGET) run examples/v0_1/add.bin

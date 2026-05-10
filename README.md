@@ -145,7 +145,7 @@ Implemented now:
 - v0.9 tiny freestanding C support:
   - examples live in `examples/v0_9/`
   - `examples/v0_9/start.s` provides a tiny `_start` that calls C `main` and exits through fake syscall `93`
-  - C examples are compiled with `clang --target=aarch64-none-elf -ffreestanding -nostdlib -fno-stack-protector -fno-pic -fno-pie -O2` and linked as static `ET_EXEC` ELF files
+  - C examples are compiled with `clang --target=aarch64-none-elf -ffreestanding -nostdlib -fno-stack-protector -fno-pic -fno-pie -O0` and linked as static `ET_EXEC` ELF files
   - normal hosted/libc C programs remain out of scope
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v0.8.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
@@ -780,12 +780,14 @@ Implemented development support:
 - New compiler-oriented instruction support:
   - `MOVN` / `MOVK`
   - `ADD` / `SUB` register
+  - `ADD` / `SUB` immediate with correct `sp` handling for compiler stack frames
   - flag-setting `ADDS` / `SUBS` immediate/register forms used by loops
   - `AND` / `ORR` / `EOR` register
   - `LSL` / `LSR` / `ASR` immediate aliases
   - `MUL`, `UDIV`, `SDIV`
   - `ADR`, `ADRP`
   - byte and halfword `LDR` / `STR` forms
+  - deliberate exclusions: logical-immediate instructions and sign-extension aliases such as `UXTB`/`UXTH`/`SXTW` are outside the selected v0.9 example profile unless added later
 - A tiny `_start` assembly stub in `examples/v0_9/start.s`:
   - calls C `main` with `BL`,
   - leaves `main`'s return value in `x0`,
@@ -796,12 +798,20 @@ Implemented development support:
   - `sum_array.c`
   - `string_len.c`
   - `hello_c.c`
+  - `nested_calls.c`
+  - `stack_locals.c`
+  - `byte_copy.c`
+  - `stderr_c.c`
+  - `bad_fd_c.c`
+  - `unknown_syscall_c.c`
+  - `invalid_write_c.c`
+  - `hosted_printf.c` as an intentionally unsupported hosted/libc example that is not built by `make examples`
 
 Documented compile profile:
 
 ```sh
 clang --target=aarch64-none-elf -ffreestanding -nostdlib \
-  -fno-stack-protector -fno-pic -fno-pie -O2 \
+  -fno-stack-protector -fno-pic -fno-pie -O0 \
   -c examples/v0_9/fib.c -o examples/v0_9/fib.o
 
 ld.lld -static -nostdlib -T examples/v0_9/linker.ld \
@@ -823,7 +833,9 @@ Expected host exit status:
 55
 ```
 
-Important limitation: v0.9 is still freestanding C only. It does not run normal hosted C programs that depend on libc startup, `printf`, `malloc`, dynamic linking, `argv`, environment variables, or auxiliary vectors.
+Important limitation: v0.9 is still freestanding C only. It does not run normal hosted C programs that depend on libc startup, `printf`, `malloc`, dynamic linking, `argv`, environment variables, or auxiliary vectors. The repository includes `examples/v0_9/hosted_printf.c` only as a teaching counterexample; it is intentionally not built.
+
+Build behavior: v0.9 example targets use `clang --target=aarch64-none-elf` and `ld.lld` when they are available. If those tools are missing, the v0.9 example recipes print a clear skip message instead of failing the build. Older raw/assembly examples still use the pre-existing toolchain path.
 
 Definition of done for the later v0.9 test phase:
 

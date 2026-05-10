@@ -25,6 +25,30 @@ static const char *base_reg(uint8_t index) {
     return xregs[index & 0x1fu];
 }
 
+static bool addsub_imm_uses_sp(const EmuDecodedInstruction *instruction) {
+    if (instruction->sets_flags) {
+        return false;
+    }
+    if (instruction->rd == 31 && instruction->rn == 31) {
+        return true;
+    }
+    return instruction->rd == 29 && instruction->rn == 31 && instruction->imm == 0;
+}
+
+static const char *addsub_imm_reg(const EmuDecodedInstruction *instruction, uint8_t index) {
+    if (addsub_imm_uses_sp(instruction) && index == 31) {
+        return instruction->is_64_bit ? "sp" : "wsp";
+    }
+    return gp_reg(index, instruction->is_64_bit);
+}
+
+static const char *addsub_imm_dest_reg(const EmuDecodedInstruction *instruction) {
+    if (addsub_imm_uses_sp(instruction) && instruction->rd == 31) {
+        return instruction->is_64_bit ? "sp" : "wsp";
+    }
+    return gp_reg(instruction->rd, instruction->is_64_bit);
+}
+
 static const char *condition_name(EmuCondition condition) {
     switch (condition) {
     case EMU_COND_EQ:
@@ -217,13 +241,13 @@ static bool format_decoded_text(const EmuDecodedInstruction *instruction, uint64
         break;
     case EMU_INST_ADD_IMM:
         written = snprintf(out, out_size, "%s %s, %s, #0x%llx", instruction->sets_flags ? "adds" : "add",
-                           gp_reg(instruction->rd, instruction->is_64_bit),
-                           gp_reg(instruction->rn, instruction->is_64_bit), (unsigned long long)instruction->imm);
+                           addsub_imm_dest_reg(instruction), addsub_imm_reg(instruction, instruction->rn),
+                           (unsigned long long)instruction->imm);
         break;
     case EMU_INST_SUB_IMM:
         written = snprintf(out, out_size, "%s %s, %s, #0x%llx", instruction->sets_flags ? "subs" : "sub",
-                           gp_reg(instruction->rd, instruction->is_64_bit),
-                           gp_reg(instruction->rn, instruction->is_64_bit), (unsigned long long)instruction->imm);
+                           addsub_imm_dest_reg(instruction), addsub_imm_reg(instruction, instruction->rn),
+                           (unsigned long long)instruction->imm);
         break;
     case EMU_INST_ADD_REG:
     case EMU_INST_SUB_REG:

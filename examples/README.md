@@ -10,7 +10,7 @@ From the repository root:
 make examples
 ```
 
-This assembles the raw-binary examples, links the v0.8 ELF examples, and builds the v0.9 freestanding C ELF examples. Generated `.bin`, `.o`, and `.elf` files are ignored by Git.
+This assembles the raw-binary examples, links the v0.8 ELF examples, and builds the v0.9 freestanding C ELF examples. Generated `.bin`, `.o`, and `.elf` files are ignored by Git. v0.9 C examples use `clang --target=aarch64-none-elf` and `ld.lld` when available; if those tools are missing, their recipes print a skip message instead of failing.
 
 The build flow is:
 
@@ -28,7 +28,7 @@ example.o
 example.elf
 
 v0.9 freestanding C example.c
-  -> clang --target=aarch64-none-elf -ffreestanding -nostdlib -fno-stack-protector -fno-pic -fno-pie -O2
+  -> clang --target=aarch64-none-elf -ffreestanding -nostdlib -fno-stack-protector -fno-pic -fno-pie -O0
 example.o + examples/v0_9/start.o
   -> ld.lld -static -nostdlib -T examples/v0_9/linker.ld
 example.elf
@@ -157,7 +157,7 @@ x8 = 93
 svc #0
 ```
 
-These examples are freestanding C. They are compiled without libc, without dynamic linking, without PIE, and without normal operating-system startup files. Programs that use `printf`, `malloc`, `argv`, environment variables, or shared libraries are still out of scope.
+These examples are freestanding C. They are compiled without libc, without dynamic linking, without PIE, and without normal operating-system startup files. Programs that use `printf`, `malloc`, `argv`, environment variables, or shared libraries are still out of scope. `examples/v0_9/hosted_printf.c` is included only as an unsupported counterexample and is intentionally not built by `make examples`.
 
 ## Versioned layout
 

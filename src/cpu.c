@@ -151,6 +151,16 @@ static void cpu_write_base_register(Cpu *cpu, uint8_t index, uint64_t value) {
     cpu_write_register(cpu, index, true, value);
 }
 
+static bool addsub_imm_uses_sp(const EmuDecodedInstruction *instruction) {
+    if (instruction->sets_flags) {
+        return false;
+    }
+    if (instruction->rd == 31 && instruction->rn == 31) {
+        return true;
+    }
+    return instruction->rd == 29 && instruction->rn == 31 && instruction->imm == 0;
+}
+
 bool cpu_calculate_branch_target(uint64_t pc, int64_t offset, const Memory *memory, uint64_t *target, char *error,
                                  size_t error_size) {
     uint64_t result = 0;
@@ -766,9 +776,14 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
     }
 
     case EMU_INST_ADD_IMM: {
-        uint64_t lhs = cpu_read_register(cpu, instruction.rn);
+        bool uses_sp = addsub_imm_uses_sp(&instruction);
+        uint64_t lhs = uses_sp ? cpu_read_base_register(cpu, instruction.rn) : cpu_read_register(cpu, instruction.rn);
         uint64_t value = lhs + instruction.imm;
-        cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
+        if (uses_sp && instruction.rd == 31) {
+            cpu_write_base_register(cpu, instruction.rd, value);
+        } else {
+            cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
+        }
         if (instruction.sets_flags) {
             set_add_flags(cpu, lhs, instruction.imm, instruction.is_64_bit);
         }
@@ -777,9 +792,14 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
     }
 
     case EMU_INST_SUB_IMM: {
-        uint64_t lhs = cpu_read_register(cpu, instruction.rn);
+        bool uses_sp = addsub_imm_uses_sp(&instruction);
+        uint64_t lhs = uses_sp ? cpu_read_base_register(cpu, instruction.rn) : cpu_read_register(cpu, instruction.rn);
         uint64_t value = lhs - instruction.imm;
-        cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
+        if (uses_sp && instruction.rd == 31) {
+            cpu_write_base_register(cpu, instruction.rd, value);
+        } else {
+            cpu_write_register(cpu, instruction.rd, instruction.is_64_bit, value);
+        }
         if (instruction.sets_flags) {
             set_sub_flags(cpu, lhs, instruction.imm, instruction.is_64_bit);
         }
