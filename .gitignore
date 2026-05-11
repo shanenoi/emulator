@@ -20,5 +20,7 @@ tests/v0_9/tmp/
 *.o
 *.bin
 *.elf
+*.macho
 *.dSYM/
 tests/v1_0/tmp/
+tests/v1_1/tmp/

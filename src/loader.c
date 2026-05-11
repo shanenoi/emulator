@@ -33,7 +33,10 @@
 #define MACHO64_HEADER_SIZE 32u
 #define MACHO64_MIN_LOAD_COMMAND_SIZE 8u
 #define MACHO64_SEGMENT_COMMAND_SIZE 72u
+#define MACHO64_SECTION_SIZE 80u
 #define MACHO64_MAIN_COMMAND_SIZE 24u
+#define MACHO64_SYMTAB_COMMAND_SIZE 24u
+#define MACHO64_DYSYMTAB_COMMAND_SIZE 80u
 
 #define MACHO_CPUTYPE 4u
 #define MACHO_FILETYPE 12u
@@ -48,8 +51,20 @@
 #define MACHO_SEG_FILEOFF 40u
 #define MACHO_SEG_FILESIZE 48u
 #define MACHO_SEG_INITPROT 60u
+#define MACHO_SEG_NSECTS 64u
 
 #define MACHO_MAIN_ENTRYOFF 8u
+
+#define MACHO_SYMTAB_SYMOFF 8u
+#define MACHO_SYMTAB_NSYMS 12u
+#define MACHO_SYMTAB_STROFF 16u
+#define MACHO_SYMTAB_STRSIZE 20u
+
+#define MACHO_DYSYMTAB_INDIRECTSYM_OFFSET 56u
+#define MACHO_DYSYMTAB_NINDIRECTSYMS 60u
+
+#define MACHO_NLIST64_SIZE 16u
+#define MACHO_INDIRECT_SYMBOL_SIZE 4u
 
 static bool read_file(const char *path, uint8_t **out_bytes, size_t *out_size, char *error, size_t error_size) {
     *out_bytes = NULL;
@@ -145,8 +160,11 @@ static bool range_fits_memory(uint64_t address, uint64_t length, const Memory *m
 }
 
 static bool ranges_overlap(uint64_t a_start, uint64_t a_length, uint64_t b_start, uint64_t b_length) {
-    uint64_t a_end = a_start + a_length;
-    uint64_t b_end = b_start + b_length;
+    uint64_t a_end = 0;
+    uint64_t b_end = 0;
+    if (!checked_u64_add(a_start, a_length, &a_end) || !checked_u64_add(b_start, b_length, &b_end)) {
+        return true;
+    }
     return a_start < b_end && b_start < a_end;
 }
 
@@ -160,7 +178,8 @@ static bool is_macho_magic(const uint8_t *bytes, size_t file_size) {
         return false;
     }
     uint32_t magic = read_le32(bytes, 0);
-    return magic == EMU_MACHO_MAGIC_64 || magic == EMU_MACHO_CIGAM_64;
+    return magic == EMU_MACHO_MAGIC_64 || magic == EMU_MACHO_CIGAM_64 || magic == EMU_MACHO_FAT_MAGIC ||
+           magic == EMU_MACHO_FAT_MAGIC_64;
 }
 
 bool load_raw_binary(Memory *memory, const char *path, uint64_t load_address, char *error, size_t error_size) {
@@ -185,8 +204,9 @@ bool load_raw_binary(Memory *memory, const char *path, uint64_t load_address, ch
 }
 
 static bool record_segment(EmuLoadedProgram *program, const char *error_prefix, const char *segment_kind,
-                           uint64_t vaddr, uint64_t file_offset, uint64_t mem_size, uint64_t file_size, uint32_t flags,
-                           char *error, size_t error_size) {
+                           const char *name, uint64_t vaddr, uint64_t file_offset, uint64_t mem_size,
+                           uint64_t file_size, uint32_t flags, uint32_t section_count, char *error,
+                           size_t error_size) {
     if (program->segment_count >= EMU_MAX_LOAD_SEGMENTS) {
         snprintf(error, error_size, "%s: too many %s segments; max=%u", error_prefix, segment_kind,
                  EMU_MAX_LOAD_SEGMENTS);
@@ -204,11 +224,16 @@ static bool record_segment(EmuLoadedProgram *program, const char *error_prefix, 
         }
     }
 
-    program->segments[program->segment_count].vaddr = vaddr;
-    program->segments[program->segment_count].file_offset = file_offset;
-    program->segments[program->segment_count].mem_size = mem_size;
-    program->segments[program->segment_count].file_size = file_size;
-    program->segments[program->segment_count].flags = flags;
+    EmuLoadedSegment *segment = &program->segments[program->segment_count];
+    if (name != NULL) {
+        snprintf(segment->name, sizeof(segment->name), "%s", name);
+    }
+    segment->vaddr = vaddr;
+    segment->file_offset = file_offset;
+    segment->mem_size = mem_size;
+    segment->file_size = file_size;
+    segment->flags = flags;
+    segment->section_count = section_count;
     program->segment_count++;
     return true;
 }
@@ -342,8 +367,8 @@ static bool load_elf64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t fi
                      p_vaddr, p_memsz, emu->memory.size);
             return false;
         }
-        if (!record_segment(program, "ELF loader error", "PT_LOAD", p_vaddr, p_offset, p_memsz, p_filesz, p_flags,
-                            error, error_size)) {
+        if (!record_segment(program, "ELF loader error", "PT_LOAD", NULL, p_vaddr, p_offset, p_memsz, p_filesz,
+                            p_flags, 0, error, error_size)) {
             return false;
         }
     }
@@ -436,6 +461,11 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
     }
 
     uint32_t magic = read_le32(bytes, 0);
+    if (magic == EMU_MACHO_FAT_MAGIC || magic == EMU_MACHO_FAT_MAGIC_64) {
+        snprintf(error, error_size,
+                 "Mach-O loader error: fat/universal Mach-O archives are unsupported in v1.1; provide a thin arm64 slice");
+        return false;
+    }
     if (magic == EMU_MACHO_CIGAM_64) {
         snprintf(error, error_size, "Mach-O loader error: big-endian Mach-O is unsupported in v1.1");
         return false;
@@ -449,6 +479,7 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
     uint32_t filetype = read_le32(bytes, MACHO_FILETYPE);
     uint32_t ncmds = read_le32(bytes, MACHO_NCMDS);
     uint32_t sizeofcmds = read_le32(bytes, MACHO_SIZEOFCMDS);
+    program->macho_load_command_count = ncmds;
 
     if (cputype != EMU_MACHO_CPU_TYPE_ARM64) {
         snprintf(error, error_size, "Mach-O loader error: unsupported CPU type 0x%08" PRIx32 "; expected arm64",
@@ -511,11 +542,29 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
                 return false;
             }
 
+            char segment_name[17];
+            memcpy(segment_name, &bytes[(size_t)command_offset + 8u], 16u);
+            segment_name[16] = '\0';
             uint64_t vmaddr = read_le64(bytes, (size_t)command_offset + MACHO_SEG_VMADDR);
             uint64_t vmsize = read_le64(bytes, (size_t)command_offset + MACHO_SEG_VMSIZE);
             uint64_t fileoff = read_le64(bytes, (size_t)command_offset + MACHO_SEG_FILEOFF);
             uint64_t filesize = read_le64(bytes, (size_t)command_offset + MACHO_SEG_FILESIZE);
             uint32_t initprot = read_le32(bytes, (size_t)command_offset + MACHO_SEG_INITPROT);
+            uint32_t nsects = read_le32(bytes, (size_t)command_offset + MACHO_SEG_NSECTS);
+            uint64_t required_segment_size = MACHO64_SEGMENT_COMMAND_SIZE;
+            uint64_t section_table_size = (uint64_t)nsects * MACHO64_SECTION_SIZE;
+            if (nsects != 0 && section_table_size / nsects != MACHO64_SECTION_SIZE) {
+                snprintf(error, error_size, "Mach-O loader error: LC_SEGMENT_64 section table size overflow");
+                return false;
+            }
+            if (!checked_u64_add(MACHO64_SEGMENT_COMMAND_SIZE, section_table_size, &required_segment_size) ||
+                cmdsize < required_segment_size) {
+                snprintf(error, error_size,
+                         "Mach-O loader error: LC_SEGMENT_64 section table is truncated: nsects=%" PRIu32
+                         " cmdsize=0x%08" PRIx32,
+                         nsects, cmdsize);
+                return false;
+            }
 
             if (filesize > vmsize) {
                 snprintf(error, error_size,
@@ -538,8 +587,8 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
                          vmaddr, vmsize, emu->memory.size);
                 return false;
             }
-            if (vmsize > 0 && !record_segment(program, "Mach-O loader error", "LC_SEGMENT_64", vmaddr, fileoff,
-                                              vmsize, filesize, initprot, error, error_size)) {
+            if (vmsize > 0 && !record_segment(program, "Mach-O loader error", "LC_SEGMENT_64", segment_name, vmaddr,
+                                              fileoff, vmsize, filesize, initprot, nsects, error, error_size)) {
                 return false;
             }
         } else if (cmd == EMU_MACHO_LC_MAIN) {
@@ -550,6 +599,57 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
             }
             saw_lc_main = true;
             entryoff = read_le64(bytes, (size_t)command_offset + MACHO_MAIN_ENTRYOFF);
+        } else if (cmd == EMU_MACHO_LC_SYMTAB) {
+            if (cmdsize < MACHO64_SYMTAB_COMMAND_SIZE) {
+                snprintf(error, error_size, "Mach-O loader error: LC_SYMTAB command is truncated: cmdsize=0x%08" PRIx32,
+                         cmdsize);
+                return false;
+            }
+            uint32_t symoff = read_le32(bytes, (size_t)command_offset + MACHO_SYMTAB_SYMOFF);
+            uint32_t nsyms = read_le32(bytes, (size_t)command_offset + MACHO_SYMTAB_NSYMS);
+            uint32_t stroff = read_le32(bytes, (size_t)command_offset + MACHO_SYMTAB_STROFF);
+            uint32_t strsize = read_le32(bytes, (size_t)command_offset + MACHO_SYMTAB_STRSIZE);
+            uint64_t symbol_table_size = (uint64_t)nsyms * MACHO_NLIST64_SIZE;
+            if (nsyms != 0 && symbol_table_size / nsyms != MACHO_NLIST64_SIZE) {
+                snprintf(error, error_size, "Mach-O loader error: LC_SYMTAB symbol table size overflow");
+                return false;
+            }
+            if (!range_fits_file(symoff, symbol_table_size, file_size)) {
+                snprintf(error, error_size,
+                         "Mach-O loader error: LC_SYMTAB symbol table outside file: symoff=0x%08" PRIx32
+                         " nsyms=%" PRIu32 " file_size=0x%zx",
+                         symoff, nsyms, file_size);
+                return false;
+            }
+            if (!range_fits_file(stroff, strsize, file_size)) {
+                snprintf(error, error_size,
+                         "Mach-O loader error: LC_SYMTAB string table outside file: stroff=0x%08" PRIx32
+                         " strsize=0x%08" PRIx32 " file_size=0x%zx",
+                         stroff, strsize, file_size);
+                return false;
+            }
+            program->macho_symbol_count = nsyms;
+        } else if (cmd == EMU_MACHO_LC_DYSYMTAB) {
+            if (cmdsize < MACHO64_DYSYMTAB_COMMAND_SIZE) {
+                snprintf(error, error_size, "Mach-O loader error: LC_DYSYMTAB command is truncated: cmdsize=0x%08" PRIx32,
+                         cmdsize);
+                return false;
+            }
+            uint32_t indirectsymoff = read_le32(bytes, (size_t)command_offset + MACHO_DYSYMTAB_INDIRECTSYM_OFFSET);
+            uint32_t nindirectsyms = read_le32(bytes, (size_t)command_offset + MACHO_DYSYMTAB_NINDIRECTSYMS);
+            uint64_t indirect_table_size = (uint64_t)nindirectsyms * MACHO_INDIRECT_SYMBOL_SIZE;
+            if (nindirectsyms != 0 && indirect_table_size / nindirectsyms != MACHO_INDIRECT_SYMBOL_SIZE) {
+                snprintf(error, error_size, "Mach-O loader error: LC_DYSYMTAB indirect symbol table size overflow");
+                return false;
+            }
+            if (nindirectsyms > 0 && !range_fits_file(indirectsymoff, indirect_table_size, file_size)) {
+                snprintf(error, error_size,
+                         "Mach-O loader error: LC_DYSYMTAB indirect symbol table outside file: indirectsymoff=0x%08"
+                         PRIx32 " nindirectsyms=%" PRIu32 " file_size=0x%zx",
+                         indirectsymoff, nindirectsyms, file_size);
+                return false;
+            }
+            program->macho_indirect_symbol_count = nindirectsyms;
         }
 
         command_offset = next_command_offset;

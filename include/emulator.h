@@ -46,6 +46,8 @@ typedef enum {
 
 #define EMU_MACHO_MAGIC_64 0xfeedfacfu
 #define EMU_MACHO_CIGAM_64 0xcffaedfeu
+#define EMU_MACHO_FAT_MAGIC 0xbebafecau
+#define EMU_MACHO_FAT_MAGIC_64 0xbfbafecau
 #define EMU_MACHO_CPU_TYPE_ARM64 0x0100000cu
 #define EMU_MACHO_FILETYPE_EXECUTE 2u
 #define EMU_MACHO_LC_SEGMENT_64 0x19u
@@ -54,6 +56,9 @@ typedef enum {
 #define EMU_MACHO_LC_DYLD_INFO 0x22u
 #define EMU_MACHO_LC_MAIN 0x80000028u
 #define EMU_MACHO_LC_DYLD_INFO_ONLY 0x80000022u
+#define EMU_MACHO_LC_SYMTAB 0x02u
+#define EMU_MACHO_LC_DYSYMTAB 0x0bu
+#define EMU_MACHO_LC_CODE_SIGNATURE 0x1du
 
 typedef enum {
     EMU_INST_NOP = 0,
@@ -164,11 +169,13 @@ typedef enum {
 } EmuProgramFormat;
 
 typedef struct {
+    char name[17];
     uint64_t vaddr;
     uint64_t file_offset;
     uint64_t mem_size;
     uint64_t file_size;
     uint32_t flags;
+    uint32_t section_count;
 } EmuLoadedSegment;
 
 typedef struct {
@@ -177,6 +184,9 @@ typedef struct {
     uint64_t stack_pointer;
     size_t segment_count;
     EmuLoadedSegment segments[EMU_MAX_LOAD_SEGMENTS];
+    uint32_t macho_load_command_count;
+    uint32_t macho_symbol_count;
+    uint32_t macho_indirect_symbol_count;
 } EmuLoadedProgram;
 
 typedef struct {

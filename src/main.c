@@ -11,6 +11,7 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "       emulator trace <program>\n");
     fprintf(stream, "       emulator regs <program>\n");
     fprintf(stream, "       emulator dump <program> <address> <length>\n");
+    fprintf(stream, "       emulator info <program>\n");
     fprintf(stream, "       emulator debug <program>\n");
     fprintf(stream, "       emulator help\n");
     fprintf(stream, "\n");
@@ -25,7 +26,42 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "       emulator trace <raw-binary>\n");
     fprintf(stream, "       emulator regs <raw-binary>\n");
     fprintf(stream, "       emulator dump <raw-binary> <address> <length>\n");
+    fprintf(stream, "       emulator info <raw-binary>\n");
     fprintf(stream, "       emulator debug <raw-binary>\n");
+}
+
+static const char *program_format_name(EmuProgramFormat format) {
+    switch (format) {
+    case EMU_PROGRAM_RAW:
+        return "raw";
+    case EMU_PROGRAM_ELF64:
+        return "elf64";
+    case EMU_PROGRAM_MACHO64:
+        return "macho64";
+    default:
+        return "unknown";
+    }
+}
+
+static void print_program_info(const EmuLoadedProgram *program, FILE *stream) {
+    fprintf(stream, "format: %s\n", program_format_name(program->format));
+    fprintf(stream, "entry: 0x%016" PRIx64 "\n", program->entry);
+    fprintf(stream, "stack_pointer: 0x%016" PRIx64 "\n", program->stack_pointer);
+    fprintf(stream, "segments: %zu\n", program->segment_count);
+    for (size_t i = 0; i < program->segment_count; i++) {
+        const EmuLoadedSegment *segment = &program->segments[i];
+        fprintf(stream,
+                "  [%zu] name=%s vaddr=0x%016" PRIx64 " mem_size=0x%016" PRIx64
+                " file_offset=0x%016" PRIx64 " file_size=0x%016" PRIx64 " flags=0x%08" PRIx32
+                " sections=%" PRIu32 "\n",
+                i, segment->name[0] == '\0' ? "-" : segment->name, segment->vaddr, segment->mem_size,
+                segment->file_offset, segment->file_size, segment->flags, segment->section_count);
+    }
+    if (program->format == EMU_PROGRAM_MACHO64) {
+        fprintf(stream, "mach_o_load_commands: %" PRIu32 "\n", program->macho_load_command_count);
+        fprintf(stream, "mach_o_symbols: %" PRIu32 "\n", program->macho_symbol_count);
+        fprintf(stream, "mach_o_indirect_symbols: %" PRIu32 "\n", program->macho_indirect_symbol_count);
+    }
 }
 
 static int guest_or_success_status(const Emulator *emu) {
@@ -78,7 +114,8 @@ int main(int argc, char **argv) {
     }
 
     if (argc >= 2 && strcmp(argv[1], "run") != 0 && strcmp(argv[1], "trace") != 0 &&
-        strcmp(argv[1], "regs") != 0 && strcmp(argv[1], "dump") != 0 && strcmp(argv[1], "debug") != 0) {
+        strcmp(argv[1], "regs") != 0 && strcmp(argv[1], "dump") != 0 && strcmp(argv[1], "info") != 0 &&
+        strcmp(argv[1], "debug") != 0) {
         fprintf(stderr, "error: unknown command: %s\n", argv[1]);
         print_usage(stderr);
         return 2;
@@ -132,6 +169,11 @@ int main(int argc, char **argv) {
             print_usage(stderr);
             return 2;
         }
+    } else if (strcmp(argv[1], "info") == 0) {
+        if (argc != 3) {
+            print_usage(stderr);
+            return 2;
+        }
     } else if (strcmp(argv[1], "run") != 0) {
         fprintf(stderr, "error: unknown command: %s\n", argv[1]);
         print_usage(stderr);
@@ -153,6 +195,12 @@ int main(int argc, char **argv) {
         fprintf(stderr, "error: %s\n", error);
         emulator_free(&emu);
         return 1;
+    }
+
+    if (strcmp(argv[1], "info") == 0) {
+        print_program_info(&program, stdout);
+        emulator_free(&emu);
+        return 0;
     }
 
     EmuStatus status = emulator_run(&emu, error, sizeof(error));

@@ -43,7 +43,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, and initial **v1.1 — Mach-O Loader** development groundwork. v1.1 starts a new executable-format milestone; deterministic v1.1 tests are still pending.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, and the non-test implementation work for **v1.1 — Mach-O Loader**. v1.1 now has deterministic Mach-O examples and CLI inspection support; dedicated v1.1 automated tests are still pending.
 
 Implemented now:
 
@@ -55,6 +55,7 @@ Implemented now:
 ./emulator trace <program>
 ./emulator regs <program>
 ./emulator dump <program> <address> <length>
+./emulator info <program>
 ./emulator debug <program>
 ```
 
@@ -159,14 +160,20 @@ Implemented now:
   - `make release-check` is a named release gate that runs v1.0 docs, repository hygiene, clean-artifact, and fresh-archive full deterministic-suite checks
   - `make release-archive` creates an archive from the current git `HEAD` and includes `.git`
   - `examples/v1_0/` documents a representative release smoke path across raw, debugger, syscall, ELF, and tiny-C examples
-- v1.1 Mach-O loader groundwork:
+- v1.1 Mach-O loader:
   - loader auto-detects 64-bit Mach-O files by magic number after checking the ELF path
   - supports the initial little-endian arm64 `MH_EXECUTE` profile
   - parses and validates the Mach-O header and load-command table
+  - rejects fat/universal Mach-O archives clearly and asks for a thin arm64 slice
   - maps `LC_SEGMENT_64` segments into the existing 1 MiB flat memory model
+  - validates `LC_SEGMENT_64` section-table sizing and records section counts for inspection
   - zero-fills segment memory when `vmsize > filesize`
   - resolves `LC_MAIN` `entryoff` through mapped segment file ranges to initialize `pc`
-  - records segment file offsets and permission bits for inspection/future versions, but does not enforce memory permissions yet
+  - validates optional `LC_SYMTAB` and `LC_DYSYMTAB` table ranges and records symbol counts for inspection
+  - records segment names, file offsets, section counts, and permission bits for inspection/future versions, but does not enforce memory permissions yet
+  - adds `emulator info <program>` for loader inspection without executing guest code
+  - includes deterministic generated Mach-O examples in `examples/v1_1/`: `minimal_exit.macho`, `hello.macho`, and `zero_fill.macho`
+  - includes an optional Mach-O toolchain smoke script in `scripts/optional_macho_toolchain_check.sh`
   - rejects big-endian Mach-O, wrong CPU type, non-executable file types, malformed command tables, invalid segment ranges, overlapping mapped segments, missing `LC_MAIN`, unmapped/misaligned entries, and dynamic-linking commands such as `LC_LOAD_DYLINKER`, `LC_LOAD_DYLIB`, and `LC_DYLD_INFO`
   - normal macOS/iOS applications, `dyld`, shared libraries, Apple process setup, code signing, Objective-C/Swift runtimes, and real Darwin syscalls remain out of scope
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
@@ -192,7 +199,7 @@ Implemented now:
   - optional v0.9 real-toolchain smoke tests that build and run the actual freestanding C examples when `clang` and `ld.lld` are available, and skip clearly otherwise
   - v1.0 release tests for CLI stability, docs consistency, optional release examples, repository hygiene, clean-artifact validation, and fresh-archive full deterministic-suite validation
 
-The full v0.1 through v1.0 test suite runs with `make test`. v1.1 implementation groundwork is present, but v1.1 deterministic tests have not been added yet. The v1.0 release gate runs with `make release-check`; it checks v1.0 docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
+The full v0.1 through v1.0 test suite runs with `make test`. v1.1 implementation and examples are present, but v1.1 deterministic automated tests have not been added yet. The v1.0 release gate runs with `make release-check`; it checks v1.0 docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
 
 ## Build and Run
 
@@ -208,7 +215,7 @@ Print the stable command surface:
 ./emulator help
 ```
 
-Build the example raw ARM64 binaries, v0.8 ELF demos, and v0.9 freestanding C demos:
+Build the example raw ARM64 binaries, v0.8 ELF demos, v0.9 freestanding C demos, and generated v1.1 Mach-O demos:
 
 ```sh
 make examples
@@ -296,12 +303,20 @@ make examples/v0_8/hello_elf.elf
 ./emulator run examples/v0_8/hello_elf.elf
 ```
 
-The same CLI commands work for raw binaries, supported ELF64 executables, and the initial supported Mach-O profile:
+The same CLI commands work for raw binaries, supported ELF64 executables, and the supported Mach-O profile:
 
 ```sh
 ./emulator trace examples/v0_8/hello_elf.elf
 ./emulator regs examples/v0_8/exit_status_elf.elf
 ./emulator dump examples/v0_8/hello_elf.elf 0x2000 13
+```
+
+Generate and inspect/run the v1.1 Mach-O examples:
+
+```sh
+make examples/v1_1/hello.macho
+./emulator info examples/v1_1/hello.macho
+./emulator run examples/v1_1/hello.macho
 ```
 
 Or build and run the main demo in one command:
@@ -359,7 +374,7 @@ This is a stable learning emulator, not a complete ARM64/Linux emulator. The cur
 - `argv`, `envp`, or auxiliary-vector setup,
 - MMU/page tables or memory protection enforcement,
 - floating point, SIMD, or NEON,
-- Mach-O loading.
+- normal macOS/iOS Mach-O applications, fat/universal Mach-O slice selection, `dyld`, shared libraries, rebasing/binding, code signing behavior, Objective-C/Swift runtimes, and real Darwin syscalls.
 
 ## IDE and Language Server Setup
 

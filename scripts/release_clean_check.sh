@@ -36,6 +36,7 @@ leftovers=$(find . \
         -name '*.o' -o \
         -name '*.bin' -o \
         -name '*.elf' -o \
+        -name '*.macho' -o \
         -path './tests/v0_1/test_v0_1' -o \
         -path './tests/v0_2/test_v0_2' -o \
         -path './tests/v0_3/test_v0_3' -o \
