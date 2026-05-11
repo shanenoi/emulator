@@ -45,7 +45,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, and the initial development slice for **v1.2 — Virtual Memory and Page Permissions**. v1.2 adds page mappings, read/write/execute permission checks, stack mapping, guard-page shape, and mapping inspection; dedicated v1.2 tests are intentionally deferred to the next test phase.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, and the non-test implementation slice for **v1.2 — Virtual Memory and Page Permissions**. v1.2 adds non-overlapping loader mapping ranges, read/write/execute permission checks, stack mapping with a visible guard page, deterministic permission-fault examples, structured memory-fault categories for future tests, and mapping inspection; dedicated v1.2 tests are intentionally deferred to the next test phase.
 
 Implemented now:
 
@@ -180,17 +180,19 @@ Implemented now:
   - includes an optional Mach-O fixture/toolchain smoke path through `make test` and `tests/v1_1/test_optional_macho_examples.sh`
   - rejects big-endian Mach-O, wrong CPU type, non-executable file types, malformed command tables, invalid segment ranges, overlapping mapped segments, missing `LC_MAIN`, unmapped/misaligned entries, and dynamic-linking commands such as `LC_LOAD_DYLINKER`, `LC_LOAD_DYLIB`, and `LC_DYLD_INFO`
   - normal dynamically linked macOS/iOS applications, `dyld`, shared libraries, Apple process setup, code signing, Objective-C/Swift runtimes, and real Darwin syscalls remain out of scope
-- v1.2 virtual-memory development slice:
+- v1.2 virtual-memory implementation slice:
   - adds a fixed 4096-byte teaching page size
   - adds memory mappings with stable `r--`, `rw-`, `r-x`, and `rwx` permission labels
   - installs explicit loader-created mappings for raw, ELF64, and Mach-O programs
-  - maps a 64 KiB `rw-` stack below the top of guest memory and leaves the page below it unmapped as the guard-page shape
+  - maps a 64 KiB `rw-` stack below the top of guest memory and prints the page below it as a `---` stack guard
+  - rejects true overlapping mapping ranges while preserving adjacent byte ranges from earlier lessons
   - checks instruction fetches through execute permission and data loads/stores through read/write permission helpers
   - checks fake `write` syscall buffers through the readable-memory path
   - extends `emulator info <program>` with a `mappings:` section
   - adds debugger `maps` and `map <address>` commands for mapping inspection
-  - documents the current v1.2 development slice in `examples/v1_2/README.md` and `lessons/v1.2-virtual-memory.md`
-  - dedicated v1.2 automated tests and generated permission-fault fixtures are deferred to the test phase
+  - adds deterministic generated v1.2 examples in `examples/v1_2/`
+  - documents the current v1.2 behavior in `examples/v1_2/README.md` and `lessons/v1.2-virtual-memory.md`
+  - dedicated v1.2 automated tests are deferred to the test phase
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -1011,7 +1013,7 @@ Definition of done:
 
 **Goal:** teach page-based memory, permissions, and fault handling.
 
-Planning reference: [v1.2 Test Plan — Virtual Memory and Page Permissions](docs/test-plan-v1.2.md). The implementation slice has started; dedicated tests are deferred to the next test phase.
+Planning reference: [v1.2 Test Plan — Virtual Memory and Page Permissions](docs/test-plan-v1.2.md). The non-test implementation slice is in place; dedicated tests are deferred to the next test phase.
 
 Added memory model pieces:
 
@@ -1019,13 +1021,16 @@ Added memory model pieces:
 - Loader-created mappings for raw, ELF64, and Mach-O inputs.
 - Read/write/execute permission labels.
 - A mapped `rw-` stack region below the top of guest memory.
-- An intentionally unmapped guard-page shape below the stack.
+- A visible `---` stack-guard page below the stack mapping.
+- True mapping-overlap rejection, while adjacent byte ranges remain allowed.
+- Deterministic generated examples in `examples/v1_2/`.
+- Structured memory-fault categories for future v1.2 tests.
 - Instruction fetch checks through execute permission.
 - Data read/write checks through read/write permission helpers.
 - `info` mapping output.
 - Debugger `maps` and `map <address>` inspection commands.
 
-Example behavior being prepared for the v1.2 test phase:
+Example behavior available through generated v1.2 fixtures:
 
 ```text
 write to RX code page -> permission fault
@@ -1034,11 +1039,20 @@ read unmapped page    -> unmapped memory fault
 stack underflow       -> guard-page fault
 ```
 
+Generate and inspect them with:
+
+```sh
+make examples/v1_2/simple_raw.bin
+./emulator info examples/v1_2/simple_raw.bin
+./emulator run examples/v1_2/write_code_page.bin
+./emulator run examples/v1_2/execute_unmapped.bin
+```
+
 Current limitations:
 
 - This is still a teaching VM, not a real ARMv8 MMU.
 - There are no page tables, TLBs, signals, demand paging, `mmap`, copy-on-write, threads, ASLR, or process isolation.
-- Dedicated v1.2 generated fixtures and automated tests are deferred to the test phase.
+- Dedicated v1.2 automated tests are deferred to the test phase.
 
 Definition of done for the full v1.2 milestone:
 

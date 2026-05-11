@@ -875,13 +875,17 @@ bool emulator_load_program(Emulator *emu, const char *path, EmuLoadedProgram *pr
         program->entry = EMU_LOAD_ADDRESS;
         program->stack_pointer = emu->memory.size;
         memory_clear_mappings(&emu->memory);
-        if (file_size > emu->memory.size - (size_t)EMU_LOAD_ADDRESS) {
+        size_t raw_mapping_size = (file_size + 3u) & ~(size_t)3u;
+        if (raw_mapping_size < file_size) {
+            snprintf(error, error_size, "loader error: raw mapping size overflow for file size 0x%zx", file_size);
+            ok = false;
+        } else if (raw_mapping_size > emu->memory.size - (size_t)EMU_LOAD_ADDRESS) {
             snprintf(error, error_size,
                      "loader error: file size 0x%zx does not fit at load address 0x%016llx; available=0x%zx",
                      file_size, (unsigned long long)EMU_LOAD_ADDRESS, emu->memory.size - (size_t)EMU_LOAD_ADDRESS);
             ok = false;
-        } else if (!memory_map_range(&emu->memory, EMU_LOAD_ADDRESS, (uint64_t)file_size, EMU_MAP_READ | EMU_MAP_EXEC,
-                                     "raw:program", error, error_size)) {
+        } else if (!memory_map_range(&emu->memory, EMU_LOAD_ADDRESS, (uint64_t)raw_mapping_size,
+                                     EMU_MAP_READ | EMU_MAP_EXEC, "raw:program", error, error_size)) {
             char detail[512];
             snprintf(detail, sizeof(detail), "%s", error);
             snprintf(error, error_size, "loader error: %s", detail);

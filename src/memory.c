@@ -30,8 +30,12 @@ static bool align_up(uint64_t value, uint64_t *out) {
     return true;
 }
 
-static bool check_bounds(const Memory *memory, uint64_t address, uint64_t width, char *error, size_t error_size) {
+static bool check_bounds(const Memory *memory, uint64_t address, uint64_t width, EmuMemoryFaultKind *fault_kind,
+                         char *error, size_t error_size) {
     if (memory == NULL || memory->bytes == NULL) {
+        if (fault_kind != NULL) {
+            *fault_kind = EMU_MEMORY_FAULT_BOUNDS;
+        }
         snprintf(error, error_size, "memory is not initialized");
         return false;
     }
@@ -43,15 +47,42 @@ static bool check_bounds(const Memory *memory, uint64_t address, uint64_t width,
                  "memory access out of bounds: address=0x%016" PRIx64 " width=0x%016" PRIx64
                  " memory_size=0x%zx",
                  address, width, memory->size);
+        if (fault_kind != NULL) {
+            *fault_kind = EMU_MEMORY_FAULT_BOUNDS;
+        }
         return false;
     }
 
     return true;
 }
 
-static bool check_permission(const Memory *memory, uint64_t address, uint64_t width, uint8_t required,
-                             const char *fault_name, char *error, size_t error_size) {
-    if (!check_bounds(memory, address, width, error, error_size)) {
+static const char *fault_name_for_required(uint8_t required) {
+    if ((required & EMU_MAP_EXEC) != 0) {
+        return "execute";
+    }
+    if ((required & EMU_MAP_WRITE) != 0) {
+        return "write";
+    }
+    return "read";
+}
+
+static EmuMemoryFaultKind fault_kind_for_required(uint8_t required) {
+    if ((required & EMU_MAP_EXEC) != 0) {
+        return EMU_MEMORY_FAULT_EXEC_PERMISSION;
+    }
+    if ((required & EMU_MAP_WRITE) != 0) {
+        return EMU_MEMORY_FAULT_WRITE_PERMISSION;
+    }
+    return EMU_MEMORY_FAULT_READ_PERMISSION;
+}
+
+bool memory_check_access(const Memory *memory, uint64_t address, uint64_t width, uint8_t required,
+                         EmuMemoryFaultKind *fault_kind, char *error, size_t error_size) {
+    if (fault_kind != NULL) {
+        *fault_kind = EMU_MEMORY_FAULT_NONE;
+    }
+
+    if (!check_bounds(memory, address, width, fault_kind, error, error_size)) {
         return false;
     }
 
@@ -60,25 +91,34 @@ static bool check_permission(const Memory *memory, uint64_t address, uint64_t wi
     }
 
     uint64_t end = address + width;
-    size_t first_page = (size_t)(address / EMU_PAGE_SIZE);
-    size_t last_page = (size_t)((end - 1u) / EMU_PAGE_SIZE);
-    for (size_t page = first_page; page <= last_page; page++) {
-        uint8_t permissions = memory->page_permissions[page];
-        if (permissions == 0) {
+    uint64_t cursor = address;
+    const char *fault_name = fault_name_for_required(required);
+    while (cursor < end) {
+        const EmuMemoryMapping *mapping = memory_find_mapping(memory, cursor);
+        if (mapping == NULL) {
+            if (fault_kind != NULL) {
+                *fault_kind = EMU_MEMORY_FAULT_UNMAPPED;
+            }
             snprintf(error, error_size,
                      "memory fault: unmapped access: address=0x%016" PRIx64 " width=0x%016" PRIx64,
                      address, width);
             return false;
         }
-        if ((permissions & required) != required) {
+        if ((mapping->permissions & required) != required) {
+            if (fault_kind != NULL) {
+                *fault_kind = fault_kind_for_required(required);
+            }
             char have[4];
-            memory_format_permissions(permissions, have, sizeof(have));
+            memory_format_permissions(mapping->permissions, have, sizeof(have));
             snprintf(error, error_size,
                      "memory fault: %s permission denied: address=0x%016" PRIx64 " width=0x%016" PRIx64
-                     " page=0x%016" PRIx64 " permissions=%s",
-                     fault_name, address, width, (uint64_t)page * EMU_PAGE_SIZE, have);
+                     " mapping=0x%016" PRIx64 "-0x%016" PRIx64 " permissions=%s name=%s",
+                     fault_name, address, width, mapping->start, mapping->start + mapping->size, have,
+                     mapping->name[0] == '\0' ? "mapping" : mapping->name);
             return false;
         }
+
+        cursor = mapping->start + mapping->size;
     }
 
     return true;
@@ -185,6 +225,22 @@ bool memory_map_range(Memory *memory, uint64_t address, uint64_t length, uint8_t
         return false;
     }
 
+    bool allow_stack_overlay = name != NULL && strcmp(name, "stack") == 0;
+    for (size_t i = 0; i < memory->mapping_count; i++) {
+        const EmuMemoryMapping *existing = &memory->mappings[i];
+        if (address < existing->start + existing->size && existing->start < end) {
+            if (allow_stack_overlay) {
+                continue;
+            }
+            snprintf(error, error_size,
+                     "memory map error: overlapping mappings are not allowed: 0x%016" PRIx64
+                     "-0x%016" PRIx64 " overlaps 0x%016" PRIx64 "-0x%016" PRIx64 " name=%s",
+                     address, end, existing->start, existing->start + existing->size,
+                     existing->name[0] == '\0' ? "mapping" : existing->name);
+            return false;
+        }
+    }
+
     size_t first_page = (size_t)(map_start / EMU_PAGE_SIZE);
     size_t page_count = (size_t)((map_end - map_start) / EMU_PAGE_SIZE);
     for (size_t page = 0; page < page_count; page++) {
@@ -192,8 +248,8 @@ bool memory_map_range(Memory *memory, uint64_t address, uint64_t length, uint8_t
     }
 
     EmuMemoryMapping *mapping = &memory->mappings[memory->mapping_count++];
-    mapping->start = map_start;
-    mapping->size = map_end - map_start;
+    mapping->start = address;
+    mapping->size = length;
     mapping->permissions = permissions;
     snprintf(mapping->name, sizeof(mapping->name), "%s", name != NULL && name[0] != '\0' ? name : "mapping");
     memory->permissions_enabled = true;
@@ -218,15 +274,15 @@ bool memory_map_stack(Memory *memory, uint64_t stack_top, uint64_t stack_size, c
 }
 
 bool memory_check_read(const Memory *memory, uint64_t address, uint64_t length, char *error, size_t error_size) {
-    return check_permission(memory, address, length, EMU_MAP_READ, "read", error, error_size);
+    return memory_check_access(memory, address, length, EMU_MAP_READ, NULL, error, error_size);
 }
 
 bool memory_check_write(const Memory *memory, uint64_t address, uint64_t length, char *error, size_t error_size) {
-    return check_permission(memory, address, length, EMU_MAP_WRITE, "write", error, error_size);
+    return memory_check_access(memory, address, length, EMU_MAP_WRITE, NULL, error, error_size);
 }
 
 bool memory_check_execute(const Memory *memory, uint64_t address, uint64_t length, char *error, size_t error_size) {
-    return check_permission(memory, address, length, EMU_MAP_EXEC, "execute", error, error_size);
+    return memory_check_access(memory, address, length, EMU_MAP_EXEC, NULL, error, error_size);
 }
 
 bool memory_read8(const Memory *memory, uint64_t address, uint8_t *out, char *error, size_t error_size) {
@@ -323,6 +379,30 @@ const EmuMemoryMapping *memory_find_mapping(const Memory *memory, uint64_t addre
     return NULL;
 }
 
+bool memory_find_stack_guard(const Memory *memory, uint64_t address, EmuMemoryMapping *out) {
+    if (memory == NULL) {
+        return false;
+    }
+    uint64_t guard_size = (uint64_t)EMU_STACK_GUARD_PAGES * EMU_PAGE_SIZE;
+    for (size_t i = 0; i < memory->mapping_count; i++) {
+        const EmuMemoryMapping *mapping = &memory->mappings[i];
+        if (strcmp(mapping->name, "stack") != 0 || mapping->start < guard_size) {
+            continue;
+        }
+        uint64_t guard_start = mapping->start - guard_size;
+        if (address >= guard_start && address < mapping->start) {
+            if (out != NULL) {
+                out->start = guard_start;
+                out->size = guard_size;
+                out->permissions = 0;
+                snprintf(out->name, sizeof(out->name), "stack-guard");
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 void memory_print_mappings(const Memory *memory, FILE *stream) {
     fprintf(stream, "mappings: %zu\n", memory != NULL ? memory->mapping_count : 0u);
     if (memory == NULL) {
@@ -335,5 +415,11 @@ void memory_print_mappings(const Memory *memory, FILE *stream) {
         fprintf(stream, "  [%zu] %s 0x%016" PRIx64 "-0x%016" PRIx64 " size=0x%016" PRIx64 " name=%s\n", i,
                 perms, mapping->start, mapping->start + mapping->size, mapping->size,
                 mapping->name[0] == '\0' ? "mapping" : mapping->name);
+        if (strcmp(mapping->name, "stack") == 0 && mapping->start >= (uint64_t)EMU_STACK_GUARD_PAGES * EMU_PAGE_SIZE) {
+            uint64_t guard_size = (uint64_t)EMU_STACK_GUARD_PAGES * EMU_PAGE_SIZE;
+            fprintf(stream, "      guard --- 0x%016" PRIx64 "-0x%016" PRIx64
+                            " size=0x%016" PRIx64 " name=stack-guard\n",
+                    mapping->start - guard_size, mapping->start, guard_size);
+        }
     }
 }

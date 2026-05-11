@@ -87,8 +87,13 @@ V1_1_EXAMPLES := \
 	examples/v1_1/minimal_exit.macho \
 	examples/v1_1/hello.macho \
 	examples/v1_1/zero_fill.macho
+V1_2_EXAMPLES := \
+	examples/v1_2/simple_raw.bin \
+	examples/v1_2/write_code_page.bin \
+	examples/v1_2/execute_unmapped.bin \
+	examples/v1_2/mapping_inspection.txt
 
-examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES) $(V0_9_EXAMPLES) $(V1_1_EXAMPLES)
+examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES) $(V0_9_EXAMPLES) $(V1_1_EXAMPLES) $(V1_2_EXAMPLES)
 
 TEST_EXAMPLES := $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES)
 
@@ -154,6 +159,9 @@ examples/v0_9/%.elf: examples/v0_9/start.o examples/v0_9/%.o examples/v0_9/linke
 $(V1_1_EXAMPLES): examples/v1_1/generate_macho_fixtures.py
 	python3 examples/v1_1/generate_macho_fixtures.py --output-dir examples/v1_1
 
+$(V1_2_EXAMPLES): examples/v1_2/generate_vm_fixtures.py
+	python3 examples/v1_2/generate_vm_fixtures.py --output-dir examples/v1_2
+
 run-demo: all examples/v0_1/add.bin
 	./$(TARGET) run examples/v0_1/add.bin
 
@@ -174,9 +182,10 @@ clean:
 		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
 		examples/v0_3/*.o examples/v0_3/*.bin examples/v0_4/*.o examples/v0_4/*.bin \
 		examples/v0_7/*.o examples/v0_7/*.bin examples/v0_8/*.o examples/v0_8/*.elf \
-		examples/v0_9/*.o examples/v0_9/*.elf examples/v1_1/*.macho \
+		examples/v0_9/*.o examples/v0_9/*.elf examples/v1_1/*.macho examples/v1_2/*.bin \
 		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/* tests/v0_4/tmp/* tests/v0_5/tmp/* \
 		tests/v0_6/tmp/* tests/v0_7/tmp/* tests/v0_8/tmp/* tests/v0_9/tmp/* tests/v1_0/tmp/*
+	rm -f examples/v1_2/mapping_inspection.txt
 	rm -rf tests/v1_1/tmp/* tests/v1_1/tmp/.fixtures.stamp
 
 $(V1_1_TEST_FIXTURE_MARKER): tests/fixtures/macho_fixture_writer.py
@@ -275,6 +284,7 @@ release-docs-check:
 		need_file examples/v1_1/README.md; \
 		need_file examples/v1_1/generate_macho_fixtures.py; \
 		need_file examples/v1_2/README.md; \
+		need_file examples/v1_2/generate_vm_fixtures.py; \
 		need_file tests/v1_0/test_cli_release.sh; \
 		need_file tests/v1_0/test_docs_release.sh; \
 		need_file tests/v1_0/test_optional_release_examples.sh; \
@@ -324,6 +334,7 @@ release-clean-check:
 		: > tests/v0_9/tmp/clean_probe.tmp; \
 		: > tests/v1_0/tmp/clean_probe.tmp; \
 		: > tests/v1_1/tmp/clean_probe.tmp; \
+		: > examples/v1_2/mapping_inspection.txt; \
 		: > tests/v0_9/test_v0_9; \
 		if [ "$${RELEASE_CLEAN_FULL:-0}" = "1" ]; then make examples >/dev/null; make test >/dev/null; fi; \
 		make clean >/dev/null; \

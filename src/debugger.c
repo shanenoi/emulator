@@ -411,7 +411,15 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
             }
             const EmuMemoryMapping *mapping = memory_find_mapping(&debugger->emu.memory, address);
             if (mapping == NULL) {
-                fprintf(output, "address 0x%016" PRIx64 " is unmapped\n", address);
+                EmuMemoryMapping guard;
+                if (memory_find_stack_guard(&debugger->emu.memory, address, &guard)) {
+                    fprintf(output,
+                            "address 0x%016" PRIx64 " is in --- guard 0x%016" PRIx64 "-0x%016" PRIx64
+                            " name=%s\n",
+                            address, guard.start, guard.start + guard.size, guard.name);
+                } else {
+                    fprintf(output, "address 0x%016" PRIx64 " is unmapped\n", address);
+                }
             } else {
                 char perms[4];
                 memory_format_permissions(mapping->permissions, perms, sizeof(perms));

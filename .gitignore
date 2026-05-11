@@ -22,6 +22,7 @@ tests/v0_9/tmp/
 *.elf
 *.macho
 examples/v1_1/*.macho
+examples/v1_2/mapping_inspection.txt
 *.dSYM/
 __pycache__/
 tests/v1_0/tmp/

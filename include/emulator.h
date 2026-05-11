@@ -187,6 +187,15 @@ typedef struct {
 } Memory;
 
 typedef enum {
+    EMU_MEMORY_FAULT_NONE = 0,
+    EMU_MEMORY_FAULT_BOUNDS,
+    EMU_MEMORY_FAULT_UNMAPPED,
+    EMU_MEMORY_FAULT_READ_PERMISSION,
+    EMU_MEMORY_FAULT_WRITE_PERMISSION,
+    EMU_MEMORY_FAULT_EXEC_PERMISSION,
+} EmuMemoryFaultKind;
+
+typedef enum {
     EMU_PROGRAM_RAW = 0,
     EMU_PROGRAM_ELF64,
     EMU_PROGRAM_MACHO64,
@@ -256,10 +265,13 @@ bool memory_map_stack(Memory *memory, uint64_t stack_top, uint64_t stack_size, c
 bool memory_check_read(const Memory *memory, uint64_t address, uint64_t length, char *error, size_t error_size);
 bool memory_check_write(const Memory *memory, uint64_t address, uint64_t length, char *error, size_t error_size);
 bool memory_check_execute(const Memory *memory, uint64_t address, uint64_t length, char *error, size_t error_size);
+bool memory_check_access(const Memory *memory, uint64_t address, uint64_t length, uint8_t required,
+                         EmuMemoryFaultKind *fault_kind, char *error, size_t error_size);
 bool memory_fetch32(const Memory *memory, uint64_t address, uint32_t *out, char *error, size_t error_size);
 void memory_format_permissions(uint8_t permissions, char *out, size_t out_size);
 void memory_print_mappings(const Memory *memory, FILE *stream);
 const EmuMemoryMapping *memory_find_mapping(const Memory *memory, uint64_t address);
+bool memory_find_stack_guard(const Memory *memory, uint64_t address, EmuMemoryMapping *out);
 bool memory_read8(const Memory *memory, uint64_t address, uint8_t *out, char *error, size_t error_size);
 bool memory_write8(Memory *memory, uint64_t address, uint8_t value, char *error, size_t error_size);
 bool memory_read32(const Memory *memory, uint64_t address, uint32_t *out, char *error, size_t error_size);
