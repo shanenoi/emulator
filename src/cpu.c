@@ -155,10 +155,10 @@ static bool addsub_imm_uses_sp(const EmuDecodedInstruction *instruction) {
     if (instruction->sets_flags) {
         return false;
     }
-    if (instruction->rd == 31 && instruction->rn == 31) {
+    if (instruction->rd == 31) {
         return true;
     }
-    return instruction->rd == 29 && instruction->rn == 31 && instruction->imm == 0;
+    return instruction->rd == 29 && instruction->rn == 31;
 }
 
 bool cpu_calculate_branch_target(uint64_t pc, int64_t offset, const Memory *memory, uint64_t *target, char *error,
@@ -254,7 +254,7 @@ bool cpu_fetch(const Cpu *cpu, const Memory *memory, uint32_t *opcode, char *err
         return false;
     }
 
-    if (!memory_read32(memory, cpu->pc, opcode, error, error_size)) {
+    if (!memory_fetch32(memory, cpu->pc, opcode, error, error_size)) {
         char detail[256];
         snprintf(detail, sizeof(detail), "%s", error);
         snprintf(error, error_size, "failed to fetch instruction at pc=0x%016" PRIx64 ": %s", cpu->pc, detail);

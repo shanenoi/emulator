@@ -251,7 +251,7 @@ release-docs-check:
 	@set -eu; \
 		fail() { echo "release docs check failed: $$*" >&2; exit 1; }; \
 		need_file() { [ -f "$$1" ] || fail "missing required file: $$1"; }; \
-		for version in v0.1 v0.2 v0.3 v0.4 v0.5 v0.6 v0.7 v0.8 v0.9 v1.0 v1.1; do \
+		for version in v0.1 v0.2 v0.3 v0.4 v0.5 v0.6 v0.7 v0.8 v0.9 v1.0 v1.1 v1.2; do \
 			need_file "docs/test-plan-$$version.md"; \
 		done; \
 		for lesson in \
@@ -265,7 +265,8 @@ release-docs-check:
 			lessons/v0.8-elf-loader.md \
 			lessons/v0.9-tiny-c-programs.md \
 			lessons/v1.0-stable-learning-emulator.md \
-			lessons/v1.1-mach-o-loader.md; do \
+			lessons/v1.1-mach-o-loader.md \
+			lessons/v1.2-virtual-memory.md; do \
 			need_file "$$lesson"; \
 		done; \
 		need_file examples/README.md; \
@@ -273,6 +274,7 @@ release-docs-check:
 		need_file examples/v1_0/smoke_manifest.txt; \
 		need_file examples/v1_1/README.md; \
 		need_file examples/v1_1/generate_macho_fixtures.py; \
+		need_file examples/v1_2/README.md; \
 		need_file tests/v1_0/test_cli_release.sh; \
 		need_file tests/v1_0/test_docs_release.sh; \
 		need_file tests/v1_0/test_optional_release_examples.sh; \
@@ -283,18 +285,22 @@ release-docs-check:
 		need_file tests/v1_1/test_optional_macho_examples.sh; \
 		need_file README.md; \
 		grep -q "v1.1 Test Plan" README.md || fail "README does not link the v1.1 test plan"; \
+		grep -q "v1.2 Test Plan" README.md || fail "README does not link the v1.2 test plan"; \
 		grep -q "v1.1 Lesson" README.md || fail "README does not link the v1.1 lesson"; \
-		grep -q "v0.1 through v1.1" README.md || fail "README does not describe v0.1 through v1.1 tests"; \
+		grep -q "v1.2 Lesson" README.md || fail "README does not link the v1.2 lesson"; \
+		grep -q "v0.1 through v1.1" README.md || fail "README does not describe current deterministic tests"; \
 		grep -q "make release-check" README.md || fail "README does not document make release-check"; \
 		grep -q "make test-asan" README.md || fail "README does not document optional sanitizer checks"; \
 		grep -q "fresh archive.*full deterministic test suite\|fresh-archive full deterministic-suite" README.md || fail "README does not document full deterministic-suite archive validation"; \
 		grep -q "raw.*ELF64" README.md || fail "README does not describe raw and ELF64 program support"; \
 		grep -q "Mach-O" README.md || fail "README does not describe Mach-O program support"; \
+		grep -q "Virtual Memory" README.md || fail "README does not describe v1.2 virtual memory"; \
+		grep -q "page" README.md || fail "README does not describe page mappings"; \
 		grep -q "dynamic linking" README.md || fail "README does not list stable limitations"; \
 		if grep -qi "no ELF loader yet" README.md; then fail "README still says there is no ELF loader"; fi; \
 		if grep -qi "v0.8 tests are missing\|v0.9 tests are missing" README.md; then fail "README contains stale missing-test wording for implemented versions"; fi; \
 		if grep -qi "not added yet\|will be added in the v1.0 test phase\|tests/v1_0/.*planned\|tests are still pending" README.md; then fail "README contains stale wording about missing implemented tests"; fi; \
-		printf '%s\n' "v1.1 release docs check passed"
+		printf '%s\n' "v1.2 release docs check passed"
 
 release-hygiene-check:
 	@set -eu; \
@@ -306,7 +312,7 @@ release-hygiene-check:
 			grep -Fq "$$pattern" .gitignore || fail ".gitignore does not cover $$pattern"; \
 		done; \
 		if [ -d scripts ]; then fail "./scripts must not be shipped in source"; fi; \
-		printf '%s\n' "v1.1 release hygiene check passed"
+		printf '%s\n' "v1.2 release hygiene check passed"
 
 release-clean-check:
 	@set -eu; \
@@ -331,7 +337,7 @@ release-clean-check:
 			-o -path './tests/v0_9/test_v0_9' -o -path './tests/v1_1/test_v1_1' \
 			\) -print | sort); \
 		if [ -n "$$leftovers" ]; then echo "$$leftovers" >&2; fail "make clean left generated artifacts behind"; fi; \
-		printf '%s\n' "v1.1 release clean-artifact check passed"
+		printf '%s\n' "v1.2 release clean-artifact check passed"
 
 release-archive-check:
 	@set -eu; \
@@ -355,10 +361,10 @@ release-archive-check:
 		EMULATOR_SKIP_OPTIONAL_REAL_TOOLCHAIN=1 make -C "$$extract_dir" -j$${RELEASE_ARCHIVE_JOBS:-4} test; \
 		[ -x "$$extract_dir/emulator" ] || fail "fresh archive did not build emulator through make test"; \
 		"$$extract_dir/emulator" help >/dev/null; \
-		printf '%s\n' "v1.1 release archive check passed: fresh archive ran the full deterministic test suite"
+		printf '%s\n' "v1.2 release archive check passed: fresh archive ran the full deterministic test suite"
 
 release-check: release-docs-check release-hygiene-check release-clean-check release-archive-check
-	@echo "v1.1 release gate passed: tests, docs, hygiene, clean-artifact, and fresh-archive full-suite checks completed successfully"
+	@echo "v1.2 release gate passed: tests, docs, hygiene, clean-artifact, and fresh-archive full-suite checks completed successfully"
 
 test-asan:
 	@set -eu; \

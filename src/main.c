@@ -43,7 +43,7 @@ static const char *program_format_name(EmuProgramFormat format) {
     }
 }
 
-static void print_program_info(const EmuLoadedProgram *program, FILE *stream) {
+static void print_program_info(const EmuLoadedProgram *program, const Memory *memory, FILE *stream) {
     fprintf(stream, "format: %s\n", program_format_name(program->format));
     fprintf(stream, "entry: 0x%016" PRIx64 "\n", program->entry);
     fprintf(stream, "stack_pointer: 0x%016" PRIx64 "\n", program->stack_pointer);
@@ -67,6 +67,7 @@ static void print_program_info(const EmuLoadedProgram *program, FILE *stream) {
                     program->macho_symbols[i].address);
         }
     }
+    memory_print_mappings(memory, stream);
 }
 
 static int guest_or_success_status(const Emulator *emu) {
@@ -91,8 +92,15 @@ static bool dump_memory(const Memory *memory, uint64_t address, uint64_t length,
                         size_t error_size) {
     if (address > (uint64_t)memory->size || length > (uint64_t)memory->size ||
         address + length > (uint64_t)memory->size || address + length < address) {
-        snprintf(error, error_size, "dump range out of bounds: address=0x%016" PRIx64 " length=0x%016" PRIx64
-                 " memory_size=0x%zx", address, length, memory->size);
+        snprintf(error, error_size,
+                 "dump range out of bounds: address=0x%016" PRIx64 " length=0x%016" PRIx64
+                 " memory_size=0x%zx",
+                 address, length, memory->size);
+        return false;
+    }
+    if (!memory_check_read(memory, address, length, error, error_size)) {
+        snprintf(error, error_size, "dump range is not readable: address=0x%016" PRIx64 " length=0x%016" PRIx64,
+                 address, length);
         return false;
     }
 
@@ -101,7 +109,11 @@ static bool dump_memory(const Memory *memory, uint64_t address, uint64_t length,
         fprintf(stream, "0x%016" PRIx64 ":", address + offset);
         uint64_t line_len = length - offset < 16u ? length - offset : 16u;
         for (uint64_t i = 0; i < line_len; i++) {
-            fprintf(stream, " %02x", memory->bytes[address + offset + i]);
+            uint8_t value = 0;
+            if (!memory_read8(memory, address + offset + i, &value, error, error_size)) {
+                return false;
+            }
+            fprintf(stream, " %02x", value);
         }
         fprintf(stream, "\n");
     }
@@ -203,7 +215,7 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "info") == 0) {
-        print_program_info(&program, stdout);
+        print_program_info(&program, &emu.memory, stdout);
         emulator_free(&emu);
         return 0;
     }

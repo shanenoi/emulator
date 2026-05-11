@@ -10,6 +10,14 @@
 #define EMU_LOAD_ADDRESS 0x1000ull
 #define EMU_DEFAULT_INSTRUCTION_LIMIT 1000000ull
 #define EMU_MAX_BREAKPOINTS 64u
+#define EMU_PAGE_SIZE 4096u
+#define EMU_STACK_SIZE (64u * 1024u)
+#define EMU_STACK_GUARD_PAGES 1u
+#define EMU_MAX_MEMORY_MAPPINGS 32u
+
+#define EMU_MAP_READ 0x1u
+#define EMU_MAP_WRITE 0x2u
+#define EMU_MAP_EXEC 0x4u
 
 typedef enum {
     EMU_OK = 0,
@@ -162,8 +170,20 @@ typedef struct {
 } Cpu;
 
 typedef struct {
+    uint64_t start;
+    uint64_t size;
+    uint8_t permissions;
+    char name[32];
+} EmuMemoryMapping;
+
+typedef struct {
     uint8_t *bytes;
     size_t size;
+    uint8_t *page_permissions;
+    size_t page_count;
+    EmuMemoryMapping mappings[EMU_MAX_MEMORY_MAPPINGS];
+    size_t mapping_count;
+    bool permissions_enabled;
 } Memory;
 
 typedef enum {
@@ -229,6 +249,17 @@ typedef struct {
 
 bool memory_init(Memory *memory, size_t size, char *error, size_t error_size);
 void memory_free(Memory *memory);
+void memory_clear_mappings(Memory *memory);
+bool memory_map_range(Memory *memory, uint64_t address, uint64_t length, uint8_t permissions, const char *name,
+                      char *error, size_t error_size);
+bool memory_map_stack(Memory *memory, uint64_t stack_top, uint64_t stack_size, char *error, size_t error_size);
+bool memory_check_read(const Memory *memory, uint64_t address, uint64_t length, char *error, size_t error_size);
+bool memory_check_write(const Memory *memory, uint64_t address, uint64_t length, char *error, size_t error_size);
+bool memory_check_execute(const Memory *memory, uint64_t address, uint64_t length, char *error, size_t error_size);
+bool memory_fetch32(const Memory *memory, uint64_t address, uint32_t *out, char *error, size_t error_size);
+void memory_format_permissions(uint8_t permissions, char *out, size_t out_size);
+void memory_print_mappings(const Memory *memory, FILE *stream);
+const EmuMemoryMapping *memory_find_mapping(const Memory *memory, uint64_t address);
 bool memory_read8(const Memory *memory, uint64_t address, uint8_t *out, char *error, size_t error_size);
 bool memory_write8(Memory *memory, uint64_t address, uint8_t value, char *error, size_t error_size);
 bool memory_read32(const Memory *memory, uint64_t address, uint32_t *out, char *error, size_t error_size);

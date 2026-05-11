@@ -87,6 +87,8 @@ static void debugger_print_help(FILE *stream) {
     fprintf(stream, "  continue | c                 resume until breakpoint, halt, error, or limit\n");
     fprintf(stream, "  regs                         print registers\n");
     fprintf(stream, "  mem | x <address> <length>   dump memory\n");
+    fprintf(stream, "  maps                         list mapped memory ranges\n");
+    fprintf(stream, "  map <address>                show mapping containing one address\n");
     fprintf(stream, "  break | b <address>          add breakpoint\n");
     fprintf(stream, "  delete <id-or-address>       delete breakpoint\n");
     fprintf(stream, "  breakpoints                  list breakpoints\n");
@@ -98,8 +100,15 @@ static bool dump_memory_debug(const Memory *memory, uint64_t address, uint64_t l
                               size_t error_size) {
     if (address > (uint64_t)memory->size || length > (uint64_t)memory->size ||
         address + length > (uint64_t)memory->size || address + length < address) {
-        snprintf(error, error_size, "dump range out of bounds: address=0x%016" PRIx64 " length=0x%016" PRIx64
-                 " memory_size=0x%zx", address, length, memory->size);
+        snprintf(error, error_size,
+                 "dump range out of bounds: address=0x%016" PRIx64 " length=0x%016" PRIx64
+                 " memory_size=0x%zx",
+                 address, length, memory->size);
+        return false;
+    }
+    if (!memory_check_read(memory, address, length, error, error_size)) {
+        snprintf(error, error_size, "dump range is not readable: address=0x%016" PRIx64 " length=0x%016" PRIx64,
+                 address, length);
         return false;
     }
 
@@ -108,7 +117,11 @@ static bool dump_memory_debug(const Memory *memory, uint64_t address, uint64_t l
         fprintf(stream, "0x%016" PRIx64 ":", address + offset);
         uint64_t line_len = length - offset < 16u ? length - offset : 16u;
         for (uint64_t i = 0; i < line_len; i++) {
-            fprintf(stream, " %02x", memory->bytes[address + offset + i]);
+            uint8_t value = 0;
+            if (!memory_read8(memory, address + offset + i, &value, error, error_size)) {
+                return false;
+            }
+            fprintf(stream, " %02x", value);
         }
         fprintf(stream, "\n");
     }
@@ -379,6 +392,34 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
                 fprintf(output, "trace disabled\n");
             } else {
                 fprintf(error_stream, "error: usage: trace on|off\n");
+            }
+            continue;
+        }
+        if (strcmp(command, "maps") == 0) {
+            if (!require_no_extra_args(&cursor, "maps", error_stream)) {
+                continue;
+            }
+            memory_print_mappings(&debugger->emu.memory, output);
+            continue;
+        }
+        if (strcmp(command, "map") == 0) {
+            char *address_text = next_token(&cursor);
+            uint64_t address = 0;
+            if (address_text == NULL || has_extra_tokens(&cursor) || !parse_u64_debug(address_text, &address)) {
+                fprintf(error_stream, "error: usage: map <address>\n");
+                continue;
+            }
+            const EmuMemoryMapping *mapping = memory_find_mapping(&debugger->emu.memory, address);
+            if (mapping == NULL) {
+                fprintf(output, "address 0x%016" PRIx64 " is unmapped\n", address);
+            } else {
+                char perms[4];
+                memory_format_permissions(mapping->permissions, perms, sizeof(perms));
+                fprintf(output,
+                        "address 0x%016" PRIx64 " is in %s mapping 0x%016" PRIx64 "-0x%016" PRIx64
+                        " name=%s\n",
+                        address, perms, mapping->start, mapping->start + mapping->size,
+                        mapping->name[0] == '\0' ? "mapping" : mapping->name);
             }
             continue;
         }

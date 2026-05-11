@@ -41,10 +41,11 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v0.9 Lesson — Tiny Freestanding C Programs](lessons/v0.9-tiny-c-programs.md)
 - [v1.0 Lesson — Stable Learning Emulator](lessons/v1.0-stable-learning-emulator.md)
 - [v1.1 Lesson — Mach-O Loader](lessons/v1.1-mach-o-loader.md)
+- [v1.2 Lesson — Virtual Memory and Page Permissions](lessons/v1.2-virtual-memory.md)
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, and the implemented/tested teaching profile for **v1.1 — Mach-O Loader**. v1.1 now has deterministic Mach-O examples, CLI inspection support, unit tests, CLI tests, docs tests, optional toolchain smoke coverage, and release-gate coverage.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, and the initial development slice for **v1.2 — Virtual Memory and Page Permissions**. v1.2 adds page mappings, read/write/execute permission checks, stack mapping, guard-page shape, and mapping inspection; dedicated v1.2 tests are intentionally deferred to the next test phase.
 
 Implemented now:
 
@@ -60,12 +61,12 @@ Implemented now:
 ./emulator debug <program>
 ```
 
-- Fixed 1 MiB flat memory.
+- Fixed 1 MiB guest memory with v1.2 page-mapping metadata for loaded programs.
 - Raw binary load address: `0x1000`.
 - Raw binary initial `pc`: `0x1000`.
 - ELF64 initial `pc`: the ELF header entry point.
 - Mach-O initial `pc`: the `LC_MAIN` entry offset resolved through a mapped `LC_SEGMENT_64` file range.
-- Initial `sp`: top of memory, currently `0x100000`.
+- Initial `sp`: top of memory, currently `0x100000`; loaded programs receive a 64 KiB `rw-` stack mapping below it.
 - Stable final register dump.
 - Instruction execution limit to avoid accidental infinite runs.
 - Supported instructions:
@@ -113,6 +114,8 @@ Implemented now:
   - `continue` / `c`
   - `regs`
   - `mem` / `x <address> <length>`
+  - `maps`
+  - `map <address>`
   - `break` / `b <address>`
   - `delete <breakpoint-id-or-address>`
   - `breakpoints`
@@ -144,9 +147,9 @@ Implemented now:
   - rejects `ET_DYN`/PIE, `PT_INTERP`, wrong architecture, wrong endian, truncated headers, invalid program-header tables, invalid segment ranges, overlapping `PT_LOAD` segments, unmapped entry points, and misaligned entry points
   - loads `PT_LOAD` segments at their guest virtual addresses
   - zero-fills segment memory when `p_memsz > p_filesz`, which is how simple `.bss` works
-  - records segment bounds and permissions for inspection/future versions, but does not enforce read/write/execute permissions yet
+  - records segment bounds and permissions for inspection and v1.2 page mapping
   - accepts in-bounds `PT_LOAD` segment addresses without requiring ELF page alignment; instruction fetch still requires 4-byte-aligned `pc`
-  - keeps `sp` at the top of flat memory and does not reserve/protect a stack region from loaded segments yet
+  - v1.2 maps loaded ELF segments into the page-permission model and adds a mapped stack region
   - preserves raw `.bin` behavior for v0.1 through v0.7 examples
   - ELF examples live in `examples/v0_8/`
 - v0.9 tiny freestanding C support:
@@ -166,17 +169,28 @@ Implemented now:
   - supports the initial little-endian arm64 `MH_EXECUTE` profile
   - parses and validates the Mach-O header and load-command table
   - rejects fat/universal Mach-O archives clearly and asks for a thin arm64 slice
-  - maps `LC_SEGMENT_64` segments into the existing 1 MiB flat memory model
+  - maps `LC_SEGMENT_64` segments into the 1 MiB guest memory model
   - validates `LC_SEGMENT_64` section-table sizing and records section counts for inspection
   - zero-fills segment memory when `vmsize > filesize`
   - resolves `LC_MAIN` `entryoff` through mapped segment file ranges to initialize `pc`
   - validates optional `LC_SYMTAB` and `LC_DYSYMTAB` table ranges and records bounded symbol names/addresses for inspection
-  - records segment names, file offsets, section counts, and permission bits for inspection/future versions, but does not enforce memory permissions yet
+  - records segment names, file offsets, section counts, and permission bits for inspection and v1.2 page mapping
   - adds `emulator info <program>` for loader inspection without executing guest code
   - includes deterministic generated Mach-O examples in `examples/v1_1/`: `minimal_exit.macho`, `hello.macho`, and `zero_fill.macho`
   - includes an optional Mach-O fixture/toolchain smoke path through `make test` and `tests/v1_1/test_optional_macho_examples.sh`
   - rejects big-endian Mach-O, wrong CPU type, non-executable file types, malformed command tables, invalid segment ranges, overlapping mapped segments, missing `LC_MAIN`, unmapped/misaligned entries, and dynamic-linking commands such as `LC_LOAD_DYLINKER`, `LC_LOAD_DYLIB`, and `LC_DYLD_INFO`
   - normal dynamically linked macOS/iOS applications, `dyld`, shared libraries, Apple process setup, code signing, Objective-C/Swift runtimes, and real Darwin syscalls remain out of scope
+- v1.2 virtual-memory development slice:
+  - adds a fixed 4096-byte teaching page size
+  - adds memory mappings with stable `r--`, `rw-`, `r-x`, and `rwx` permission labels
+  - installs explicit loader-created mappings for raw, ELF64, and Mach-O programs
+  - maps a 64 KiB `rw-` stack below the top of guest memory and leaves the page below it unmapped as the guard-page shape
+  - checks instruction fetches through execute permission and data loads/stores through read/write permission helpers
+  - checks fake `write` syscall buffers through the readable-memory path
+  - extends `emulator info <program>` with a `mappings:` section
+  - adds debugger `maps` and `map <address>` commands for mapping inspection
+  - documents the current v1.2 development slice in `examples/v1_2/README.md` and `lessons/v1.2-virtual-memory.md`
+  - dedicated v1.2 automated tests and generated permission-fault fixtures are deferred to the test phase
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -201,7 +215,7 @@ Implemented now:
   - v1.0 release tests for CLI stability, docs consistency, optional release examples, repository hygiene, clean-artifact validation, and fresh-archive full deterministic-suite validation
   - v1.1 Mach-O tests for deterministic fixture generation, loader metadata, segment mapping, zero-fill behavior, entry resolution, unsupported runtime command rejection, CLI `run`/`trace`/`regs`/`dump`/`debug`/`info` behavior, docs consistency, and optional Mach-O toolchain smoke checks
 
-The full v0.1 through v1.1 deterministic test suite runs with `make test`. The v1.1 suite covers Mach-O loader units, CLI behavior, malformed fixtures, docs, deterministic fixture generation, and optional real-toolchain smoke behavior. The v1.1 release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
+The full v0.1 through v1.1 deterministic test suite runs with `make test`. The v1.1 suite covers Mach-O loader units, CLI behavior, malformed fixtures, docs, deterministic fixture generation, and optional real-toolchain smoke behavior. v1.2 implementation work has started, but dedicated v1.2 tests are deferred to the next test phase. The release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
 
 ## Build and Run
 
@@ -997,34 +1011,40 @@ Definition of done:
 
 **Goal:** teach page-based memory, permissions, and fault handling.
 
-Planning reference: [v1.2 Test Plan — Virtual Memory and Page Permissions](docs/test-plan-v1.2.md).
+Planning reference: [v1.2 Test Plan — Virtual Memory and Page Permissions](docs/test-plan-v1.2.md). The implementation slice has started; dedicated tests are deferred to the next test phase.
 
-Add memory model:
+Added memory model pieces:
 
-- Page-sized mappings.
-- Mapped and unmapped regions.
-- Read/write/execute permissions.
-- Stack guard page.
-- Memory access fault reporting.
+- Fixed 4096-byte teaching pages.
+- Loader-created mappings for raw, ELF64, and Mach-O inputs.
+- Read/write/execute permission labels.
+- A mapped `rw-` stack region below the top of guest memory.
+- An intentionally unmapped guard-page shape below the stack.
+- Instruction fetch checks through execute permission.
+- Data read/write checks through read/write permission helpers.
+- `info` mapping output.
+- Debugger `maps` and `map <address>` inspection commands.
 
-Example behavior:
+Example behavior being prepared for the v1.2 test phase:
 
 ```text
 write to RX code page -> permission fault
-execute RW data page -> permission fault
+execute RW data page  -> permission fault
 read unmapped page    -> unmapped memory fault
+stack underflow       -> guard-page fault
 ```
 
-Add debugger support:
+Current limitations:
 
-- List memory mappings.
-- Show page permissions.
-- Identify the mapping for an address.
+- This is still a teaching VM, not a real ARMv8 MMU.
+- There are no page tables, TLBs, signals, demand paging, `mmap`, copy-on-write, threads, ASLR, or process isolation.
+- Dedicated v1.2 generated fixtures and automated tests are deferred to the test phase.
 
-Definition of done:
+Definition of done for the full v1.2 milestone:
 
-- ELF segment permissions can be represented and enforced.
+- ELF and Mach-O segment permissions are represented and tested.
 - Invalid memory behavior is deterministic and easy to debug.
+- Stack guard behavior is covered by tests and examples.
 - The project has documentation explaining the virtual memory model.
 
 ### v1.3 — Memory-Mapped Devices

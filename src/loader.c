@@ -171,6 +171,34 @@ static bool ranges_overlap(uint64_t a_start, uint64_t a_length, uint64_t b_start
     return a_start < b_end && b_start < a_end;
 }
 
+static uint8_t elf_flags_to_permissions(uint32_t flags) {
+    uint8_t permissions = 0;
+    if ((flags & EMU_ELF_PF_R) != 0) {
+        permissions |= EMU_MAP_READ;
+    }
+    if ((flags & EMU_ELF_PF_W) != 0) {
+        permissions |= EMU_MAP_WRITE;
+    }
+    if ((flags & EMU_ELF_PF_X) != 0) {
+        permissions |= EMU_MAP_EXEC;
+    }
+    return permissions;
+}
+
+static uint8_t macho_prot_to_permissions(uint32_t initprot) {
+    uint8_t permissions = 0;
+    if ((initprot & 0x1u) != 0) {
+        permissions |= EMU_MAP_READ;
+    }
+    if ((initprot & 0x2u) != 0) {
+        permissions |= EMU_MAP_WRITE;
+    }
+    if ((initprot & 0x4u) != 0) {
+        permissions |= EMU_MAP_EXEC;
+    }
+    return permissions;
+}
+
 static size_t bounded_cstring_length(const uint8_t *bytes, size_t offset, size_t limit) {
     size_t length = 0;
     while (offset + length < limit && bytes[offset + length] != '\0') {
@@ -281,6 +309,7 @@ static bool load_elf64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t fi
     memset(program, 0, sizeof(*program));
     program->format = EMU_PROGRAM_ELF64;
     program->stack_pointer = emu->memory.size;
+    memory_clear_mappings(&emu->memory);
 
     if (file_size < ELF64_EHDR_SIZE) {
         snprintf(error, error_size, "ELF loader error: ELF header is truncated: file_size=0x%zx", file_size);
@@ -415,6 +444,30 @@ static bool load_elf64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t fi
         return false;
     }
 
+    for (size_t i = 0; i < program->segment_count; i++) {
+        const EmuLoadedSegment *segment = &program->segments[i];
+        if (segment->mem_size == 0) {
+            continue;
+        }
+        uint8_t permissions = elf_flags_to_permissions(segment->flags);
+        if (e_entry >= segment->vaddr && e_entry < segment->vaddr + segment->mem_size) {
+            permissions |= EMU_MAP_EXEC;
+        }
+        if (!memory_map_range(&emu->memory, segment->vaddr, segment->mem_size, permissions, "elf:PT_LOAD", error,
+                              error_size)) {
+            char detail[512];
+            snprintf(detail, sizeof(detail), "%s", error);
+            snprintf(error, error_size, "ELF loader error: %s", detail);
+            return false;
+        }
+    }
+    if (!memory_map_stack(&emu->memory, program->stack_pointer, EMU_STACK_SIZE, error, error_size)) {
+        char detail[512];
+        snprintf(detail, sizeof(detail), "%s", error);
+        snprintf(error, error_size, "ELF loader error: %s", detail);
+        return false;
+    }
+
     for (uint16_t i = 0; i < e_phnum; i++) {
         size_t ph = (size_t)e_phoff + (size_t)i * (size_t)e_phentsize;
         uint32_t p_type = read_le32(bytes, ph + ELF_P_TYPE);
@@ -481,6 +534,7 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
     memset(program, 0, sizeof(*program));
     program->format = EMU_PROGRAM_MACHO64;
     program->stack_pointer = emu->memory.size;
+    memory_clear_mappings(&emu->memory);
 
     if (file_size < MACHO64_HEADER_SIZE) {
         snprintf(error, error_size, "Mach-O loader error: Mach-O header is truncated: file_size=0x%zx", file_size);
@@ -764,6 +818,31 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
 
     for (size_t i = 0; i < program->segment_count; i++) {
         const EmuLoadedSegment *segment = &program->segments[i];
+        if (segment->mem_size == 0) {
+            continue;
+        }
+        uint8_t permissions = macho_prot_to_permissions(segment->flags);
+        if (entry >= segment->vaddr && entry < segment->vaddr + segment->mem_size) {
+            permissions |= EMU_MAP_EXEC;
+        }
+        char name[32];
+        snprintf(name, sizeof(name), "macho:%s", segment->name[0] == '\0' ? "segment" : segment->name);
+        if (!memory_map_range(&emu->memory, segment->vaddr, segment->mem_size, permissions, name, error, error_size)) {
+            char detail[512];
+            snprintf(detail, sizeof(detail), "%s", error);
+            snprintf(error, error_size, "Mach-O loader error: %s", detail);
+            return false;
+        }
+    }
+    if (!memory_map_stack(&emu->memory, program->stack_pointer, EMU_STACK_SIZE, error, error_size)) {
+        char detail[512];
+        snprintf(detail, sizeof(detail), "%s", error);
+        snprintf(error, error_size, "Mach-O loader error: %s", detail);
+        return false;
+    }
+
+    for (size_t i = 0; i < program->segment_count; i++) {
+        const EmuLoadedSegment *segment = &program->segments[i];
         if (segment->file_size > 0) {
             memcpy(&emu->memory.bytes[segment->vaddr], &bytes[segment->file_offset], (size_t)segment->file_size);
         }
@@ -795,10 +874,22 @@ bool emulator_load_program(Emulator *emu, const char *path, EmuLoadedProgram *pr
         program->format = EMU_PROGRAM_RAW;
         program->entry = EMU_LOAD_ADDRESS;
         program->stack_pointer = emu->memory.size;
+        memory_clear_mappings(&emu->memory);
         if (file_size > emu->memory.size - (size_t)EMU_LOAD_ADDRESS) {
             snprintf(error, error_size,
                      "loader error: file size 0x%zx does not fit at load address 0x%016llx; available=0x%zx",
                      file_size, (unsigned long long)EMU_LOAD_ADDRESS, emu->memory.size - (size_t)EMU_LOAD_ADDRESS);
+            ok = false;
+        } else if (!memory_map_range(&emu->memory, EMU_LOAD_ADDRESS, (uint64_t)file_size, EMU_MAP_READ | EMU_MAP_EXEC,
+                                     "raw:program", error, error_size)) {
+            char detail[512];
+            snprintf(detail, sizeof(detail), "%s", error);
+            snprintf(error, error_size, "loader error: %s", detail);
+            ok = false;
+        } else if (!memory_map_stack(&emu->memory, program->stack_pointer, EMU_STACK_SIZE, error, error_size)) {
+            char detail[512];
+            snprintf(detail, sizeof(detail), "%s", error);
+            snprintf(error, error_size, "loader error: %s", detail);
             ok = false;
         } else {
             memcpy(&emu->memory.bytes[EMU_LOAD_ADDRESS], bytes, file_size);

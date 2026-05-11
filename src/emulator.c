@@ -31,6 +31,11 @@ static bool check_syscall_buffer(const Memory *memory, uint64_t address, uint64_
                  address, length, memory->size);
         return false;
     }
+    if (!memory_check_read(memory, address, length, error, error_size)) {
+        snprintf(error, error_size, "syscall write buffer is not readable: address=0x%016" PRIx64
+                 " length=0x%016" PRIx64, address, length);
+        return false;
+    }
     return true;
 }
 
@@ -127,7 +132,7 @@ EmuStatus emulator_step(Emulator *emu, char *error, size_t error_size) {
     }
 
     if (!cpu_decode(opcode, &instruction, error, error_size)) {
-        char detail[256];
+        char detail[512];
         snprintf(detail, sizeof(detail), "%s", error);
         snprintf(error, error_size, "decode error at pc=0x%016" PRIx64 ": %s", current_pc, detail);
         return EMU_ERROR;
@@ -137,7 +142,7 @@ EmuStatus emulator_step(Emulator *emu, char *error, size_t error_size) {
     if (instruction.kind == EMU_INST_SVC) {
         status = emulator_handle_syscall(emu, &instruction, error, error_size);
         if (status == EMU_ERROR) {
-            char detail[256];
+            char detail[512];
             snprintf(detail, sizeof(detail), "%s", error);
             snprintf(error, error_size, "execution error at pc=0x%016" PRIx64 " opcode=0x%08x: %s", current_pc,
                      opcode, detail);
