@@ -43,7 +43,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, and the non-test implementation work for **v1.1 — Mach-O Loader**. v1.1 now has deterministic Mach-O examples and CLI inspection support; dedicated v1.1 automated tests are still pending.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, and the implemented/tested teaching profile for **v1.1 — Mach-O Loader**. v1.1 now has deterministic Mach-O examples, CLI inspection support, unit tests, CLI tests, docs tests, optional toolchain smoke coverage, and release-gate coverage.
 
 Implemented now:
 
@@ -173,9 +173,9 @@ Implemented now:
   - records segment names, file offsets, section counts, and permission bits for inspection/future versions, but does not enforce memory permissions yet
   - adds `emulator info <program>` for loader inspection without executing guest code
   - includes deterministic generated Mach-O examples in `examples/v1_1/`: `minimal_exit.macho`, `hello.macho`, and `zero_fill.macho`
-  - includes an optional Mach-O toolchain smoke script in `scripts/optional_macho_toolchain_check.sh`
+  - includes an optional Mach-O fixture/toolchain smoke path through `make test` and `tests/v1_1/test_optional_macho_examples.sh`
   - rejects big-endian Mach-O, wrong CPU type, non-executable file types, malformed command tables, invalid segment ranges, overlapping mapped segments, missing `LC_MAIN`, unmapped/misaligned entries, and dynamic-linking commands such as `LC_LOAD_DYLINKER`, `LC_LOAD_DYLIB`, and `LC_DYLD_INFO`
-  - normal macOS/iOS applications, `dyld`, shared libraries, Apple process setup, code signing, Objective-C/Swift runtimes, and real Darwin syscalls remain out of scope
+  - normal dynamically linked macOS/iOS applications, `dyld`, shared libraries, Apple process setup, code signing, Objective-C/Swift runtimes, and real Darwin syscalls remain out of scope
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -198,8 +198,9 @@ Implemented now:
   - v0.9 CLI/C-program tests for generated ELF fixtures, `_start -> main -> exit`, stack locals, nested calls, global data, zero-filled storage, fake syscall wrappers, hosted/libc rejection, docs, and regressions
   - optional v0.9 real-toolchain smoke tests that build and run the actual freestanding C examples when `clang` and `ld.lld` are available, and skip clearly otherwise
   - v1.0 release tests for CLI stability, docs consistency, optional release examples, repository hygiene, clean-artifact validation, and fresh-archive full deterministic-suite validation
+  - v1.1 Mach-O tests for deterministic fixture generation, loader metadata, segment mapping, zero-fill behavior, entry resolution, unsupported runtime command rejection, CLI `run`/`trace`/`regs`/`dump`/`debug`/`info` behavior, docs consistency, and optional Mach-O toolchain smoke checks
 
-The full v0.1 through v1.0 test suite runs with `make test`. v1.1 implementation and examples are present, but v1.1 deterministic automated tests have not been added yet. The v1.0 release gate runs with `make release-check`; it checks v1.0 docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
+The full v0.1 through v1.1 deterministic test suite runs with `make test`. The v1.1 suite covers Mach-O loader units, CLI behavior, malformed fixtures, docs, deterministic fixture generation, and optional real-toolchain smoke behavior. The v1.1 release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
 
 ## Build and Run
 
@@ -838,7 +839,7 @@ Implemented ELF support:
 - Preserve all raw `.bin` loading behavior.
 - Reject unsupported dynamic-linking features clearly.
 
-Initial limitations:
+Current limitations:
 
 - Support static `ET_EXEC` first.
 - No dynamic linker and no `PT_INTERP`.
@@ -967,7 +968,7 @@ Definition of done:
 
 ### v1.1 — Mach-O Loader
 
-**Goal:** add Apple-focused binary-format learning without trying to boot iOS or macOS.
+**Goal:** add Apple-focused binary-format learning without trying to boot iOS or macOS. This milestone is implemented for the documented teaching profile.
 
 Add Mach-O support:
 
@@ -975,10 +976,10 @@ Add Mach-O support:
 - Parse `LC_SEGMENT_64`.
 - Map `__TEXT` and `__DATA` segments.
 - Parse entry point from `LC_MAIN` when available.
-- Basic symbol/table inspection if practical.
+- Basic symbol/table count inspection.
 - Clear unsupported-feature errors for dynamic linking and complex relocations.
 
-Initial limitations:
+Current limitations:
 
 - Prefer simple, static or freestanding Mach-O examples.
 - Do not attempt to run normal macOS/iOS dynamically linked apps.
@@ -987,7 +988,9 @@ Initial limitations:
 Definition of done:
 
 - The emulator can inspect a simple arm64 Mach-O file.
-- The emulator can load and run a deliberately simple Mach-O example, or clearly document why a given Mach-O requires unsupported runtime features.
+- The emulator can load and run deliberately simple Mach-O examples.
+- The emulator rejects unsupported runtime features clearly.
+- `make test` and `make release-check` include v1.1 deterministic coverage.
 
 ### v1.2 — Virtual Memory
 

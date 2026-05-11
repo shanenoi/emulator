@@ -21,6 +21,8 @@ tests/v0_9/tmp/
 *.bin
 *.elf
 *.macho
+examples/v1_1/*.macho
 *.dSYM/
+__pycache__/
 tests/v1_0/tmp/
 tests/v1_1/tmp/

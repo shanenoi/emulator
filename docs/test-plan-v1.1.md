@@ -146,7 +146,7 @@ Optional supporting files:
 tests/fixtures/macho_fixture_writer.py
 examples/v1_1/minimal_exit_macho_fixture.py
 examples/v1_1/hello_macho_fixture.py
-scripts/optional_macho_toolchain_check.sh
+tests/v1_1/test_optional_macho_examples.sh
 ```
 
 The implementation may choose different filenames, but v1.1 tests should remain

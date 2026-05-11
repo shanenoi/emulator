@@ -178,8 +178,8 @@ static bool is_macho_magic(const uint8_t *bytes, size_t file_size) {
         return false;
     }
     uint32_t magic = read_le32(bytes, 0);
-    return magic == EMU_MACHO_MAGIC_64 || magic == EMU_MACHO_CIGAM_64 || magic == EMU_MACHO_FAT_MAGIC ||
-           magic == EMU_MACHO_FAT_MAGIC_64;
+    return magic == EMU_MACHO_MAGIC_64 || magic == EMU_MACHO_MAGIC_32 || magic == EMU_MACHO_CIGAM_64 ||
+           magic == EMU_MACHO_CIGAM_32 || magic == EMU_MACHO_FAT_MAGIC || magic == EMU_MACHO_FAT_MAGIC_64;
 }
 
 bool load_raw_binary(Memory *memory, const char *path, uint64_t load_address, char *error, size_t error_size) {
@@ -470,6 +470,10 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
         snprintf(error, error_size, "Mach-O loader error: big-endian Mach-O is unsupported in v1.1");
         return false;
     }
+    if (magic == EMU_MACHO_MAGIC_32 || magic == EMU_MACHO_CIGAM_32) {
+        snprintf(error, error_size, "Mach-O loader error: 32-bit Mach-O is unsupported in v1.1");
+        return false;
+    }
     if (magic != EMU_MACHO_MAGIC_64) {
         snprintf(error, error_size, "Mach-O loader error: unsupported Mach-O magic 0x%08" PRIx32, magic);
         return false;
@@ -526,6 +530,12 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
                      "Mach-O loader error: invalid load command %u size: offset=0x%016" PRIx64
                      " cmdsize=0x%08" PRIx32 " sizeofcmds=0x%08" PRIx32,
                      i, command_offset, cmdsize, sizeofcmds);
+            return false;
+        }
+        if ((cmdsize & 0x7u) != 0) {
+            snprintf(error, error_size,
+                     "Mach-O loader error: invalid load command %u alignment: cmdsize=0x%08" PRIx32,
+                     i, cmdsize);
             return false;
         }
 
@@ -597,6 +607,10 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
                          cmdsize);
                 return false;
             }
+            if (saw_lc_main) {
+                snprintf(error, error_size, "Mach-O loader error: duplicate LC_MAIN commands are unsupported in v1.1");
+                return false;
+            }
             saw_lc_main = true;
             entryoff = read_le64(bytes, (size_t)command_offset + MACHO_MAIN_ENTRYOFF);
         } else if (cmd == EMU_MACHO_LC_SYMTAB) {
@@ -637,6 +651,15 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
             }
             uint32_t indirectsymoff = read_le32(bytes, (size_t)command_offset + MACHO_DYSYMTAB_INDIRECTSYM_OFFSET);
             uint32_t nindirectsyms = read_le32(bytes, (size_t)command_offset + MACHO_DYSYMTAB_NINDIRECTSYMS);
+            uint32_t nextrel = read_le32(bytes, (size_t)command_offset + 68u);
+            uint32_t nlocrel = read_le32(bytes, (size_t)command_offset + 76u);
+            if (nextrel > 0 || nlocrel > 0) {
+                snprintf(error, error_size,
+                         "Mach-O loader error: LC_DYSYMTAB relocations are unsupported in v1.1: external=%" PRIu32
+                         " local=%" PRIu32,
+                         nextrel, nlocrel);
+                return false;
+            }
             uint64_t indirect_table_size = (uint64_t)nindirectsyms * MACHO_INDIRECT_SYMBOL_SIZE;
             if (nindirectsyms != 0 && indirect_table_size / nindirectsyms != MACHO_INDIRECT_SYMBOL_SIZE) {
                 snprintf(error, error_size, "Mach-O loader error: LC_DYSYMTAB indirect symbol table size overflow");

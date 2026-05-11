@@ -45,7 +45,9 @@ typedef enum {
 #define EMU_ELF_PF_R 4u
 
 #define EMU_MACHO_MAGIC_64 0xfeedfacfu
+#define EMU_MACHO_MAGIC_32 0xfeedfaceu
 #define EMU_MACHO_CIGAM_64 0xcffaedfeu
+#define EMU_MACHO_CIGAM_32 0xcefaedfeu
 #define EMU_MACHO_FAT_MAGIC 0xbebafecau
 #define EMU_MACHO_FAT_MAGIC_64 0xbfbafecau
 #define EMU_MACHO_CPU_TYPE_ARM64 0x0100000cu

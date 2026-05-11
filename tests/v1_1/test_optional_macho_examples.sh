@@ -1,6 +1,11 @@
 #!/bin/sh
 set -eu
 
+if [ "${EMULATOR_SKIP_OPTIONAL_REAL_TOOLCHAIN:-0}" = "1" ]; then
+    echo "skipping optional Mach-O toolchain smoke test: EMULATOR_SKIP_OPTIONAL_REAL_TOOLCHAIN=1"
+    exit 0
+fi
+
 if ! command -v clang >/dev/null 2>&1; then
     echo "skipping optional Mach-O toolchain check: clang is not available"
     exit 0

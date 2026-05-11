@@ -101,6 +101,6 @@ for path in \
     esac
 done
 
-sh scripts/release_docs_check.sh >/dev/null
+make release-docs-check >/dev/null
 
 echo "v1.0 docs release tests passed"

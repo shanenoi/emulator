@@ -38,4 +38,6 @@ Try them:
 
 The generated fixtures are ignored by git and removed by `make clean`; the generator script is the checked-in source of truth.
 
-Dedicated v1.1 automated tests are still intentionally pending.
+Dedicated v1.1 automated tests live in `tests/v1_1/`, with reusable malformed and valid fixture generation in `tests/fixtures/macho_fixture_writer.py`.
+
+These fixtures are intentionally tiny. More complex Apple runtime features remain unsupported here, including `dyld`, shared libraries, code signing, platform process setup, and real Darwin syscalls.

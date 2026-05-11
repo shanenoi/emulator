@@ -104,12 +104,12 @@ Optional supporting files:
 lessons/v1.0-stable-learning-emulator.md
 examples/v1_0/README.md
 examples/v1_0/smoke_manifest.txt
-scripts/release_docs_check.sh
-scripts/release_hygiene_check.sh
-scripts/release_archive_check.sh
+make release-docs-check
+make release-hygiene-check
+make release-archive-check
 ```
 
-The implementation may choose different filenames, but it should keep release tests separate from feature tests so v1.0 remains clearly a stability milestone. Dedicated `tests/v1_0/` release tests should wrap the public CLI/documentation behavior. Reusable release helper scripts may also live under `scripts/` and be invoked by `make release-check` for checks that are naturally release-oriented rather than feature-specific, such as archive validation, clean-artifact validation, and optional sanitizer/compiler probes.
+The implementation may choose different filenames, but it should keep release tests separate from feature tests so v1.0 remains clearly a stability milestone. Dedicated `tests/v1_0/` release tests should wrap the public CLI/documentation behavior. Reusable release checks may live directly in Makefile targets and be invoked by `make release-check` for checks that are naturally release-oriented rather than feature-specific, such as archive validation, clean-artifact validation, and optional sanitizer/compiler probes.
 
 ## Test Data Strategy
 
