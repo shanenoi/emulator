@@ -15,6 +15,9 @@ static void debugger_clear_break_stop(Debugger *debugger) {
 }
 
 static bool parse_u64_debug(const char *text, uint64_t *out) {
+    if (text == NULL || text[0] == '\0' || text[0] == '-' || text[0] == '+') {
+        return false;
+    }
     char *end = NULL;
     errno = 0;
     unsigned long long value = strtoull(text, &end, 0);
@@ -107,8 +110,11 @@ static bool dump_memory_debug(const Memory *memory, uint64_t address, uint64_t l
         return false;
     }
     if (!memory_check_read(memory, address, length, error, error_size)) {
-        snprintf(error, error_size, "dump range is not readable: address=0x%016" PRIx64 " length=0x%016" PRIx64,
-                 address, length);
+        char cause[512];
+        snprintf(cause, sizeof(cause), "%s", error);
+        snprintf(error, error_size,
+                 "dump range is not readable: address=0x%016" PRIx64 " length=0x%016" PRIx64 " (%.300s)",
+                 address, length, cause);
         return false;
     }
 
@@ -452,6 +458,19 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
             uint64_t address = 0;
             if (address_text == NULL || has_extra_tokens(&cursor) || !parse_u64_debug(address_text, &address)) {
                 fprintf(error_stream, "error: usage: break <address>\n");
+                continue;
+            }
+            if (address > (uint64_t)debugger->emu.memory.size ||
+                debugger->emu.memory.size - (size_t)address < sizeof(uint32_t)) {
+                fprintf(error_stream, "error: breakpoint address outside memory: 0x%016" PRIx64 "\n", address);
+                continue;
+            }
+            if (address != 0 &&
+                !memory_check_execute(&debugger->emu.memory, address, sizeof(uint32_t), error, sizeof(error))) {
+                char cause[512];
+                snprintf(cause, sizeof(cause), "%s", error);
+                fprintf(error_stream, "error: breakpoint address is not executable: 0x%016" PRIx64 " (%.300s)\n",
+                        address, cause);
                 continue;
             }
             if (debugger_add_breakpoint(debugger, address, error, sizeof(error))) {

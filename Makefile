@@ -172,6 +172,7 @@ V1_0_RELEASE_TESTS := \
 	tests/v1_0/test_optional_release_examples.sh
 
 V1_1_TEST_FIXTURE_MARKER := tests/v1_1/tmp/.fixtures.stamp
+V1_2_TEST_FIXTURE_MARKER := tests/v1_2/tmp/.fixtures.stamp
 
 clean:
 	rm -f $(TARGET) $(OBJ) tests/v0_1/*.o tests/v0_1/test_v0_1 tests/v0_2/*.o tests/v0_2/test_v0_2 \
@@ -179,6 +180,7 @@ clean:
 		tests/v0_5/*.o tests/v0_5/test_v0_5 tests/v0_6/*.o tests/v0_6/test_v0_6 \
 		tests/v0_7/*.o tests/v0_7/test_v0_7 tests/v0_8/*.o tests/v0_8/test_v0_8 \
 		tests/v0_9/*.o tests/v0_9/test_v0_9 tests/v1_1/*.o tests/v1_1/test_v1_1 \
+		tests/v1_2/*.o tests/v1_2/test_v1_2 \
 		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
 		examples/v0_3/*.o examples/v0_3/*.bin examples/v0_4/*.o examples/v0_4/*.bin \
 		examples/v0_7/*.o examples/v0_7/*.bin examples/v0_8/*.o examples/v0_8/*.elf \
@@ -186,11 +188,17 @@ clean:
 		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/* tests/v0_4/tmp/* tests/v0_5/tmp/* \
 		tests/v0_6/tmp/* tests/v0_7/tmp/* tests/v0_8/tmp/* tests/v0_9/tmp/* tests/v1_0/tmp/*
 	rm -f examples/v1_2/mapping_inspection.txt
-	rm -rf tests/v1_1/tmp/* tests/v1_1/tmp/.fixtures.stamp
+	rm -rf tests/v1_1/tmp/* tests/v1_1/tmp/.fixtures.stamp tests/v1_2/tmp/* tests/v1_2/tmp/.fixtures.stamp
 
 $(V1_1_TEST_FIXTURE_MARKER): tests/fixtures/macho_fixture_writer.py
 	mkdir -p tests/v1_1/tmp
 	python3 tests/fixtures/macho_fixture_writer.py --output-dir tests/v1_1/tmp
+	touch $@
+
+$(V1_2_TEST_FIXTURE_MARKER): tests/fixtures/vm_fixture_writer.py tests/fixtures/macho_fixture_writer.py
+	mkdir -p tests/v1_2/tmp
+	python3 tests/fixtures/vm_fixture_writer.py --output-dir tests/v1_2/tmp
+	python3 tests/fixtures/macho_fixture_writer.py --output-dir tests/v1_2/tmp
 	touch $@
 
 tests/v0_1/test_v0_1: tests/v0_1/test_v0_1.o $(CORE_OBJ)
@@ -223,7 +231,10 @@ tests/v0_9/test_v0_9: tests/v0_9/test_v0_9.o $(CORE_OBJ)
 tests/v1_1/test_v1_1: tests/v1_1/test_v1_1.o $(CORE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^
 
-test: all $(TEST_EXAMPLES) $(V1_1_TEST_FIXTURE_MARKER) tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_3 tests/v0_4/test_v0_4 tests/v0_5/test_v0_5 tests/v0_6/test_v0_6 tests/v0_7/test_v0_7 tests/v0_8/test_v0_8 tests/v0_9/test_v0_9 tests/v1_1/test_v1_1
+tests/v1_2/test_v1_2: tests/v1_2/test_v1_2.o $(CORE_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+test: all $(TEST_EXAMPLES) $(V1_1_TEST_FIXTURE_MARKER) $(V1_2_TEST_FIXTURE_MARKER) tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_3 tests/v0_4/test_v0_4 tests/v0_5/test_v0_5 tests/v0_6/test_v0_6 tests/v0_7/test_v0_7 tests/v0_8/test_v0_8 tests/v0_9/test_v0_9 tests/v1_1/test_v1_1 tests/v1_2/test_v1_2
 	./tests/v0_1/test_v0_1
 	./tests/v0_1/test_cli.sh
 	./tests/v0_2/test_v0_2
@@ -255,6 +266,11 @@ test: all $(TEST_EXAMPLES) $(V1_1_TEST_FIXTURE_MARKER) tests/v0_1/test_v0_1 test
 	./tests/v1_1/test_cli_macho.sh
 	./tests/v1_1/test_docs_macho.sh
 	./tests/v1_1/test_optional_macho_examples.sh
+	mkdir -p tests/v1_2/tmp
+	./tests/v1_2/test_v1_2
+	./tests/v1_2/test_cli_virtual_memory.sh
+	./tests/v1_2/test_debugger_virtual_memory.sh
+	./tests/v1_2/test_docs_virtual_memory.sh
 
 release-docs-check:
 	@set -eu; \
@@ -293,12 +309,17 @@ release-docs-check:
 		need_file tests/v1_1/test_cli_macho.sh; \
 		need_file tests/v1_1/test_docs_macho.sh; \
 		need_file tests/v1_1/test_optional_macho_examples.sh; \
+		need_file tests/fixtures/vm_fixture_writer.py; \
+		need_file tests/v1_2/test_v1_2.c; \
+		need_file tests/v1_2/test_cli_virtual_memory.sh; \
+		need_file tests/v1_2/test_debugger_virtual_memory.sh; \
+		need_file tests/v1_2/test_docs_virtual_memory.sh; \
 		need_file README.md; \
 		grep -q "v1.1 Test Plan" README.md || fail "README does not link the v1.1 test plan"; \
 		grep -q "v1.2 Test Plan" README.md || fail "README does not link the v1.2 test plan"; \
 		grep -q "v1.1 Lesson" README.md || fail "README does not link the v1.1 lesson"; \
 		grep -q "v1.2 Lesson" README.md || fail "README does not link the v1.2 lesson"; \
-		grep -q "v0.1 through v1.1" README.md || fail "README does not describe current deterministic tests"; \
+		grep -q "v0.1 through v1.2" README.md || fail "README does not describe current deterministic tests"; \
 		grep -q "make release-check" README.md || fail "README does not document make release-check"; \
 		grep -q "make test-asan" README.md || fail "README does not document optional sanitizer checks"; \
 		grep -q "fresh archive.*full deterministic test suite\|fresh-archive full deterministic-suite" README.md || fail "README does not document full deterministic-suite archive validation"; \
@@ -309,7 +330,7 @@ release-docs-check:
 		grep -q "dynamic linking" README.md || fail "README does not list stable limitations"; \
 		if grep -qi "no ELF loader yet" README.md; then fail "README still says there is no ELF loader"; fi; \
 		if grep -qi "v0.8 tests are missing\|v0.9 tests are missing" README.md; then fail "README contains stale missing-test wording for implemented versions"; fi; \
-		if grep -qi "not added yet\|will be added in the v1.0 test phase\|tests/v1_0/.*planned\|tests are still pending" README.md; then fail "README contains stale wording about missing implemented tests"; fi; \
+		if grep -qi "not added yet\|will be added in the v1.0 test phase\|tests/v1_0/.*planned\|tests are still pending\|tests are intentionally deferred\|fixtures/tests are deferred" README.md; then fail "README contains stale wording about missing implemented tests"; fi; \
 		printf '%s\n' "v1.2 release docs check passed"
 
 release-hygiene-check:
@@ -318,7 +339,7 @@ release-hygiene-check:
 		[ -d .git ] || fail "not running from a git checkout"; \
 		tracked_generated=$$(git ls-files | grep -E '(^emulator$$|\.(o|bin|elf|macho)$$|^tests/v[0-9_]+/test_v[0-9_]+$$)' || true); \
 		if [ -n "$$tracked_generated" ]; then echo "$$tracked_generated" >&2; fail "generated build outputs are tracked"; fi; \
-		for pattern in 'emulator' '*.o' '*.bin' '*.elf' '*.macho' 'tests/v0_9/tmp/' 'tests/v1_0/tmp/' 'tests/v1_1/tmp/'; do \
+		for pattern in 'emulator' '*.o' '*.bin' '*.elf' '*.macho' 'tests/v0_9/tmp/' 'tests/v1_0/tmp/' 'tests/v1_1/tmp/' 'tests/v1_2/tmp/'; do \
 			grep -Fq "$$pattern" .gitignore || fail ".gitignore does not cover $$pattern"; \
 		done; \
 		if [ -d scripts ]; then fail "./scripts must not be shipped in source"; fi; \
@@ -328,12 +349,13 @@ release-clean-check:
 	@set -eu; \
 		fail() { echo "release clean check failed: $$*" >&2; exit 1; }; \
 		make all regression-examples >/dev/null; \
-		mkdir -p tests/v0_9/tmp tests/v1_0/tmp tests/v1_1/tmp; \
+		mkdir -p tests/v0_9/tmp tests/v1_0/tmp tests/v1_1/tmp tests/v1_2/tmp; \
 		: > examples/v0_9/clean_probe.o; \
 		: > examples/v0_9/clean_probe.elf; \
 		: > tests/v0_9/tmp/clean_probe.tmp; \
 		: > tests/v1_0/tmp/clean_probe.tmp; \
 		: > tests/v1_1/tmp/clean_probe.tmp; \
+		: > tests/v1_2/tmp/clean_probe.tmp; \
 		: > examples/v1_2/mapping_inspection.txt; \
 		: > tests/v0_9/test_v0_9; \
 		if [ "$${RELEASE_CLEAN_FULL:-0}" = "1" ]; then make examples >/dev/null; make test >/dev/null; fi; \
@@ -346,6 +368,7 @@ release-clean-check:
 			-o -path './tests/v0_5/test_v0_5' -o -path './tests/v0_6/test_v0_6' \
 			-o -path './tests/v0_7/test_v0_7' -o -path './tests/v0_8/test_v0_8' \
 			-o -path './tests/v0_9/test_v0_9' -o -path './tests/v1_1/test_v1_1' \
+			-o -path './tests/v1_2/test_v1_2' \
 			\) -print | sort); \
 		if [ -n "$$leftovers" ]; then echo "$$leftovers" >&2; fail "make clean left generated artifacts behind"; fi; \
 		printf '%s\n' "v1.2 release clean-artifact check passed"

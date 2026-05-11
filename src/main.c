@@ -99,8 +99,11 @@ static bool dump_memory(const Memory *memory, uint64_t address, uint64_t length,
         return false;
     }
     if (!memory_check_read(memory, address, length, error, error_size)) {
-        snprintf(error, error_size, "dump range is not readable: address=0x%016" PRIx64 " length=0x%016" PRIx64,
-                 address, length);
+        char cause[512];
+        snprintf(cause, sizeof(cause), "%s", error);
+        snprintf(error, error_size,
+                 "dump range is not readable: address=0x%016" PRIx64 " length=0x%016" PRIx64 " (%.300s)",
+                 address, length, cause);
         return false;
     }
 

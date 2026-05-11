@@ -36,6 +36,10 @@ execute_unmapped.bin    branches outside its raw program mapping
 mapping_inspection.txt  short manual-inspection checklist
 ```
 
+The deterministic v1.2 test suite also uses `tests/fixtures/vm_fixture_writer.py`
+to generate extra raw and ELF fixtures under `tests/v1_2/tmp/`. Those temporary
+files are intentionally not tracked and are removed by `make clean`.
+
 Try these inspection commands:
 
 ```sh
@@ -57,6 +61,11 @@ Expected ideas to notice:
   permissions.
 - `write_code_page.bin` fails with a write-permission fault.
 - `execute_unmapped.bin` fails with an unmapped execute fault.
+- `tests/v1_2/test_cli_virtual_memory.sh` covers the CLI-facing version of
+  those same permission faults.
+- `tests/v1_2/test_debugger_virtual_memory.sh` covers `maps`, `map <address>`,
+  debugger memory inspection, and breakpoint validation against unmapped or
+  non-executable addresses.
 
 Policy details:
 

@@ -45,7 +45,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, and the non-test implementation slice for **v1.2 — Virtual Memory and Page Permissions**. v1.2 adds non-overlapping loader mapping ranges, read/write/execute permission checks, stack mapping with a visible guard page, deterministic permission-fault examples, structured memory-fault categories for future tests, and mapping inspection; dedicated v1.2 tests are intentionally deferred to the next test phase.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, and the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**. v1.2 adds non-overlapping loader mapping ranges, read/write/execute permission checks, stack mapping with a visible guard page, deterministic permission-fault examples, structured memory-fault categories, mapping inspection, and v1.2 unit/CLI/debugger/docs coverage.
 
 Implemented now:
 
@@ -180,7 +180,7 @@ Implemented now:
   - includes an optional Mach-O fixture/toolchain smoke path through `make test` and `tests/v1_1/test_optional_macho_examples.sh`
   - rejects big-endian Mach-O, wrong CPU type, non-executable file types, malformed command tables, invalid segment ranges, overlapping mapped segments, missing `LC_MAIN`, unmapped/misaligned entries, and dynamic-linking commands such as `LC_LOAD_DYLINKER`, `LC_LOAD_DYLIB`, and `LC_DYLD_INFO`
   - normal dynamically linked macOS/iOS applications, `dyld`, shared libraries, Apple process setup, code signing, Objective-C/Swift runtimes, and real Darwin syscalls remain out of scope
-- v1.2 virtual-memory implementation slice:
+- v1.2 virtual-memory teaching profile:
   - adds a fixed 4096-byte teaching page size
   - adds memory mappings with stable `r--`, `rw-`, `r-x`, and `rwx` permission labels
   - installs explicit loader-created mappings for raw, ELF64, and Mach-O programs
@@ -192,7 +192,7 @@ Implemented now:
   - adds debugger `maps` and `map <address>` commands for mapping inspection
   - adds deterministic generated v1.2 examples in `examples/v1_2/`
   - documents the current v1.2 behavior in `examples/v1_2/README.md` and `lessons/v1.2-virtual-memory.md`
-  - dedicated v1.2 automated tests are deferred to the test phase
+  - includes v1.2 unit, CLI, debugger, docs, clean, and fresh-archive release tests
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -216,8 +216,9 @@ Implemented now:
   - optional v0.9 real-toolchain smoke tests that build and run the actual freestanding C examples when `clang` and `ld.lld` are available, and skip clearly otherwise
   - v1.0 release tests for CLI stability, docs consistency, optional release examples, repository hygiene, clean-artifact validation, and fresh-archive full deterministic-suite validation
   - v1.1 Mach-O tests for deterministic fixture generation, loader metadata, segment mapping, zero-fill behavior, entry resolution, unsupported runtime command rejection, CLI `run`/`trace`/`regs`/`dump`/`debug`/`info` behavior, docs consistency, and optional Mach-O toolchain smoke checks
+  - v1.2 virtual-memory tests for page mapping, R/W/X permission enforcement, loader-created mappings, stack guard behavior, CPU fault ordering, CLI `info`/`run`/`trace`/`regs`/`dump`, debugger `maps`/`map`, docs consistency, generated fixtures, clean behavior, and fresh-archive release coverage
 
-The full v0.1 through v1.1 deterministic test suite runs with `make test`. The v1.1 suite covers Mach-O loader units, CLI behavior, malformed fixtures, docs, deterministic fixture generation, and optional real-toolchain smoke behavior. v1.2 implementation work has started, but dedicated v1.2 tests are deferred to the next test phase. The release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
+The full v0.1 through v1.2 deterministic test suite runs with `make test`. The release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
 
 ## Build and Run
 
@@ -1013,7 +1014,7 @@ Definition of done:
 
 **Goal:** teach page-based memory, permissions, and fault handling.
 
-Planning reference: [v1.2 Test Plan — Virtual Memory and Page Permissions](docs/test-plan-v1.2.md). The non-test implementation slice is in place; dedicated tests are deferred to the next test phase.
+Planning reference: [v1.2 Test Plan — Virtual Memory and Page Permissions](docs/test-plan-v1.2.md). The implementation and deterministic tests for the teaching profile are in place.
 
 Added memory model pieces:
 
@@ -1024,7 +1025,7 @@ Added memory model pieces:
 - A visible `---` stack-guard page below the stack mapping.
 - True mapping-overlap rejection, while adjacent byte ranges remain allowed.
 - Deterministic generated examples in `examples/v1_2/`.
-- Structured memory-fault categories for future v1.2 tests.
+- Structured memory-fault categories used by v1.2 tests.
 - Instruction fetch checks through execute permission.
 - Data read/write checks through read/write permission helpers.
 - `info` mapping output.
@@ -1052,9 +1053,8 @@ Current limitations:
 
 - This is still a teaching VM, not a real ARMv8 MMU.
 - There are no page tables, TLBs, signals, demand paging, `mmap`, copy-on-write, threads, ASLR, or process isolation.
-- Dedicated v1.2 automated tests are deferred to the test phase.
 
-Definition of done for the full v1.2 milestone:
+Definition of done for the v1.2 teaching profile:
 
 - ELF and Mach-O segment permissions are represented and tested.
 - Invalid memory behavior is deterministic and easy to debug.

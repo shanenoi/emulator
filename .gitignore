@@ -27,3 +27,6 @@ examples/v1_2/mapping_inspection.txt
 __pycache__/
 tests/v1_0/tmp/
 tests/v1_1/tmp/
+tests/v1_2/tmp/
+examples/v1_2/*.bin
+tests/v1_2/test_v1_2
