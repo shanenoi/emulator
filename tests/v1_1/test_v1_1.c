@@ -68,7 +68,31 @@ static void test_valid_macho_metadata_and_mapping(void) {
     EXPECT_U64_EQ(program.segments[1].vaddr, 0x3000u);
     EXPECT_TRUE(memcmp(&emu.memory.bytes[0x3000], "hello, v1.1!\n", 13u) == 0);
     EXPECT_U64_EQ(program.macho_symbol_count, 1u);
+    EXPECT_U64_EQ(program.macho_recorded_symbol_count, 1u);
+    EXPECT_TRUE(strcmp(program.macho_symbols[0].name, "_fixture") == 0);
+    EXPECT_U64_EQ(program.macho_symbols[0].address, 0x1000u);
 
+    emulator_free(&emu);
+}
+
+static void test_adjacent_and_zero_sized_segments(void) {
+    Emulator emu;
+    EmuLoadedProgram program;
+    char error[512];
+    init_emulator_or_die(&emu);
+
+    EXPECT_TRUE(load_fixture(&emu, TMP "adjacent.macho", &program, error, sizeof(error)));
+    EXPECT_SIZE_EQ(program.segment_count, 2u);
+    EXPECT_U64_EQ(program.segments[0].vaddr + program.segments[0].mem_size, program.segments[1].vaddr);
+    EXPECT_U64_EQ(program.segments[1].file_size, 1u);
+    EXPECT_U64_EQ(emu.memory.bytes[program.segments[1].vaddr], 'X');
+    emulator_free(&emu);
+
+    init_emulator_or_die(&emu);
+    EXPECT_TRUE(load_fixture(&emu, TMP "zero_sized_segment.macho", &program, error, sizeof(error)));
+    EXPECT_SIZE_EQ(program.segment_count, 1u);
+    EXPECT_TRUE(strcmp(program.segments[0].name, "__TEXT") == 0);
+    EXPECT_U64_EQ(program.entry, 0x1000u);
     emulator_free(&emu);
 }
 
@@ -108,6 +132,7 @@ static void test_entry_and_segment_validation_errors(void) {
         {TMP "mem_range_oob.macho", "memory range outside"},
         {TMP "overlap_1byte.macho", "overlapping"},
         {TMP "section_overflow.macho", "section table is truncated"},
+        {TMP "bad_symbol_string_index.macho", "symbol string index outside string table"},
     };
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
@@ -202,6 +227,7 @@ static void test_execution_paths(void) {
 
 int main(void) {
     test_valid_macho_metadata_and_mapping();
+    test_adjacent_and_zero_sized_segments();
     test_zero_fill_and_boundary_segment();
     test_entry_and_segment_validation_errors();
     test_header_and_load_command_errors();

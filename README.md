@@ -169,7 +169,7 @@ Implemented now:
   - validates `LC_SEGMENT_64` section-table sizing and records section counts for inspection
   - zero-fills segment memory when `vmsize > filesize`
   - resolves `LC_MAIN` `entryoff` through mapped segment file ranges to initialize `pc`
-  - validates optional `LC_SYMTAB` and `LC_DYSYMTAB` table ranges and records symbol counts for inspection
+  - validates optional `LC_SYMTAB` and `LC_DYSYMTAB` table ranges and records bounded symbol names/addresses for inspection
   - records segment names, file offsets, section counts, and permission bits for inspection/future versions, but does not enforce memory permissions yet
   - adds `emulator info <program>` for loader inspection without executing guest code
   - includes deterministic generated Mach-O examples in `examples/v1_1/`: `minimal_exit.macho`, `hello.macho`, and `zero_fill.macho`
@@ -976,7 +976,7 @@ Add Mach-O support:
 - Parse `LC_SEGMENT_64`.
 - Map `__TEXT` and `__DATA` segments.
 - Parse entry point from `LC_MAIN` when available.
-- Basic symbol/table count inspection.
+- Basic symbol/table inspection, including bounded Mach-O symbol names and addresses when an `LC_SYMTAB` is present.
 - Clear unsupported-feature errors for dynamic linking and complex relocations.
 
 Current limitations:

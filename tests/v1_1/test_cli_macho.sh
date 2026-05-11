@@ -98,6 +98,11 @@ require_contains "$TMP_DIR/stdout.txt" "name=__TEXT"
 require_contains "$TMP_DIR/stdout.txt" "name=__DATA"
 require_contains "$TMP_DIR/stdout.txt" "mach_o_load_commands: 4"
 require_contains "$TMP_DIR/stdout.txt" "mach_o_symbols: 1"
+require_contains "$TMP_DIR/stdout.txt" "symbol[0]: name=_fixture address=0x0000000000001000"
+
+# TC-V11-INSP-002: missing symbol tables remain graceful.
+run_expect_status 0 ./emulator info "$TMP_DIR/stderr_data.macho"
+require_contains "$TMP_DIR/stdout.txt" "mach_o_symbols: 0"
 
 # TC-V11-CLI-002/003/004: trace, regs, dump on Mach-O.
 run_expect_status 0 ./emulator trace "$TMP_DIR/stdout_data.macho"
@@ -158,6 +163,33 @@ printf '%s\n' "$invalid_cases" | while IFS=' ' read -r file needle_rest; do
     run_expect_status 1 ./emulator run "$TMP_DIR/$file"
     require_contains "$TMP_DIR/stderr.txt" "$needle_rest"
 done
+
+# TC-V11-INSP-002: malformed symbol string references are rejected.
+run_expect_status 1 ./emulator info "$TMP_DIR/bad_symbol_string_index.macho"
+require_contains "$TMP_DIR/stderr.txt" "symbol string index outside string table"
+
+# Representative byte-mutation smoke: mutated headers must either reject before
+# execution or remain safely inspectable; this keeps the loader's error path
+# deterministic without pretending v1.1 is a full fuzzer.
+for file in "$TMP_DIR"/mutated_header_*.macho; do
+    set +e
+    ./emulator info "$file" >"$TMP_DIR/stdout.txt" 2>"$TMP_DIR/stderr.txt"
+    status=$?
+    set -e
+    case "$status" in
+        0|1) ;;
+        *) fail "mutated header returned unexpected status $status for $file" ;;
+    esac
+done
+
+# TC-V11-SEG-002/EDGE-003: adjacent ranges are allowed and zero-sized segments
+# are ignored without invalid writes.
+run_expect_status 0 ./emulator info "$TMP_DIR/adjacent.macho"
+require_contains "$TMP_DIR/stdout.txt" "segments: 2"
+require_contains "$TMP_DIR/stdout.txt" "name=__DATA"
+run_expect_status 0 ./emulator info "$TMP_DIR/zero_sized_segment.macho"
+require_contains "$TMP_DIR/stdout.txt" "segments: 1"
+require_contains "$TMP_DIR/stdout.txt" "name=__TEXT"
 
 # TC-V11-EXEC-006 and ERR-004.
 run_expect_status 1 ./emulator run "$TMP_DIR/loop.macho"

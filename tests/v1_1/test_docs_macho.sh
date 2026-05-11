@@ -61,6 +61,10 @@ for file in README.md lessons/v1.1-mach-o-loader.md examples/v1_1/README.md; do
     require_contains "$file" "unsupported"
 done
 
+require_contains README.md "symbol names/addresses"
+require_contains lessons/v1.1-mach-o-loader.md "symbol names/addresses"
+require_contains examples/v1_1/README.md "symbol-name/address"
+
 require_contains docs/test-plan-v1.1.md "TC-V11-BUILD-002"
 require_contains docs/test-plan-v1.1.md "tests/v1_1/test_v1_1.c"
 require_contains docs/test-plan-v1.1.md "tests/v1_1/test_cli_macho.sh"

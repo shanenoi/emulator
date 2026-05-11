@@ -9,7 +9,7 @@ The supported runtime profile is narrow:
 MH_EXECUTE
 LC_SEGMENT_64 mapped into the existing 1 MiB flat memory
 LC_MAIN resolved through mapped file ranges
-optional LC_SYMTAB range validation and symbol-count inspection
+optional LC_SYMTAB range validation and bounded symbol-name/address inspection
 toy SVC #0 syscalls only
 no dyld, shared libraries, rebasing, binding, code signing, or Darwin process setup
 ```

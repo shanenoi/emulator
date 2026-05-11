@@ -26,6 +26,8 @@ typedef enum {
 
 #define EMU_MAX_LOAD_SEGMENTS 16u
 #define EMU_MAX_ELF_SEGMENTS EMU_MAX_LOAD_SEGMENTS
+#define EMU_MAX_MACHO_SYMBOLS 8u
+#define EMU_MAX_MACHO_SYMBOL_NAME 64u
 
 #define EMU_ELF_MAGIC0 0x7fu
 #define EMU_ELF_MAGIC1 'E'
@@ -181,6 +183,11 @@ typedef struct {
 } EmuLoadedSegment;
 
 typedef struct {
+    char name[EMU_MAX_MACHO_SYMBOL_NAME];
+    uint64_t address;
+} EmuMachoSymbol;
+
+typedef struct {
     EmuProgramFormat format;
     uint64_t entry;
     uint64_t stack_pointer;
@@ -189,6 +196,8 @@ typedef struct {
     uint32_t macho_load_command_count;
     uint32_t macho_symbol_count;
     uint32_t macho_indirect_symbol_count;
+    uint32_t macho_recorded_symbol_count;
+    EmuMachoSymbol macho_symbols[EMU_MAX_MACHO_SYMBOLS];
 } EmuLoadedProgram;
 
 typedef struct {

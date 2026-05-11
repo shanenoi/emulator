@@ -61,6 +61,11 @@ static void print_program_info(const EmuLoadedProgram *program, FILE *stream) {
         fprintf(stream, "mach_o_load_commands: %" PRIu32 "\n", program->macho_load_command_count);
         fprintf(stream, "mach_o_symbols: %" PRIu32 "\n", program->macho_symbol_count);
         fprintf(stream, "mach_o_indirect_symbols: %" PRIu32 "\n", program->macho_indirect_symbol_count);
+        for (uint32_t i = 0; i < program->macho_recorded_symbol_count; i++) {
+            fprintf(stream, "  symbol[%" PRIu32 "]: name=%s address=0x%016" PRIx64 "\n", i,
+                    program->macho_symbols[i].name[0] == '\0' ? "-" : program->macho_symbols[i].name,
+                    program->macho_symbols[i].address);
+        }
     }
 }
 

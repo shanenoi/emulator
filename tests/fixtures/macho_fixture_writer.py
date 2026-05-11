@@ -254,6 +254,35 @@ def write(path: Path, data: bytes) -> None:
     path.write_bytes(data)
 
 
+def corrupt_first_symtab_string_index(image: bytes, string_index: int) -> bytes:
+    """Return image with the first nlist64 n_strx changed.
+
+    The fixture writer owns these byte layouts, so this tiny parser keeps malformed
+    symbol-table fixtures deterministic without hand-maintaining offsets in tests.
+    """
+    data = bytearray(image)
+    ncmds = struct.unpack_from("<I", data, 16)[0]
+    cursor = HEADER_SIZE
+    for _ in range(ncmds):
+        cmd, cmdsize = struct.unpack_from("<II", data, cursor)
+        if cmd == LC_SYMTAB:
+            symoff = struct.unpack_from("<I", data, cursor + 8)[0]
+            struct.pack_into("<I", data, symoff, string_index)
+            return bytes(data)
+        cursor += cmdsize
+    raise ValueError("fixture has no LC_SYMTAB")
+
+
+def header_mutations(image: bytes) -> list[tuple[str, bytes]]:
+    mutations: list[tuple[str, bytes]] = []
+    interesting_offsets = [0, 4, 12, 16, 20]
+    for offset in interesting_offsets:
+        data = bytearray(image)
+        data[offset] ^= 0x80
+        mutations.append((f"mutated_header_{offset:02d}.macho", bytes(data)))
+    return mutations
+
+
 def valid_minimal(status: int = 0, *, symtab: bool = True, unknown: bool = False) -> MachOImage:
     return MachOImage([Segment("__TEXT", TEXT_VMADDR, exit_code(status))], include_symtab=symtab, unknown_command=unknown)
 
@@ -263,7 +292,8 @@ def generate_suite(output_dir: Path) -> None:
     hello = b"hello, v1.1!\n"
     err = b"ERRv1.1\n"
     data = b"DATA"
-    write(output_dir / "valid_exit0.macho", valid_minimal(0).build())
+    valid_exit0 = valid_minimal(0).build()
+    write(output_dir / "valid_exit0.macho", valid_exit0)
     write(output_dir / "valid_exit42.macho", valid_minimal(42).build())
     write(output_dir / "unknown_harmless.macho", valid_minimal(0, unknown=True).build())
     text = write_stdout(DATA_VMADDR, len(hello))
@@ -294,6 +324,7 @@ def generate_suite(output_dir: Path) -> None:
     for name, cmd in [("dylinker.macho", LC_LOAD_DYLINKER), ("dylib.macho", LC_LOAD_DYLIB), ("dyld_info.macho", LC_DYLD_INFO), ("dyld_info_only.macho", LC_DYLD_INFO_ONLY)]:
         write(output_dir / name, MachOImage([Segment("__TEXT", TEXT_VMADDR, exit_code(0))], unsupported_command=cmd).build())
     write(output_dir / "relocations.macho", MachOImage([Segment("__TEXT", TEXT_VMADDR, exit_code(0))], include_dysymtab=True, dysymtab_reloc_count=1).build())
+    write(output_dir / "bad_symbol_string_index.macho", corrupt_first_symtab_string_index(valid_exit0, 0xFFFF))
     bad = bytearray(valid_minimal(0).build())
     bad[16:20] = u32(1)
     bad[20:24] = u32(0)
@@ -323,6 +354,8 @@ def generate_suite(output_dir: Path) -> None:
     write(output_dir / "section_overflow.macho", bytes(section_bad))
     for i in range(0, HEADER_SIZE):
         write(output_dir / f"truncated_header_{i:02d}.macho", valid_minimal(0).build()[:i])
+    for name, mutation in header_mutations(valid_exit0):
+        write(output_dir / name, mutation)
     write(output_dir / "empty.bin", b"")
     write(output_dir / "partial1.bin", b"\xcf")
     write(output_dir / "partial2.bin", b"\xcf\xfa")

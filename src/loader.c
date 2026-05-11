@@ -66,6 +66,9 @@
 #define MACHO_NLIST64_SIZE 16u
 #define MACHO_INDIRECT_SYMBOL_SIZE 4u
 
+#define MACHO_NLIST_N_STRX 0u
+#define MACHO_NLIST_N_VALUE 8u
+
 static bool read_file(const char *path, uint8_t **out_bytes, size_t *out_size, char *error, size_t error_size) {
     *out_bytes = NULL;
     *out_size = 0;
@@ -166,6 +169,30 @@ static bool ranges_overlap(uint64_t a_start, uint64_t a_length, uint64_t b_start
         return true;
     }
     return a_start < b_end && b_start < a_end;
+}
+
+static size_t bounded_cstring_length(const uint8_t *bytes, size_t offset, size_t limit) {
+    size_t length = 0;
+    while (offset + length < limit && bytes[offset + length] != '\0') {
+        length++;
+    }
+    return length;
+}
+
+static void record_macho_symbol(EmuLoadedProgram *program, const char *name, size_t name_length, uint64_t address) {
+    if (program->macho_recorded_symbol_count >= EMU_MAX_MACHO_SYMBOLS) {
+        return;
+    }
+
+    EmuMachoSymbol *symbol = &program->macho_symbols[program->macho_recorded_symbol_count];
+    size_t copy_length = name_length;
+    if (copy_length >= sizeof(symbol->name)) {
+        copy_length = sizeof(symbol->name) - 1u;
+    }
+    memcpy(symbol->name, name, copy_length);
+    symbol->name[copy_length] = '\0';
+    symbol->address = address;
+    program->macho_recorded_symbol_count++;
 }
 
 static bool is_elf_magic(const uint8_t *bytes, size_t file_size) {
@@ -643,6 +670,30 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
                 return false;
             }
             program->macho_symbol_count = nsyms;
+            program->macho_recorded_symbol_count = 0;
+            for (uint32_t symbol_index = 0; symbol_index < nsyms; symbol_index++) {
+                uint64_t symbol_offset = (uint64_t)symoff + (uint64_t)symbol_index * MACHO_NLIST64_SIZE;
+                uint32_t string_index = read_le32(bytes, (size_t)symbol_offset + MACHO_NLIST_N_STRX);
+                uint64_t value = read_le64(bytes, (size_t)symbol_offset + MACHO_NLIST_N_VALUE);
+                if (string_index >= strsize) {
+                    snprintf(error, error_size,
+                             "Mach-O loader error: LC_SYMTAB symbol string index outside string table: symbol=%" PRIu32
+                             " n_strx=0x%08" PRIx32 " strsize=0x%08" PRIx32,
+                             symbol_index, string_index, strsize);
+                    return false;
+                }
+                size_t name_offset = (size_t)stroff + (size_t)string_index;
+                size_t string_limit = (size_t)stroff + (size_t)strsize;
+                size_t name_length = bounded_cstring_length(bytes, name_offset, string_limit);
+                if (name_offset + name_length >= string_limit) {
+                    snprintf(error, error_size,
+                             "Mach-O loader error: LC_SYMTAB symbol name is not NUL-terminated inside string table:"
+                             " symbol=%" PRIu32 " n_strx=0x%08" PRIx32,
+                             symbol_index, string_index);
+                    return false;
+                }
+                record_macho_symbol(program, (const char *)&bytes[name_offset], name_length, value);
+            }
         } else if (cmd == EMU_MACHO_LC_DYSYMTAB) {
             if (cmdsize < MACHO64_DYSYMTAB_COMMAND_SIZE) {
                 snprintf(error, error_size, "Mach-O loader error: LC_DYSYMTAB command is truncated: cmdsize=0x%08" PRIx32,
