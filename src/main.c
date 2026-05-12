@@ -19,6 +19,9 @@ static void print_usage(FILE *stream) {
             (unsigned long long)EMU_LOAD_ADDRESS);
     fprintf(stream, "or a supported little-endian AArch64 ELF64 ET_EXEC file,\n");
     fprintf(stream, "or a supported little-endian arm64 Mach-O MH_EXECUTE file.\n");
+    fprintf(stream, "v1.3 registers fixed MMIO teaching devices: UART 0x09000000, timer 0x09010000, random 0x09020000.\n");
+    fprintf(stream, "info and debugger maps show RAM mappings and MMIO device ranges.\n");
+    fprintf(stream, "dump inspects ordinary readable RAM; CPU loads/stores are what trigger device behavior.\n");
     fprintf(stream, "dump <address> and <length> accept decimal or 0x-prefixed hexadecimal values.\n");
     fprintf(stream, "\n");
     fprintf(stream, "Older raw-only lessons also describe the same commands as:\n");

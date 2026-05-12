@@ -56,39 +56,7 @@ static bool device_check_access(const EmuDeviceRange *device, uint64_t address, 
         return false;
     }
 
-    uint64_t offset = address - device->start;
-    bool is_write = (required & EMU_MAP_WRITE) != 0;
-    switch (device->kind) {
-    case EMU_DEVICE_UART:
-        if (!is_write && offset == EMU_UART_STATUS_OFFSET && width == 4) {
-            return true;
-        }
-        if (is_write && offset == EMU_UART_DATA_OFFSET && width == 1) {
-            return true;
-        }
-        break;
-    case EMU_DEVICE_TIMER:
-        if (!is_write && width == 4 && (offset == EMU_TIMER_TICKS_LO_OFFSET || offset == EMU_TIMER_TICKS_HI_OFFSET)) {
-            return true;
-        }
-        if (is_write && width == 4 && offset == EMU_TIMER_RESET_OFFSET) {
-            return true;
-        }
-        break;
-    case EMU_DEVICE_RANDOM:
-        if (!is_write && width == 4 && offset == EMU_RANDOM_VALUE_OFFSET) {
-            return true;
-        }
-        if (is_write && width == 4 && offset == EMU_RANDOM_SEED_OFFSET) {
-            return true;
-        }
-        break;
-    }
-
-    snprintf(error, error_size,
-             "device fault: invalid %s register: device=%s offset=0x%03" PRIx64 " width=0x%016" PRIx64,
-             is_write ? "write" : "read", device->name, offset, width);
-    return false;
+    return true;
 }
 
 static bool device_reject_width(const EmuDeviceRange *device, uint64_t offset, uint64_t width, const char *operation,
@@ -97,6 +65,42 @@ static bool device_reject_width(const EmuDeviceRange *device, uint64_t offset, u
              "device fault: unsupported %s width: device=%s offset=0x%03" PRIx64 " width=0x%016" PRIx64,
              operation, device->name, offset, width);
     return false;
+}
+
+static bool device_reject_unaligned(const EmuDeviceRange *device, uint64_t offset, uint64_t width,
+                                    const char *operation, char *error, size_t error_size) {
+    snprintf(error, error_size,
+             "device fault: unaligned %s access: device=%s offset=0x%03" PRIx64 " width=0x%016" PRIx64,
+             operation, device->name, offset, width);
+    return false;
+}
+
+static bool device_reject_readonly(const EmuDeviceRange *device, uint64_t offset, char *error, size_t error_size) {
+    snprintf(error, error_size, "device fault: write to read-only register: device=%s offset=0x%03" PRIx64,
+             device->name, offset);
+    return false;
+}
+
+static bool device_reject_writeonly(const EmuDeviceRange *device, uint64_t offset, char *error, size_t error_size) {
+    snprintf(error, error_size, "device fault: read from write-only register: device=%s offset=0x%03" PRIx64,
+             device->name, offset);
+    return false;
+}
+
+static bool device_reject_invalid_register(const EmuDeviceRange *device, uint64_t offset, uint64_t width,
+                                           const char *operation, char *error, size_t error_size) {
+    snprintf(error, error_size,
+             "device fault: invalid %s register: device=%s offset=0x%03" PRIx64 " width=0x%016" PRIx64,
+             operation, device->name, offset, width);
+    return false;
+}
+
+static bool device_reject_if_unaligned(const EmuDeviceRange *device, uint64_t offset, uint64_t width,
+                                       const char *operation, char *error, size_t error_size) {
+    if (width > 1 && (offset % width) != 0) {
+        return device_reject_unaligned(device, offset, width, operation, error, error_size);
+    }
+    return true;
 }
 
 static uint32_t random_next(uint32_t state) {
@@ -113,17 +117,25 @@ static bool device_read(Memory *memory, const EmuDeviceRange *device, uint64_t a
 
     switch (device->kind) {
     case EMU_DEVICE_UART:
+        if (!device_reject_if_unaligned(device, offset, width, "read", error, error_size)) {
+            return false;
+        }
+        if (offset == EMU_UART_DATA_OFFSET) {
+            return device_reject_writeonly(device, offset, error, error_size);
+        }
         if (offset == EMU_UART_STATUS_OFFSET && width == 4) {
             *out = 0x1u;
             return true;
         }
-        snprintf(error, error_size,
-                 "device fault: invalid read register: device=uart offset=0x%03" PRIx64
-                 " width=0x%016" PRIx64,
-                 offset, width);
-        return false;
+        if (offset == EMU_UART_STATUS_OFFSET) {
+            return device_reject_width(device, offset, width, "read", error, error_size);
+        }
+        return device_reject_invalid_register(device, offset, width, "read", error, error_size);
 
     case EMU_DEVICE_TIMER:
+        if (!device_reject_if_unaligned(device, offset, width, "read", error, error_size)) {
+            return false;
+        }
         if (width != 4) {
             return device_reject_width(device, offset, width, "read", error, error_size);
         }
@@ -137,13 +149,15 @@ static bool device_read(Memory *memory, const EmuDeviceRange *device, uint64_t a
             memory->devices.timer_ticks++;
             return true;
         }
-        snprintf(error, error_size,
-                 "device fault: invalid read register: device=timer offset=0x%03" PRIx64
-                 " width=0x%016" PRIx64,
-                 offset, width);
-        return false;
+        if (offset == EMU_TIMER_RESET_OFFSET) {
+            return device_reject_writeonly(device, offset, error, error_size);
+        }
+        return device_reject_invalid_register(device, offset, width, "read", error, error_size);
 
     case EMU_DEVICE_RANDOM:
+        if (!device_reject_if_unaligned(device, offset, width, "read", error, error_size)) {
+            return false;
+        }
         if (width != 4) {
             return device_reject_width(device, offset, width, "read", error, error_size);
         }
@@ -152,11 +166,10 @@ static bool device_read(Memory *memory, const EmuDeviceRange *device, uint64_t a
             *out = memory->devices.random_state;
             return true;
         }
-        snprintf(error, error_size,
-                 "device fault: invalid read register: device=random offset=0x%03" PRIx64
-                 " width=0x%016" PRIx64,
-                 offset, width);
-        return false;
+        if (offset == EMU_RANDOM_SEED_OFFSET) {
+            return device_reject_writeonly(device, offset, error, error_size);
+        }
+        return device_reject_invalid_register(device, offset, width, "read", error, error_size);
     }
 
     snprintf(error, error_size, "device fault: unknown device kind");
@@ -173,6 +186,9 @@ static bool device_write(Memory *memory, const EmuDeviceRange *device, uint64_t 
 
     switch (device->kind) {
     case EMU_DEVICE_UART:
+        if (!device_reject_if_unaligned(device, offset, width, "write", error, error_size)) {
+            return false;
+        }
         if (offset == EMU_UART_DATA_OFFSET && width == 1) {
             FILE *stream = memory->devices.uart_output != NULL ? memory->devices.uart_output : stdout;
             if (fputc((int)(value & 0xffu), stream) == EOF || fflush(stream) != 0) {
@@ -181,19 +197,18 @@ static bool device_write(Memory *memory, const EmuDeviceRange *device, uint64_t 
             }
             return true;
         }
-        if (offset == EMU_UART_STATUS_OFFSET) {
-            snprintf(error, error_size,
-                     "device fault: write to read-only register: device=uart offset=0x%03" PRIx64,
-                     offset);
-            return false;
+        if (offset == EMU_UART_DATA_OFFSET) {
+            return device_reject_width(device, offset, width, "write", error, error_size);
         }
-        snprintf(error, error_size,
-                 "device fault: invalid write register: device=uart offset=0x%03" PRIx64
-                 " width=0x%016" PRIx64,
-                 offset, width);
-        return false;
+        if (offset == EMU_UART_STATUS_OFFSET) {
+            return device_reject_readonly(device, offset, error, error_size);
+        }
+        return device_reject_invalid_register(device, offset, width, "write", error, error_size);
 
     case EMU_DEVICE_TIMER:
+        if (!device_reject_if_unaligned(device, offset, width, "write", error, error_size)) {
+            return false;
+        }
         if (width != 4) {
             return device_reject_width(device, offset, width, "write", error, error_size);
         }
@@ -202,12 +217,15 @@ static bool device_write(Memory *memory, const EmuDeviceRange *device, uint64_t 
             memory->devices.timer_ticks = 0;
             return true;
         }
-        snprintf(error, error_size,
-                 "device fault: write to read-only register: device=timer offset=0x%03" PRIx64,
-                 offset);
-        return false;
+        if (offset == EMU_TIMER_TICKS_LO_OFFSET || offset == EMU_TIMER_TICKS_HI_OFFSET) {
+            return device_reject_readonly(device, offset, error, error_size);
+        }
+        return device_reject_invalid_register(device, offset, width, "write", error, error_size);
 
     case EMU_DEVICE_RANDOM:
+        if (!device_reject_if_unaligned(device, offset, width, "write", error, error_size)) {
+            return false;
+        }
         if (width != 4) {
             return device_reject_width(device, offset, width, "write", error, error_size);
         }
@@ -215,10 +233,10 @@ static bool device_write(Memory *memory, const EmuDeviceRange *device, uint64_t 
             memory->devices.random_state = (uint32_t)value;
             return true;
         }
-        snprintf(error, error_size,
-                 "device fault: write to read-only register: device=random offset=0x%03" PRIx64,
-                 offset);
-        return false;
+        if (offset == EMU_RANDOM_VALUE_OFFSET) {
+            return device_reject_readonly(device, offset, error, error_size);
+        }
+        return device_reject_invalid_register(device, offset, width, "write", error, error_size);
     }
 
     snprintf(error, error_size, "device fault: unknown device kind");
@@ -515,6 +533,37 @@ bool memory_write8(Memory *memory, uint64_t address, uint8_t value, char *error,
         return false;
     }
     memory->bytes[address] = value;
+    return true;
+}
+
+bool memory_read16(const Memory *memory, uint64_t address, uint16_t *out, char *error, size_t error_size) {
+    const EmuDeviceRange *device = memory_find_device(memory, address);
+    if (device != NULL) {
+        uint64_t value = 0;
+        if (!device_read((Memory *)memory, device, address, 2, &value, error, error_size)) {
+            return false;
+        }
+        *out = (uint16_t)value;
+        return true;
+    }
+    if (!memory_check_read(memory, address, 2, error, error_size)) {
+        return false;
+    }
+    *out = (uint16_t)((uint16_t)memory->bytes[address] | ((uint16_t)memory->bytes[address + 1u] << 8u));
+    return true;
+}
+
+bool memory_write16(Memory *memory, uint64_t address, uint16_t value, char *error, size_t error_size) {
+    const EmuDeviceRange *device = memory_find_device(memory, address);
+    if (device != NULL) {
+        return device_write(memory, device, address, 2, value, error, error_size);
+    }
+    if (!memory_check_write(memory, address, 2, error, error_size)) {
+        return false;
+    }
+
+    memory->bytes[address] = (uint8_t)(value & 0xffu);
+    memory->bytes[address + 1u] = (uint8_t)((value >> 8u) & 0xffu);
     return true;
 }
 

@@ -31,3 +31,5 @@ tests/v1_1/test_v1_1
 tests/v1_2/tmp/
 examples/v1_2/*.bin
 tests/v1_2/test_v1_2
+tests/v1_3/tmp/
+examples/v1_3/*.bin

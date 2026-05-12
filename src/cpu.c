@@ -77,6 +77,7 @@ static uint64_t apply_shift(uint64_t value, uint8_t shift_type, uint8_t amount, 
 static bool memory_read_width(const Memory *memory, uint64_t address, uint8_t access_size, uint64_t *out, char *error,
                               size_t error_size) {
     uint8_t value8 = 0;
+    uint16_t value16 = 0;
     uint32_t value32 = 0;
     uint64_t value64 = 0;
 
@@ -88,10 +89,10 @@ static bool memory_read_width(const Memory *memory, uint64_t address, uint8_t ac
         *out = value8;
         return true;
     case 2:
-        if (!memory_check_read(memory, address, 2, error, error_size)) {
+        if (!memory_read16(memory, address, &value16, error, error_size)) {
             return false;
         }
-        *out = (uint64_t)memory->bytes[address] | ((uint64_t)memory->bytes[address + 1u] << 8u);
+        *out = value16;
         return true;
     case 4:
         if (!memory_read32(memory, address, &value32, error, error_size)) {
@@ -117,12 +118,7 @@ static bool memory_write_width(Memory *memory, uint64_t address, uint8_t access_
     case 1:
         return memory_write8(memory, address, (uint8_t)value, error, error_size);
     case 2:
-        if (!memory_check_write(memory, address, 2, error, error_size)) {
-            return false;
-        }
-        memory->bytes[address] = (uint8_t)(value & 0xffu);
-        memory->bytes[address + 1u] = (uint8_t)((value >> 8u) & 0xffu);
-        return true;
+        return memory_write16(memory, address, (uint16_t)value, error, error_size);
     case 4:
         return memory_write32(memory, address, (uint32_t)value, error, error_size);
     case 8:
