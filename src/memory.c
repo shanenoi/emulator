@@ -13,23 +13,6 @@ static bool checked_add_u64(uint64_t left, uint64_t right, uint64_t *out) {
     return true;
 }
 
-static uint64_t align_down(uint64_t value) {
-    return value & ~((uint64_t)EMU_PAGE_SIZE - 1ull);
-}
-
-static bool align_up(uint64_t value, uint64_t *out) {
-    uint64_t mask = (uint64_t)EMU_PAGE_SIZE - 1ull;
-    if ((value & mask) == 0) {
-        *out = value;
-        return true;
-    }
-    if (value > UINT64_MAX - mask) {
-        return false;
-    }
-    *out = (value + mask) & ~mask;
-    return true;
-}
-
 static bool check_bounds(const Memory *memory, uint64_t address, uint64_t width, EmuMemoryFaultKind *fault_kind,
                          char *error, size_t error_size) {
     if (memory == NULL || memory->bytes == NULL) {
@@ -139,18 +122,6 @@ bool memory_init(Memory *memory, size_t size, char *error, size_t error_size) {
         return false;
     }
 
-    memory->page_count = (size + EMU_PAGE_SIZE - 1u) / EMU_PAGE_SIZE;
-    memory->page_permissions = calloc(memory->page_count, sizeof(memory->page_permissions[0]));
-    if (memory->page_permissions == NULL) {
-        snprintf(error, error_size, "failed to allocate %zu memory page descriptors: %s", memory->page_count,
-                 strerror(errno));
-        free(memory->bytes);
-        memory->bytes = NULL;
-        memory->size = 0;
-        memory->page_count = 0;
-        return false;
-    }
-
     /*
      * Early lessons use Memory directly as a simple flat byte array. Keep that
      * teaching path permissive until a program loader explicitly installs the
@@ -166,11 +137,8 @@ void memory_free(Memory *memory) {
     }
 
     free(memory->bytes);
-    free(memory->page_permissions);
     memory->bytes = NULL;
-    memory->page_permissions = NULL;
     memory->size = 0;
-    memory->page_count = 0;
     memory->mapping_count = 0;
     memory->permissions_enabled = false;
 }
@@ -179,9 +147,6 @@ void memory_clear_mappings(Memory *memory) {
     if (memory == NULL) {
         return;
     }
-    if (memory->page_permissions != NULL) {
-        memset(memory->page_permissions, 0, memory->page_count * sizeof(memory->page_permissions[0]));
-    }
     memory->mapping_count = 0;
     memset(memory->mappings, 0, sizeof(memory->mappings));
     memory->permissions_enabled = true;
@@ -189,7 +154,7 @@ void memory_clear_mappings(Memory *memory) {
 
 bool memory_map_range(Memory *memory, uint64_t address, uint64_t length, uint8_t permissions, const char *name,
                       char *error, size_t error_size) {
-    if (memory == NULL || memory->bytes == NULL || memory->page_permissions == NULL) {
+    if (memory == NULL || memory->bytes == NULL) {
         snprintf(error, error_size, "memory is not initialized");
         return false;
     }
@@ -199,6 +164,20 @@ bool memory_map_range(Memory *memory, uint64_t address, uint64_t length, uint8_t
     }
     if ((permissions & (EMU_MAP_READ | EMU_MAP_WRITE | EMU_MAP_EXEC)) == 0) {
         snprintf(error, error_size, "memory map error: mapping must have at least one permission");
+        return false;
+    }
+    if ((address & ((uint64_t)EMU_PAGE_SIZE - 1ull)) != 0) {
+        snprintf(error, error_size,
+                 "memory map error: mapping base must be page-aligned: address=0x%016" PRIx64
+                 " page_size=0x%04x",
+                 address, EMU_PAGE_SIZE);
+        return false;
+    }
+    if ((length & ((uint64_t)EMU_PAGE_SIZE - 1ull)) != 0) {
+        snprintf(error, error_size,
+                 "memory map error: mapping length must be page-sized: length=0x%016" PRIx64
+                 " page_size=0x%04x",
+                 length, EMU_PAGE_SIZE);
         return false;
     }
 
@@ -211,27 +190,14 @@ bool memory_map_range(Memory *memory, uint64_t address, uint64_t length, uint8_t
         return false;
     }
 
-    uint64_t map_start = align_down(address);
-    uint64_t map_end = 0;
-    if (!align_up(end, &map_end) || map_end > (uint64_t)memory->size) {
-        snprintf(error, error_size,
-                 "memory map error: aligned mapping outside memory: address=0x%016" PRIx64 " length=0x%016" PRIx64,
-                 address, length);
-        return false;
-    }
-
     if (memory->mapping_count >= EMU_MAX_MEMORY_MAPPINGS) {
         snprintf(error, error_size, "memory map error: too many mappings; max=%u", EMU_MAX_MEMORY_MAPPINGS);
         return false;
     }
 
-    bool allow_stack_overlay = name != NULL && strcmp(name, "stack") == 0;
     for (size_t i = 0; i < memory->mapping_count; i++) {
         const EmuMemoryMapping *existing = &memory->mappings[i];
         if (address < existing->start + existing->size && existing->start < end) {
-            if (allow_stack_overlay) {
-                continue;
-            }
             snprintf(error, error_size,
                      "memory map error: overlapping mappings are not allowed: 0x%016" PRIx64
                      "-0x%016" PRIx64 " overlaps 0x%016" PRIx64 "-0x%016" PRIx64 " name=%s",
@@ -239,12 +205,6 @@ bool memory_map_range(Memory *memory, uint64_t address, uint64_t length, uint8_t
                      existing->name[0] == '\0' ? "mapping" : existing->name);
             return false;
         }
-    }
-
-    size_t first_page = (size_t)(map_start / EMU_PAGE_SIZE);
-    size_t page_count = (size_t)((map_end - map_start) / EMU_PAGE_SIZE);
-    for (size_t page = 0; page < page_count; page++) {
-        memory->page_permissions[first_page + page] |= permissions;
     }
 
     EmuMemoryMapping *mapping = &memory->mappings[memory->mapping_count++];

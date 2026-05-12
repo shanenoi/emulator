@@ -71,10 +71,12 @@ Policy details:
 
 - zero-length checks are treated as successful no-ops after ordinary bounds
   validation.
-- empty input files are rejected by the loader before mapping.
+- empty raw input files still map one executable teaching page and then fail at
+  decode time if execution reaches zero-filled bytes.
 - true overlapping mapping ranges are rejected.
-- adjacent byte ranges are allowed, preserving the earlier ELF/Mach-O lesson
-  fixtures.
+- mappings are page-aligned and page-sized; adjacent page ranges are allowed.
+- loader metadata can describe segments smaller than one page, but v1.2 rounds
+  the protected mapping outward to whole pages and zero-fills padding.
 - loaders keep the entry segment executable for compatibility with earlier
   generated fixtures; future stricter fixtures can turn that compatibility
   policy into a deliberate negative test.

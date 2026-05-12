@@ -145,6 +145,14 @@ def write_elf_fixtures(out: Path) -> None:
         ],
     )
     elf(out / "data_entry.elf", 0x3000, [{"offset": 0x100, "vaddr": 0x3000, "flags": PF_R | PF_W, "data": code(hlt0())}])
+    elf(
+        out / "zero_permission_data.elf",
+        0x1000,
+        [
+            {"offset": 0x100, "vaddr": 0x1000, "flags": PF_R | PF_X, "data": text},
+            {"offset": 0x200, "vaddr": 0x5000, "flags": 0, "data": b"X"},
+        ],
+    )
     elf(out / "write_text.elf", 0x1000, [{"offset": 0x100, "vaddr": 0x1000, "flags": PF_R | PF_X, "data": mov_abs_x(1, 0x1000) + code(movz_x(0, 0x41), str_x(0, 1), hlt0())}])
     # A zero-memory segment should be accepted as a no-op segment by the loader if present after executable text.
     elf(

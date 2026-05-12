@@ -98,7 +98,7 @@ require_contains "$TMP_DIR/stdout.txt" "emulator debug"
 run_capture 7 ./emulator run "$TMP_DIR/exit7_raw.bin"
 require_not_contains "$TMP_DIR/stderr.txt" "error:"
 
-# TC-V12-EDGE-012: raw mapping is exact; page padding remains unmapped.
+# TC-V12-EDGE-012: raw mappings are rounded to page boundaries, but the next page remains unmapped.
 run_capture 1 ./emulator run "$TMP_DIR/execute_unmapped.bin"
 require_contains "$TMP_DIR/stderr.txt" "unmapped access"
 

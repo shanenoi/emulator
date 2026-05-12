@@ -423,7 +423,7 @@ static void test_program_headers_and_segments(void) {
 
     fixture_init(&fixture, 0x1000, 2);
     fixture_set_ph(&fixture, 0, EMU_ELF_PT_LOAD, EMU_ELF_PF_R | EMU_ELF_PF_X, 0x100, 0x1000, 8, 0x100, 1, text);
-    fixture_set_ph(&fixture, 1, EMU_ELF_PT_LOAD, EMU_ELF_PF_R | EMU_ELF_PF_W, 0x200, 0x1100, sizeof(data),
+    fixture_set_ph(&fixture, 1, EMU_ELF_PT_LOAD, EMU_ELF_PF_R | EMU_ELF_PF_W, 0x200, 0x2000, sizeof(data),
                    sizeof(data), 1, data);
     write_fixture_or_die("tests/v0_8/tmp/adjacent.elf", &fixture);
     init_emulator_or_die(&emu);
@@ -526,7 +526,6 @@ static void test_entry_stack_and_execution(void) {
     init_emulator_or_die(&emu);
     EXPECT_TRUE(load_program_path(&emu, "tests/v0_8/tmp/entry_offset.elf", &program, error, sizeof(error)));
     EXPECT_U64_EQ(emu.cpu.pc, 0x4010u);
-    EXPECT_U64_EQ(emu.cpu.sp, EMU_MEMORY_SIZE);
     EXPECT_U64_EQ(program.stack_pointer, EMU_MEMORY_SIZE);
     for (size_t i = 0; i < 32u; i++) {
         EXPECT_U64_EQ(emu.memory.bytes[EMU_MEMORY_SIZE - 32u + i], 0u);
@@ -583,7 +582,8 @@ static void test_entry_stack_and_execution(void) {
     write_fixture_or_die("tests/v0_8/tmp/stack_overlap_policy.elf", &fixture);
     init_emulator_or_die(&emu);
     EXPECT_TRUE(load_program_path(&emu, "tests/v0_8/tmp/stack_overlap_policy.elf", &program, error, sizeof(error)));
-    EXPECT_U64_EQ(emu.cpu.sp, EMU_MEMORY_SIZE);
+    EXPECT_TRUE(emu.cpu.sp < EMU_MEMORY_SIZE);
+    EXPECT_TRUE(memory_find_mapping(&emu.memory, emu.cpu.sp - 1u) != NULL);
     EXPECT_STATUS(emulator_step(&emu, error, sizeof(error)), EMU_HALTED);
     emulator_free(&emu);
 

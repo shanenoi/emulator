@@ -179,8 +179,6 @@ typedef struct {
 typedef struct {
     uint8_t *bytes;
     size_t size;
-    uint8_t *page_permissions;
-    size_t page_count;
     EmuMemoryMapping mappings[EMU_MAX_MEMORY_MAPPINGS];
     size_t mapping_count;
     bool permissions_enabled;

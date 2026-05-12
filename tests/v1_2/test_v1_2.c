@@ -7,6 +7,8 @@
 
 #define TMP "tests/v1_2/tmp/"
 #define OP_HLT_0 0xd4400000u
+#define OP_STP_X0_X1_X2 0xa9000440u
+#define OP_LDP_X0_X1_X2 0xa9400440u
 
 static int tests_run = 0;
 static int tests_failed = 0;
@@ -75,17 +77,22 @@ static void test_page_mapping_model(void) {
     EXPECT_SIZE_EQ(memory.mapping_count, 0u);
 
     EXPECT_TRUE(memory_map_range(&memory, 0x1000u, EMU_PAGE_SIZE, EMU_MAP_READ, "r", error, sizeof(error)));
-    EXPECT_FALSE(memory_map_range(&memory, 0x1001u, 16u, EMU_MAP_WRITE, "overlap", error, sizeof(error)));
+    EXPECT_FALSE(memory_map_range(&memory, 0x1001u, EMU_PAGE_SIZE, EMU_MAP_WRITE, "unaligned-base", error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "page-aligned");
+    EXPECT_FALSE(memory_map_range(&memory, 0x2000u, 7u, EMU_MAP_WRITE, "unaligned-length", error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "page-sized");
+    EXPECT_FALSE(memory_map_range(&memory, 0x1000u, EMU_PAGE_SIZE, EMU_MAP_WRITE, "overlap", error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "overlapping");
     EXPECT_SIZE_EQ(memory.mapping_count, 1u);
 
     EXPECT_TRUE(memory_map_range(&memory, 0x2000u, EMU_PAGE_SIZE, EMU_MAP_READ | EMU_MAP_WRITE, "rw", error, sizeof(error)));
     EXPECT_TRUE(memory_map_range(&memory, 0x3000u, EMU_PAGE_SIZE, EMU_MAP_READ | EMU_MAP_EXEC, "rx", error, sizeof(error)));
-    EXPECT_TRUE(memory_map_range(&memory, 0x4001u, 7u, EMU_MAP_EXEC, "unaligned-exact", error, sizeof(error)));
+    EXPECT_TRUE(memory_map_range(&memory, 0x4000u, EMU_PAGE_SIZE, EMU_MAP_EXEC, "x", error, sizeof(error)));
     EXPECT_SIZE_EQ(memory.mapping_count, 4u);
     EXPECT_TRUE(memory_find_mapping(&memory, 0x4001u) != NULL);
-    EXPECT_TRUE(memory_find_mapping(&memory, 0x4000u) == NULL);
-    EXPECT_TRUE(memory_find_mapping(&memory, 0x4008u) == NULL);
+    EXPECT_TRUE(memory_find_mapping(&memory, 0x4000u) != NULL);
+    EXPECT_TRUE(memory_find_mapping(&memory, 0x4fffu) != NULL);
+    EXPECT_TRUE(memory_find_mapping(&memory, 0x5000u) == NULL);
 
     const EmuMemoryMapping *mapping = memory_find_mapping(&memory, 0x2000u);
     EXPECT_TRUE(mapping != NULL);
@@ -108,9 +115,9 @@ static void test_page_mapping_model(void) {
     EXPECT_STR_CONTAINS(error, "zero-length");
     EXPECT_FALSE(memory_map_range(&memory, 0x5000u, EMU_PAGE_SIZE, 0u, "none", error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "at least one permission");
-    EXPECT_FALSE(memory_map_range(&memory, EMU_MEMORY_SIZE - 16u, 32u, EMU_MAP_READ, "oob", error, sizeof(error)));
+    EXPECT_FALSE(memory_map_range(&memory, EMU_MEMORY_SIZE, EMU_PAGE_SIZE, EMU_MAP_READ, "oob", error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "outside memory");
-    EXPECT_FALSE(memory_map_range(&memory, UINT64_MAX - 4u, 16u, EMU_MAP_READ, "overflow", error, sizeof(error)));
+    EXPECT_FALSE(memory_map_range(&memory, UINT64_MAX - EMU_PAGE_SIZE + 1u, EMU_PAGE_SIZE, EMU_MAP_READ, "overflow", error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "outside memory");
 
     for (size_t i = 0; i < EMU_MAX_MEMORY_MAPPINGS - 4u; i++) {
@@ -119,6 +126,56 @@ static void test_page_mapping_model(void) {
     }
     EXPECT_FALSE(memory_map_range(&memory, 0x25000u, EMU_PAGE_SIZE, EMU_MAP_READ, "too-many", error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "too many mappings");
+
+    memory_free(&memory);
+}
+
+static void test_cpu_fault_ordering(void) {
+    /* TC-V12-CPU-003/004/007: faults happen before register write-back or partial pair-store writes. */
+    Cpu cpu;
+    Memory memory;
+    char error[512];
+
+    init_memory_or_die(&memory);
+    EXPECT_TRUE(memory_map_range(&memory, 0x1000u, EMU_PAGE_SIZE, EMU_MAP_READ | EMU_MAP_EXEC, "text", error, sizeof(error)));
+    EXPECT_TRUE(memory_map_range(&memory, 0x5000u, EMU_PAGE_SIZE, EMU_MAP_READ | EMU_MAP_WRITE, "pair-a", error, sizeof(error)));
+    EXPECT_TRUE(memory_map_range(&memory, 0x6000u, EMU_PAGE_SIZE, EMU_MAP_READ, "pair-b", error, sizeof(error)));
+    EXPECT_TRUE(memory_map_range(&memory, 0x7000u, EMU_PAGE_SIZE, EMU_MAP_EXEC, "execute-only", error, sizeof(error)));
+
+    memory.bytes[0x1000u] = (uint8_t)(OP_STP_X0_X1_X2 & 0xffu);
+    memory.bytes[0x1001u] = (uint8_t)((OP_STP_X0_X1_X2 >> 8u) & 0xffu);
+    memory.bytes[0x1002u] = (uint8_t)((OP_STP_X0_X1_X2 >> 16u) & 0xffu);
+    memory.bytes[0x1003u] = (uint8_t)((OP_STP_X0_X1_X2 >> 24u) & 0xffu);
+    cpu_init(&cpu, 0x1000u, EMU_MEMORY_SIZE);
+    cpu.x[0] = 0xaaaaaaaaaaaaaaaaull;
+    cpu.x[1] = 0xbbbbbbbbbbbbbbbbull;
+    cpu.x[2] = 0x5ff8u;
+    memset(&memory.bytes[0x5ff8u], 0x11, 16u);
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_ERROR);
+    EXPECT_STR_CONTAINS(error, "write permission denied");
+    EXPECT_U64_EQ(cpu.pc, 0x1000u);
+    for (size_t i = 0; i < 16u; i++) {
+        EXPECT_U64_EQ(memory.bytes[0x5ff8u + i], 0x11u);
+    }
+
+    memory.bytes[0x1000u] = (uint8_t)(OP_LDP_X0_X1_X2 & 0xffu);
+    memory.bytes[0x1001u] = (uint8_t)((OP_LDP_X0_X1_X2 >> 8u) & 0xffu);
+    memory.bytes[0x1002u] = (uint8_t)((OP_LDP_X0_X1_X2 >> 16u) & 0xffu);
+    memory.bytes[0x1003u] = (uint8_t)((OP_LDP_X0_X1_X2 >> 24u) & 0xffu);
+    cpu_init(&cpu, 0x1000u, EMU_MEMORY_SIZE);
+    cpu.x[0] = 0x1234u;
+    cpu.x[1] = 0x5678u;
+    cpu.x[2] = 0x6ff8u;
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_ERROR);
+    EXPECT_STR_CONTAINS(error, "read permission denied");
+    EXPECT_U64_EQ(cpu.x[0], 0x1234u);
+    EXPECT_U64_EQ(cpu.x[1], 0x5678u);
+    EXPECT_U64_EQ(cpu.pc, 0x1000u);
+
+    memory.bytes[0x7000u] = 0xffu;
+    uint8_t byte = 0;
+    EXPECT_FALSE(memory_read8(&memory, 0x7000u, &byte, error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "read permission denied");
 
     memory_free(&memory);
 }
@@ -296,6 +353,11 @@ static void test_elf_and_macho_loader_permissions(void) {
     emulator_free(&emu);
 
     init_emulator_or_die(&emu);
+    EXPECT_FALSE(load_fixture(&emu, TMP "zero_permission_data.elf", &program, error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "at least one permission");
+    emulator_free(&emu);
+
+    init_emulator_or_die(&emu);
     EXPECT_TRUE(load_fixture(&emu, TMP "stdout_data.macho", &program, error, sizeof(error)));
     EXPECT_U64_EQ(program.format, EMU_PROGRAM_MACHO64);
     const EmuMemoryMapping *mtext = memory_find_mapping(&emu.memory, 0x1000u);
@@ -315,6 +377,11 @@ static void test_elf_and_macho_loader_permissions(void) {
     emulator_free(&emu);
 
     init_emulator_or_die(&emu);
+    EXPECT_FALSE(load_fixture(&emu, TMP "zero_permission_data.macho", &program, error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "at least one permission");
+    emulator_free(&emu);
+
+    init_emulator_or_die(&emu);
     EXPECT_TRUE(load_fixture(&emu, TMP "adjacent.macho", &program, error, sizeof(error)));
     EXPECT_SIZE_EQ(program.segment_count, 2u);
     emulator_free(&emu);
@@ -328,6 +395,7 @@ static void test_elf_and_macho_loader_permissions(void) {
 int main(void) {
     test_page_mapping_model();
     test_access_enforcement();
+    test_cpu_fault_ordering();
     test_raw_loader_stack_and_cpu_faults();
     test_elf_and_macho_loader_permissions();
 

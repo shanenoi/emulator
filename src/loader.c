@@ -152,6 +152,121 @@ static bool checked_u64_add(uint64_t left, uint64_t right, uint64_t *out) {
     return true;
 }
 
+static uint64_t align_down_to_page(uint64_t value) {
+    return value & ~((uint64_t)EMU_PAGE_SIZE - 1ull);
+}
+
+static bool align_up_to_page(uint64_t value, uint64_t *out) {
+    uint64_t mask = (uint64_t)EMU_PAGE_SIZE - 1ull;
+    if ((value & mask) == 0) {
+        *out = value;
+        return true;
+    }
+    if (value > UINT64_MAX - mask) {
+        return false;
+    }
+    *out = (value + mask) & ~mask;
+    return true;
+}
+
+static bool page_range_for_segment(uint64_t vaddr, uint64_t mem_size, uint64_t *page_start, uint64_t *page_size) {
+    uint64_t segment_end = 0;
+    uint64_t page_end = 0;
+    if (!checked_u64_add(vaddr, mem_size, &segment_end)) {
+        return false;
+    }
+    *page_start = align_down_to_page(vaddr);
+    if (!align_up_to_page(segment_end, &page_end) || page_end < *page_start) {
+        return false;
+    }
+    *page_size = page_end - *page_start;
+    return true;
+}
+
+static uint64_t choose_stack_top_below_mappings(const Memory *memory) {
+    uint64_t stack_span = EMU_STACK_SIZE + (uint64_t)EMU_STACK_GUARD_PAGES * EMU_PAGE_SIZE;
+    uint64_t stack_top = (uint64_t)memory->size;
+    bool changed = true;
+
+    while (changed) {
+        changed = false;
+        uint64_t stack_floor = stack_top >= stack_span ? stack_top - stack_span : 0;
+        for (size_t i = 0; i < memory->mapping_count; i++) {
+            const EmuMemoryMapping *mapping = &memory->mappings[i];
+            uint64_t mapping_end = mapping->start + mapping->size;
+            if (stack_floor < mapping_end && mapping->start < stack_top) {
+                stack_top = align_down_to_page(mapping->start);
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    return stack_top;
+}
+
+static bool map_stack_for_program(Emulator *emu, EmuLoadedProgram *program, const char *prefix, char *error,
+                                  size_t error_size) {
+    program->stack_pointer = choose_stack_top_below_mappings(&emu->memory);
+    if (!memory_map_stack(&emu->memory, program->stack_pointer, EMU_STACK_SIZE, error, error_size)) {
+        char detail[512];
+        snprintf(detail, sizeof(detail), "%s", error);
+        snprintf(error, error_size, "%s: %s", prefix, detail);
+        return false;
+    }
+    return true;
+}
+
+static bool loader_map_pages(Memory *memory, uint64_t address, uint64_t length, uint8_t permissions,
+                             const char *name, char *error, size_t error_size) {
+    if ((permissions & (EMU_MAP_READ | EMU_MAP_WRITE | EMU_MAP_EXEC)) == 0) {
+        snprintf(error, error_size, "memory map error: mapping must have at least one permission");
+        return false;
+    }
+
+    uint64_t end = 0;
+    if (!checked_u64_add(address, length, &end)) {
+        snprintf(error, error_size,
+                 "memory map error: mapping outside memory: address=0x%016" PRIx64 " length=0x%016" PRIx64,
+                 address, length);
+        return false;
+    }
+
+    for (size_t i = 0; i < memory->mapping_count; i++) {
+        EmuMemoryMapping *existing = &memory->mappings[i];
+        uint64_t existing_end = existing->start + existing->size;
+        bool overlaps = address < existing_end && existing->start < end;
+        if (!overlaps) {
+            continue;
+        }
+        if (strcmp(existing->name, name) != 0) {
+            break;
+        }
+
+        uint64_t merged_start = address < existing->start ? address : existing->start;
+        uint64_t merged_end = end > existing_end ? end : existing_end;
+        for (size_t j = 0; j < memory->mapping_count; j++) {
+            const EmuMemoryMapping *other = &memory->mappings[j];
+            uint64_t other_end = other->start + other->size;
+            if (j != i && merged_start < other_end && other->start < merged_end) {
+                snprintf(error, error_size,
+                         "memory map error: overlapping mappings are not allowed: 0x%016" PRIx64
+                         "-0x%016" PRIx64 " overlaps 0x%016" PRIx64 "-0x%016" PRIx64 " name=%s",
+                         merged_start, merged_end, other->start, other_end,
+                         other->name[0] == '\0' ? "mapping" : other->name);
+                return false;
+            }
+        }
+
+        existing->start = merged_start;
+        existing->size = merged_end - merged_start;
+        existing->permissions |= permissions;
+        return true;
+    }
+
+    return memory_map_range(memory, address, length, permissions, name, error, error_size);
+}
+
 static bool range_fits_file(uint64_t offset, uint64_t length, size_t file_size) {
     uint64_t end = 0;
     return checked_u64_add(offset, length, &end) && end <= (uint64_t)file_size;
@@ -453,18 +568,23 @@ static bool load_elf64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t fi
         if (e_entry >= segment->vaddr && e_entry < segment->vaddr + segment->mem_size) {
             permissions |= EMU_MAP_EXEC;
         }
-        if (!memory_map_range(&emu->memory, segment->vaddr, segment->mem_size, permissions, "elf:PT_LOAD", error,
-                              error_size)) {
+        uint64_t map_start = 0;
+        uint64_t map_size = 0;
+        if (!page_range_for_segment(segment->vaddr, segment->mem_size, &map_start, &map_size)) {
+            snprintf(error, error_size,
+                     "ELF loader error: PT_LOAD page mapping overflow: vaddr=0x%016" PRIx64
+                     " memsz=0x%016" PRIx64,
+                     segment->vaddr, segment->mem_size);
+            return false;
+        }
+        if (!loader_map_pages(&emu->memory, map_start, map_size, permissions, "elf:PT_LOAD", error, error_size)) {
             char detail[512];
             snprintf(detail, sizeof(detail), "%s", error);
             snprintf(error, error_size, "ELF loader error: %s", detail);
             return false;
         }
     }
-    if (!memory_map_stack(&emu->memory, program->stack_pointer, EMU_STACK_SIZE, error, error_size)) {
-        char detail[512];
-        snprintf(detail, sizeof(detail), "%s", error);
-        snprintf(error, error_size, "ELF loader error: %s", detail);
+    if (!map_stack_for_program(emu, program, "ELF loader error", error, error_size)) {
         return false;
     }
 
@@ -827,17 +947,23 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
         }
         char name[32];
         snprintf(name, sizeof(name), "macho:%s", segment->name[0] == '\0' ? "segment" : segment->name);
-        if (!memory_map_range(&emu->memory, segment->vaddr, segment->mem_size, permissions, name, error, error_size)) {
+        uint64_t map_start = 0;
+        uint64_t map_size = 0;
+        if (!page_range_for_segment(segment->vaddr, segment->mem_size, &map_start, &map_size)) {
+            snprintf(error, error_size,
+                     "Mach-O loader error: segment page mapping overflow: vmaddr=0x%016" PRIx64
+                     " vmsize=0x%016" PRIx64,
+                     segment->vaddr, segment->mem_size);
+            return false;
+        }
+        if (!loader_map_pages(&emu->memory, map_start, map_size, permissions, name, error, error_size)) {
             char detail[512];
             snprintf(detail, sizeof(detail), "%s", error);
             snprintf(error, error_size, "Mach-O loader error: %s", detail);
             return false;
         }
     }
-    if (!memory_map_stack(&emu->memory, program->stack_pointer, EMU_STACK_SIZE, error, error_size)) {
-        char detail[512];
-        snprintf(detail, sizeof(detail), "%s", error);
-        snprintf(error, error_size, "Mach-O loader error: %s", detail);
+    if (!map_stack_for_program(emu, program, "Mach-O loader error", error, error_size)) {
         return false;
     }
 
@@ -875,25 +1001,28 @@ bool emulator_load_program(Emulator *emu, const char *path, EmuLoadedProgram *pr
         program->entry = EMU_LOAD_ADDRESS;
         program->stack_pointer = emu->memory.size;
         memory_clear_mappings(&emu->memory);
-        size_t raw_mapping_size = (file_size + 3u) & ~(size_t)3u;
-        if (raw_mapping_size < file_size) {
+        uint64_t raw_instruction_size = (uint64_t)((file_size + 3u) & ~(size_t)3u);
+        uint64_t raw_end = 0;
+        uint64_t raw_mapping_size = 0;
+        if ((size_t)raw_instruction_size < file_size) {
             snprintf(error, error_size, "loader error: raw mapping size overflow for file size 0x%zx", file_size);
             ok = false;
-        } else if (raw_mapping_size > emu->memory.size - (size_t)EMU_LOAD_ADDRESS) {
+        } else if (!checked_u64_add(EMU_LOAD_ADDRESS, raw_instruction_size, &raw_end) ||
+                   !align_up_to_page(raw_end, &raw_mapping_size) || raw_mapping_size < EMU_LOAD_ADDRESS) {
+            snprintf(error, error_size, "loader error: raw page mapping size overflow for file size 0x%zx", file_size);
+            ok = false;
+        } else if (raw_mapping_size - EMU_LOAD_ADDRESS > emu->memory.size - (size_t)EMU_LOAD_ADDRESS) {
             snprintf(error, error_size,
                      "loader error: file size 0x%zx does not fit at load address 0x%016llx; available=0x%zx",
                      file_size, (unsigned long long)EMU_LOAD_ADDRESS, emu->memory.size - (size_t)EMU_LOAD_ADDRESS);
             ok = false;
-        } else if (!memory_map_range(&emu->memory, EMU_LOAD_ADDRESS, (uint64_t)raw_mapping_size,
+        } else if (!memory_map_range(&emu->memory, EMU_LOAD_ADDRESS, raw_mapping_size - EMU_LOAD_ADDRESS,
                                      EMU_MAP_READ | EMU_MAP_EXEC, "raw:program", error, error_size)) {
             char detail[512];
             snprintf(detail, sizeof(detail), "%s", error);
             snprintf(error, error_size, "loader error: %s", detail);
             ok = false;
-        } else if (!memory_map_stack(&emu->memory, program->stack_pointer, EMU_STACK_SIZE, error, error_size)) {
-            char detail[512];
-            snprintf(detail, sizeof(detail), "%s", error);
-            snprintf(error, error_size, "loader error: %s", detail);
+        } else if (!map_stack_for_program(emu, program, "loader error", error, error_size)) {
             ok = false;
         } else {
             memcpy(&emu->memory.bytes[EMU_LOAD_ADDRESS], bytes, file_size);

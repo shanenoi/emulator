@@ -342,8 +342,12 @@ def generate_suite(output_dir: Path) -> None:
         Segment("__DATA", TEXT_VMADDR + len(exit_code(0)) - 1, b"X", maxprot=VM_PROT_READ, initprot=VM_PROT_READ),
     ]).build())
     write(output_dir / "adjacent.macho", MachOImage([
+        Segment("__TEXT", TEXT_VMADDR, exit_code(0), vmsize=0x1000),
+        Segment("__DATA", TEXT_VMADDR + 0x1000, b"X", maxprot=VM_PROT_READ, initprot=VM_PROT_READ),
+    ]).build())
+    write(output_dir / "zero_permission_data.macho", MachOImage([
         Segment("__TEXT", TEXT_VMADDR, exit_code(0)),
-        Segment("__DATA", TEXT_VMADDR + len(exit_code(0)), b"X", maxprot=VM_PROT_READ, initprot=VM_PROT_READ),
+        Segment("__DATA", DATA_VMADDR, b"X", maxprot=0, initprot=0),
     ]).build())
     write(output_dir / "zero_sized_segment.macho", MachOImage([
         Segment("__ZERO", 0x2000, b"", vmsize=0, maxprot=VM_PROT_READ, initprot=VM_PROT_READ),

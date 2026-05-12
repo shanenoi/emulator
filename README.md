@@ -148,8 +148,8 @@ Implemented now:
   - loads `PT_LOAD` segments at their guest virtual addresses
   - zero-fills segment memory when `p_memsz > p_filesz`, which is how simple `.bss` works
   - records segment bounds and permissions for inspection and v1.2 page mapping
-  - accepts in-bounds `PT_LOAD` segment addresses without requiring ELF page alignment; instruction fetch still requires 4-byte-aligned `pc`
-  - v1.2 maps loaded ELF segments into the page-permission model and adds a mapped stack region
+  - accepts in-bounds `PT_LOAD` segment addresses and records their exact segment bounds; v1.2 rounds the protected mapping to page boundaries while instruction fetch still requires 4-byte-aligned `pc`
+  - v1.2 maps loaded ELF segments into the page-permission model, zero-fills page padding, and adds a mapped stack region
   - preserves raw `.bin` behavior for v0.1 through v0.7 examples
   - ELF examples live in `examples/v0_8/`
 - v0.9 tiny freestanding C support:
@@ -185,7 +185,7 @@ Implemented now:
   - adds memory mappings with stable `r--`, `rw-`, `r-x`, and `rwx` permission labels
   - installs explicit loader-created mappings for raw, ELF64, and Mach-O programs
   - maps a 64 KiB `rw-` stack below the top of guest memory and prints the page below it as a `---` stack guard
-  - rejects true overlapping mapping ranges while preserving adjacent byte ranges from earlier lessons
+  - requires page-aligned/page-sized mappings, rejects true page-range overlaps, and preserves adjacent page ranges from earlier lessons
   - checks instruction fetches through execute permission and data loads/stores through read/write permission helpers
   - checks fake `write` syscall buffers through the readable-memory path
   - extends `emulator info <program>` with a `mappings:` section
@@ -391,7 +391,7 @@ This is a stable learning emulator, not a complete ARM64/Linux emulator. The cur
 - `printf`, `malloc`, or libc,
 - real Linux syscall handling beyond the fake `write = 64` and `exit = 93` ABI,
 - `argv`, `envp`, or auxiliary-vector setup,
-- MMU/page tables or memory protection enforcement,
+- real ARM MMU/page tables beyond the v1.2 teaching permission model,
 - floating point, SIMD, or NEON,
 - normal macOS/iOS Mach-O applications, fat/universal Mach-O slice selection, `dyld`, shared libraries, rebasing/binding, code signing behavior, Objective-C/Swift runtimes, and real Darwin syscalls.
 
@@ -1023,7 +1023,7 @@ Added memory model pieces:
 - Read/write/execute permission labels.
 - A mapped `rw-` stack region below the top of guest memory.
 - A visible `---` stack-guard page below the stack mapping.
-- True mapping-overlap rejection, while adjacent byte ranges remain allowed.
+- Page-aligned/page-sized mappings with true mapping-overlap rejection; adjacent page ranges remain allowed.
 - Deterministic generated examples in `examples/v1_2/`.
 - Structured memory-fault categories used by v1.2 tests.
 - Instruction fetch checks through execute permission.

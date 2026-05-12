@@ -88,7 +88,7 @@ static bool memory_read_width(const Memory *memory, uint64_t address, uint8_t ac
         *out = value8;
         return true;
     case 2:
-        if (!check_data_range(memory, address, 2, error, error_size)) {
+        if (!memory_check_read(memory, address, 2, error, error_size)) {
             return false;
         }
         *out = (uint64_t)memory->bytes[address] | ((uint64_t)memory->bytes[address + 1u] << 8u);
@@ -117,7 +117,7 @@ static bool memory_write_width(Memory *memory, uint64_t address, uint8_t access_
     case 1:
         return memory_write8(memory, address, (uint8_t)value, error, error_size);
     case 2:
-        if (!check_data_range(memory, address, 2, error, error_size)) {
+        if (!memory_check_write(memory, address, 2, error, error_size)) {
             return false;
         }
         memory->bytes[address] = (uint8_t)(value & 0xffu);
@@ -1064,7 +1064,7 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
             add_instruction_context(error, error_size, current_pc, opcode);
             return EMU_ERROR;
         }
-        if (!check_data_range(memory, address, 16, error, error_size)) {
+        if (!memory_check_read(memory, address, 16, error, error_size)) {
             add_instruction_context(error, error_size, current_pc, opcode);
             return EMU_ERROR;
         }
@@ -1093,7 +1093,7 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
             add_instruction_context(error, error_size, current_pc, opcode);
             return EMU_ERROR;
         }
-        if (!check_data_range(memory, address, 16, error, error_size)) {
+        if (!memory_check_write(memory, address, 16, error, error_size)) {
             add_instruction_context(error, error_size, current_pc, opcode);
             return EMU_ERROR;
         }
