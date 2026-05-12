@@ -717,7 +717,8 @@ bool cpu_calculate_memory_access(const Cpu *cpu, const EmuDecodedInstruction *in
         break;
     }
 
-    if (!check_data_range(memory, access_address, instruction->access_size, error, error_size)) {
+    if (memory_find_device(memory, access_address) == NULL &&
+        !check_data_range(memory, access_address, instruction->access_size, error, error_size)) {
         return false;
     }
 

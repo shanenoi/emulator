@@ -43,10 +43,11 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v1.0 Lesson — Stable Learning Emulator](lessons/v1.0-stable-learning-emulator.md)
 - [v1.1 Lesson — Mach-O Loader](lessons/v1.1-mach-o-loader.md)
 - [v1.2 Lesson — Virtual Memory and Page Permissions](lessons/v1.2-virtual-memory.md)
+- [v1.3 Lesson — Memory-Mapped Devices](lessons/v1.3-memory-mapped-devices.md)
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, and the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**. v1.2 adds non-overlapping loader mapping ranges, read/write/execute permission checks, stack mapping with a visible guard page, deterministic permission-fault examples, structured memory-fault categories, mapping inspection, and v1.2 unit/CLI/debugger/docs coverage.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, and the initial implementation for **v1.3 — Memory-Mapped Devices**. v1.3 adds a fixed device bus, UART/timer/random device ranges, deterministic device-register behavior, and learner-facing documentation/examples; dedicated v1.3 coverage is the next testing milestone.
 
 Implemented now:
 
@@ -62,7 +63,7 @@ Implemented now:
 ./emulator debug <program>
 ```
 
-- Fixed 1 MiB guest memory with v1.2 page-mapping metadata for loaded programs.
+- Fixed 1 MiB guest memory with v1.2 page-mapping metadata for loaded programs, plus v1.3 fixed MMIO device ranges outside RAM.
 - Raw binary load address: `0x1000`.
 - Raw binary initial `pc`: `0x1000`.
 - ELF64 initial `pc`: the ELF header entry point.
@@ -194,6 +195,18 @@ Implemented now:
   - adds deterministic generated v1.2 examples in `examples/v1_2/`
   - documents the current v1.2 behavior in `examples/v1_2/README.md` and `lessons/v1.2-virtual-memory.md`
   - includes v1.2 unit, CLI, debugger, docs, clean, and fresh-archive release tests
+- v1.3 memory-mapped-device teaching profile:
+  - adds fixed device ranges for UART, timer, and deterministic random devices
+  - routes CPU data loads/stores through RAM or device-register handlers
+  - keeps instruction fetch restricted to executable RAM mappings
+  - supports byte writes to UART DATA at `0x09000000` for stdout output
+  - supports word reads from UART STATUS at `0x09000004`
+  - supports deterministic timer word reads and a timer reset register
+  - supports deterministic pseudo-random word reads and a seed register
+  - reports invalid device offsets, unsupported widths, and boundary crossings as deterministic device faults
+  - extends `info` and debugger `maps` / `map <address>` output with device ranges
+  - adds deterministic generated v1.3 examples in `examples/v1_3/`
+  - documents the current v1.3 behavior in `examples/v1_3/README.md` and `lessons/v1.3-memory-mapped-devices.md`
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -1066,17 +1079,20 @@ Definition of done for the v1.2 teaching profile:
 
 **Goal:** introduce simple hardware-device emulation.
 
-Add device bus:
+Planning reference: [v1.3 Test Plan — Memory-Mapped Devices](docs/test-plan-v1.3.md). The initial implementation and learner-facing examples/docs are in place; the v1.3 test suite is still the next step.
+
+Added device bus:
 
 - Route memory accesses to RAM or devices.
 - Register devices at fixed address ranges.
-- Provide clear errors for unmapped device addresses.
+- Provide clear errors for invalid device offsets, unsupported widths, and boundary-crossing accesses.
+- Keep instruction fetch on executable RAM only; devices are data-access targets, not code.
 
 Initial devices:
 
-- UART console.
-- Timer.
-- Random-number device.
+- UART console at `0x09000000`.
+- Deterministic timer at `0x09010000`.
+- Deterministic random-number device at `0x09020000`.
 
 Suggested memory map:
 
@@ -1093,13 +1109,38 @@ UART behavior:
 
 ```text
 write byte to 0x09000000 -> print character
+read word from 0x09000004 -> status bits; bit 0 means writable
+```
+
+Timer behavior:
+
+```text
+read word from 0x09010000 -> low 32 bits of deterministic tick counter
+read word from 0x09010004 -> high 32 bits of deterministic tick counter
+write word to 0x09010008 -> reset deterministic tick counter
+```
+
+Random behavior:
+
+```text
+read word from 0x09020000 -> next deterministic pseudo-random value
+write word to 0x09020004 -> set deterministic pseudo-random seed
+```
+
+Generate and run the v1.3 UART example with:
+
+```sh
+make examples/v1_3/mmio_uart_hello.bin
+./emulator run examples/v1_3/mmio_uart_hello.bin
+./emulator info examples/v1_3/mmio_uart_hello.bin
 ```
 
 Definition of done:
 
 - A program can print through memory-mapped UART without using fake syscalls.
-- Device reads/writes are tested.
-- The memory map is documented.
+- Device reads/writes have deterministic behavior.
+- The memory map is documented in `lessons/v1.3-memory-mapped-devices.md` and `examples/v1_3/README.md`.
+- Device reads/writes are tested in the upcoming v1.3 test pass.
 
 ### v1.4 — Toy Kernel Mode
 

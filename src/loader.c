@@ -990,6 +990,8 @@ bool emulator_load_program(Emulator *emu, const char *path, EmuLoadedProgram *pr
         return false;
     }
 
+    memory_reset_devices(&emu->memory);
+
     bool ok = false;
     if (is_elf_magic(bytes, file_size)) {
         ok = load_elf64_from_bytes(emu, bytes, file_size, program, error, error_size);

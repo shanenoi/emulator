@@ -50,6 +50,7 @@ bool emulator_init(Emulator *emu, char *error, size_t error_size) {
     emu->trace_stream = stdout;
     emu->stdout_stream = stdout;
     emu->stderr_stream = stderr;
+    memory_set_uart_output(&emu->memory, emu->stdout_stream);
     emu->guest_exit_code = 0;
     emu->guest_exited = false;
     return true;
