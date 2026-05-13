@@ -1173,7 +1173,28 @@ Definition of done:
 - The control transfer is visible in trace/debug output.
 - Dedicated v1.4 tests and fixtures cover the exception paths in the follow-up testing slice; this change starts the implementation hooks first.
 
-### v1.5 — Tiny OS Lab
+### v1.5 — Toy Kernel Mode
+
+**Goal:** introduce the first small kernel/user boundary on top of the v1.4 exception and trap foundation.
+
+Layer the toy-kernel teaching contract on top of v1.4:
+
+- A clear distinction between normal user program flow and kernel handler flow.
+- A stable trap/syscall entry path that beginner kernel examples can use.
+- A simple convention for passing trap context into kernel code.
+- A controlled return path from kernel handler code back to the interrupted or next user instruction.
+- Documentation and examples that explain how the vector handler acts like the first tiny kernel entry point.
+- Toy-kernel examples that show a user program entering a toy kernel handler and returning.
+
+Definition of done:
+
+- Toy-kernel mode can be enabled without changing older v1.4 exception behavior.
+- A tiny user program can enter a toy kernel handler through a trap/syscall path.
+- The toy kernel can inspect trap context, perform a small service, and return to user code.
+- Debugger and trace output make the user/kernel transition visible.
+- Dedicated v1.5 tests and fixtures cover the toy-kernel entry/return path.
+
+### v1.6 — Tiny OS Lab
 
 **Goal:** turn the emulator into a small operating-systems playground.
 
