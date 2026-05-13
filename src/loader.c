@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #define ELF_IDENT_SIZE 16u
 #define ELF64_EHDR_SIZE 64u
@@ -76,6 +77,13 @@ static bool read_file(const char *path, uint8_t **out_bytes, size_t *out_size, c
     FILE *file = fopen(path, "rb");
     if (file == NULL) {
         snprintf(error, error_size, "loader error: failed to open '%s': %s", path, strerror(errno));
+        return false;
+    }
+
+    struct stat st;
+    if (fstat(fileno(file), &st) == 0 && S_ISDIR(st.st_mode)) {
+        snprintf(error, error_size, "loader error: failed to read '%s': is a directory", path);
+        fclose(file);
         return false;
     }
 

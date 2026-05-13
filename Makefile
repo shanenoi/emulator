@@ -146,7 +146,8 @@ examples/v0_9/start.o: examples/v0_9/start.s
 		echo "skipping v0.9 example build: clang is not available"; \
 	fi
 
-examples/v0_9/%.o: examples/v0_9/%.c
+V0_9_C_OBJ := $(patsubst %.elf,%.o,$(V0_9_EXAMPLES))
+$(V0_9_C_OBJ): examples/v0_9/%.o: examples/v0_9/%.c
 	@if command -v clang >/dev/null 2>&1; then \
 		clang --target=aarch64-none-elf -ffreestanding -nostdlib -fno-stack-protector -fno-pic -fno-pie -O0 -c $< -o $@; \
 	else \
@@ -447,7 +448,7 @@ test-asan:
 		flags='-std=c11 -Wall -Wextra -Wpedantic -Werror -O1 -g -fsanitize=address -fno-omit-frame-pointer'; \
 		if ! "$$cc_bin" $$flags "$$probe_dir/probe.c" -o "$$probe_dir/probe" >/dev/null 2>&1; then echo "skipping AddressSanitizer check: compiler '$$cc_bin' does not support required flags"; exit 0; fi; \
 		make clean >/dev/null; \
-		make CC="$$cc_bin" CFLAGS="$$flags" test; \
+		make CC="$$cc_bin" CFLAGS="$$flags" LDFLAGS="-fsanitize=address -fno-omit-frame-pointer" test; \
 		printf '%s\n' "AddressSanitizer release check passed"
 
 test-ubsan:
@@ -460,7 +461,7 @@ test-ubsan:
 		flags='-std=c11 -Wall -Wextra -Wpedantic -Werror -O1 -g -fsanitize=undefined'; \
 		if ! "$$cc_bin" $$flags "$$probe_dir/probe.c" -o "$$probe_dir/probe" >/dev/null 2>&1; then echo "skipping UndefinedBehaviorSanitizer check: compiler '$$cc_bin' does not support required flags"; exit 0; fi; \
 		make clean >/dev/null; \
-		make CC="$$cc_bin" CFLAGS="$$flags" test; \
+		make CC="$$cc_bin" CFLAGS="$$flags" LDFLAGS="-fsanitize=undefined" test; \
 		printf '%s\n' "UndefinedBehaviorSanitizer release check passed"
 
 test-cc-matrix:
