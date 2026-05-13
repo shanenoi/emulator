@@ -280,6 +280,17 @@ bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error
         return true;
     }
 
+    if ((opcode & 0xffe0001fu) == 0xd4200000u) {
+        instruction->kind = EMU_INST_BRK;
+        instruction->imm = (opcode >> 5u) & 0xffffu;
+        return true;
+    }
+
+    if (opcode == 0xd69f03e0u) {
+        instruction->kind = EMU_INST_ERET;
+        return true;
+    }
+
     if ((opcode & 0x7f800000u) == 0x52800000u) {
         uint8_t sf = (uint8_t)((opcode >> 31u) & 0x1u);
         uint8_t hw = (uint8_t)((opcode >> 21u) & 0x3u);
@@ -751,6 +762,14 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
 
     case EMU_INST_SVC:
         snprintf(error, error_size, "svc requires emulator syscall dispatcher");
+        return EMU_ERROR;
+
+    case EMU_INST_BRK:
+        snprintf(error, error_size, "brk requires emulator exception dispatcher");
+        return EMU_ERROR;
+
+    case EMU_INST_ERET:
+        snprintf(error, error_size, "eret requires emulator exception dispatcher");
         return EMU_ERROR;
 
     case EMU_INST_MOVZ:

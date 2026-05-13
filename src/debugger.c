@@ -89,6 +89,7 @@ static void debugger_print_help(FILE *stream) {
     fprintf(stream, "  step | s                     execute exactly one instruction\n");
     fprintf(stream, "  continue | c                 resume until breakpoint, halt, error, or limit\n");
     fprintf(stream, "  regs                         print registers\n");
+    fprintf(stream, "  exception                    print the current exception context\n");
     fprintf(stream, "  mem | x <address> <length>   dump memory\n");
     fprintf(stream, "  maps                         list mapped memory ranges\n");
     fprintf(stream, "  map <address>                show mapping containing one address\n");
@@ -280,6 +281,22 @@ void debugger_list_breakpoints(const Debugger *debugger, FILE *stream) {
     }
 }
 
+static void debugger_print_exception_context(const Debugger *debugger, FILE *stream) {
+    const EmuExceptionContext *context = emulator_get_exception_context(&debugger->emu);
+    fprintf(stream, "exception_active = %s\n", debugger->emu.exceptions.active ? "yes" : "no");
+    fprintf(stream, "vector_configured = %s\n", debugger->emu.exceptions.vector_configured ? "yes" : "no");
+    fprintf(stream, "vector_base = 0x%016" PRIx64 "\n", debugger->emu.exceptions.vector_base);
+    fprintf(stream, "interrupts_enabled = %s\n", debugger->emu.exceptions.interrupts_enabled ? "yes" : "no");
+    fprintf(stream, "pending_timer_interrupt = %s\n", debugger->emu.exceptions.pending_timer_interrupt ? "yes" : "no");
+    fprintf(stream, "cause = 0x%02x\n", (unsigned)context->cause);
+    fprintf(stream, "fault_address = 0x%016" PRIx64 "\n", context->fault_address);
+    fprintf(stream, "interrupted_pc = 0x%016" PRIx64 "\n", context->interrupted_pc);
+    fprintf(stream, "resume_pc = 0x%016" PRIx64 "\n", context->resume_pc);
+    fprintf(stream, "saved_nzcv = %u%u%u%u\n", context->flags.n ? 1u : 0u, context->flags.z ? 1u : 0u,
+            context->flags.c ? 1u : 0u, context->flags.v ? 1u : 0u);
+    fprintf(stream, "depth = %u\n", context->depth);
+}
+
 EmuStatus debugger_step(Debugger *debugger, char *error, size_t error_size) {
     debugger_clear_break_stop(debugger);
     if (debugger->emu.cpu.halted) {
@@ -376,6 +393,13 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
                 continue;
             }
             cpu_dump(&debugger->emu.cpu, output);
+            continue;
+        }
+        if (strcmp(command, "exception") == 0) {
+            if (!require_no_extra_args(&cursor, "exception", error_stream)) {
+                continue;
+            }
+            debugger_print_exception_context(debugger, output);
             continue;
         }
         if (strcmp(command, "breakpoints") == 0) {

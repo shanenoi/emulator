@@ -213,6 +213,12 @@ static bool format_decoded_text(const EmuDecodedInstruction *instruction, uint64
     case EMU_INST_SVC:
         written = snprintf(out, out_size, "svc #0x%llx", (unsigned long long)instruction->imm);
         break;
+    case EMU_INST_BRK:
+        written = snprintf(out, out_size, "brk #0x%llx", (unsigned long long)instruction->imm);
+        break;
+    case EMU_INST_ERET:
+        written = snprintf(out, out_size, "eret");
+        break;
     case EMU_INST_MOVN:
         if (instruction->shift_amount == 0) {
             written = snprintf(out, out_size, "movn %s, #0x%llx", gp_reg(instruction->rd, instruction->is_64_bit),

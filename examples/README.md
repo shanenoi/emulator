@@ -43,6 +43,13 @@ ELF64 ET_EXEC files loaded from PT_LOAD program headers
 
 It still does not load Mach-O, DWARF, source-level debug information, dynamically linked Linux programs, shared libraries, or PIE executables.
 
+## v1.4 exception examples
+
+The `examples/v1_4/` directory currently documents the planned exception,
+trap, and interrupt fixtures for the v1.4 implementation slice. Generated v1.4
+fixture binaries will be added with the dedicated v1.4 tests so the runtime and
+test artifacts stay reviewable separately.
+
 ## Run an example
 
 ```sh

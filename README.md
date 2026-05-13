@@ -46,10 +46,11 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v1.1 Lesson — Mach-O Loader](lessons/v1.1-mach-o-loader.md)
 - [v1.2 Lesson — Virtual Memory and Page Permissions](lessons/v1.2-virtual-memory.md)
 - [v1.3 Lesson — Memory-Mapped Devices](lessons/v1.3-memory-mapped-devices.md)
+- [v1.4 Lesson — Exceptions, Traps, and Interrupt Skeleton](lessons/v1.4-exceptions-and-interrupts.md)
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, and the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**. v1.3 adds a fixed device bus, UART/timer/random device ranges, deterministic device-register behavior, learner-facing documentation/examples, and dedicated device unit/CLI/debugger/docs coverage.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, and the initial development slice for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**. v1.4 adds the exception-controller data model, vector configuration API, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, a deterministic timer-interrupt skeleton, and debugger exception-context inspection. v1.4 dedicated tests remain outside this non-test development slice.
 
 Implemented now:
 
@@ -1147,36 +1148,30 @@ Definition of done:
 - The memory map is documented in `lessons/v1.3-memory-mapped-devices.md` and `examples/v1_3/README.md`.
 - Device reads/writes are covered by the v1.3 unit, CLI, and debugger tests.
 
-### v1.4 — Toy Kernel Mode
+### v1.4 — Exceptions, Traps, and Interrupt Skeleton
 
-**Goal:** support a tiny educational kernel running above the emulator platform.
+**Goal:** introduce controlled exceptional control flow before full toy-kernel mode.
 
-Add simplified privilege support:
+Add a simplified exception model:
 
-- EL0 and EL1 mode tracking.
-- A small subset of system registers:
-  - `CurrentEL`
-  - `SPSR_EL1`
-  - `ELR_EL1`
-  - `SP_EL0`
-  - `SP_EL1`
-  - `VBAR_EL1`
-- Exception vector address handling.
-- `SVC` trap from user mode into kernel mode.
-- Return from exception through a simplified `ERET` implementation.
-
-Toy kernel capabilities:
-
-- Print through UART.
-- Install an exception vector.
-- Handle a syscall from user code.
-- Return to user code.
+- Exception-controller state inside the emulator runtime.
+- A configured exception vector address.
+- Stable teaching cause codes.
+- Saved exception context with cause, fault address, interrupted `pc`, resume `pc`, saved flags, and depth.
+- Handler entry convention using `x0` through `x3` for beginner-friendly context inspection.
+- `BRK #imm` as an explicit trap source.
+- Nonzero `SVC #imm` as a catchable trap when a vector is configured, while preserving `SVC #0` toy syscalls.
+- Simplified `ERET` return from an active exception.
+- Selected fetch/decode/memory/device faults become catchable when a vector is configured.
+- A deterministic pending timer-interrupt skeleton.
+- Debugger inspection through the `exception` command.
 
 Definition of done:
 
-- A tiny kernel binary can boot at a fixed address.
-- The kernel can handle one user `SVC` call and resume execution.
+- Old fatal behavior remains stable when no vector is configured.
+- A tiny handler can receive a trap/fault context and return with simplified `ERET`.
 - The control transfer is visible in trace/debug output.
+- Dedicated v1.4 tests and fixtures cover the exception paths in the follow-up testing slice; this change starts the implementation hooks first.
 
 ### v1.5 — Tiny OS Lab
 

@@ -121,6 +121,8 @@ typedef enum {
     EMU_INST_STP,
     EMU_INST_RET,
     EMU_INST_SVC,
+    EMU_INST_BRK,
+    EMU_INST_ERET,
 } EmuInstructionKind;
 
 typedef enum {
@@ -181,6 +183,42 @@ typedef struct {
     bool halted;
     uint64_t instructions_executed;
 } Cpu;
+
+typedef enum {
+    EMU_EXCEPTION_NONE = 0x00u,
+    EMU_EXCEPTION_INVALID_INSTRUCTION = 0x01u,
+    EMU_EXCEPTION_BREAKPOINT_OR_TRAP = 0x02u,
+    EMU_EXCEPTION_SVC_TRAP = 0x03u,
+    EMU_EXCEPTION_FETCH_FAULT = 0x10u,
+    EMU_EXCEPTION_READ_FAULT = 0x11u,
+    EMU_EXCEPTION_WRITE_FAULT = 0x12u,
+    EMU_EXCEPTION_EXEC_PERMISSION_FAULT = 0x13u,
+    EMU_EXCEPTION_READ_PERMISSION_FAULT = 0x14u,
+    EMU_EXCEPTION_WRITE_PERMISSION_FAULT = 0x15u,
+    EMU_EXCEPTION_DEVICE_FAULT = 0x20u,
+    EMU_EXCEPTION_DIVIDE_BY_ZERO = 0x30u,
+    EMU_EXCEPTION_TIMER_INTERRUPT = 0x40u,
+} EmuExceptionCause;
+
+typedef struct {
+    EmuExceptionCause cause;
+    uint64_t fault_address;
+    uint64_t interrupted_pc;
+    uint64_t resume_pc;
+    EmuFlags flags;
+    uint32_t depth;
+} EmuExceptionContext;
+
+typedef struct {
+    bool vector_configured;
+    uint64_t vector_base;
+    bool active;
+    bool interrupts_enabled;
+    bool pending_timer_interrupt;
+    uint64_t timer_interval;
+    uint64_t next_timer_deadline;
+    EmuExceptionContext context;
+} EmuExceptionController;
 
 typedef struct {
     uint64_t start;
@@ -273,6 +311,7 @@ typedef struct {
     FILE *stderr_stream;
     uint8_t guest_exit_code;
     bool guest_exited;
+    EmuExceptionController exceptions;
 } Emulator;
 
 typedef struct {
@@ -347,6 +386,15 @@ bool emulator_init(Emulator *emu, char *error, size_t error_size);
 void emulator_free(Emulator *emu);
 EmuStatus emulator_handle_syscall(Emulator *emu, const EmuDecodedInstruction *instruction, char *error,
                                   size_t error_size);
+bool emulator_configure_exception_vector(Emulator *emu, uint64_t vector_base, char *error, size_t error_size);
+void emulator_clear_exception_vector(Emulator *emu);
+bool emulator_exception_return(Emulator *emu, char *error, size_t error_size);
+EmuStatus emulator_raise_exception(Emulator *emu, EmuExceptionCause cause, uint64_t fault_address,
+                                   uint64_t interrupted_pc, uint64_t resume_pc, char *error, size_t error_size);
+void emulator_set_interrupts_enabled(Emulator *emu, bool enabled);
+bool emulator_queue_timer_interrupt(Emulator *emu);
+void emulator_configure_timer_interrupt(Emulator *emu, uint64_t interval);
+const EmuExceptionContext *emulator_get_exception_context(const Emulator *emu);
 EmuStatus emulator_step(Emulator *emu, char *error, size_t error_size);
 EmuStatus emulator_run(Emulator *emu, char *error, size_t error_size);
 
