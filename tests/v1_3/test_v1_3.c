@@ -46,14 +46,29 @@ static uint32_t op_movk_x(unsigned rd, unsigned imm, unsigned shift) {
 static uint32_t op_ldr_w(unsigned rt, unsigned rn, unsigned imm) {
     return 0xb9400000u | (((imm / 4u) & 0xfffu) << 10u) | ((rn & 31u) << 5u) | (rt & 31u);
 }
+static uint32_t op_ldr_x(unsigned rt, unsigned rn, unsigned imm) {
+    return 0xf9400000u | (((imm / 8u) & 0xfffu) << 10u) | ((rn & 31u) << 5u) | (rt & 31u);
+}
 static uint32_t op_strb(unsigned rt, unsigned rn, unsigned imm) {
     return 0x39000000u | ((imm & 0xfffu) << 10u) | ((rn & 31u) << 5u) | (rt & 31u);
 }
 static uint32_t op_strh(unsigned rt, unsigned rn, unsigned imm) {
     return 0x79000000u | (((imm / 2u) & 0xfffu) << 10u) | ((rn & 31u) << 5u) | (rt & 31u);
 }
+static uint32_t op_str_x(unsigned rt, unsigned rn, unsigned imm) {
+    return 0xf9000000u | (((imm / 8u) & 0xfffu) << 10u) | ((rn & 31u) << 5u) | (rt & 31u);
+}
 static uint32_t op_stp_x(unsigned rt, unsigned rt2, unsigned rn) {
     return 0xa9000000u | ((rt2 & 31u) << 10u) | ((rn & 31u) << 5u) | (rt & 31u);
+}
+static uint32_t op_ldr_pre_w(unsigned rt, unsigned rn, int offset) {
+    return 0xb8400c00u | (((uint32_t)offset & 0x1ffu) << 12u) | ((rn & 31u) << 5u) | (rt & 31u);
+}
+static uint32_t op_str_post_b(unsigned rt, unsigned rn, int offset) {
+    return 0x38000400u | (((uint32_t)offset & 0x1ffu) << 12u) | ((rn & 31u) << 5u) | (rt & 31u);
+}
+static uint32_t op_b(int offset_bytes) {
+    return 0x14000000u | (((uint32_t)(offset_bytes / 4)) & 0x03ffffffu);
 }
 
 static void write_word(Memory *memory, uint64_t address, uint32_t word) {
@@ -107,6 +122,9 @@ static void test_device_map_and_routing(void) {
     EXPECT_STR_CONTAINS(error, "out of bounds");
     EXPECT_TRUE(memory_check_access(&memory, 0x2000u, 0u, EMU_MAP_READ, &fault, error, sizeof(error)));
     EXPECT_U64_EQ(fault, EMU_MEMORY_FAULT_NONE);
+    EXPECT_FALSE(memory_check_execute(&memory, EMU_DEVICE_UART_BASE, 4u, error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "reserved non-executable device range");
+    EXPECT_STR_CONTAINS(error, "device=uart");
     memory_free(&memory);
 }
 
@@ -115,6 +133,7 @@ static void test_uart_device_policy(void) {
     Memory memory;
     char error[512];
     uint32_t status = 0;
+    uint64_t wide = 0;
     uint8_t byte = 0;
     FILE *out = tmpfile();
     unsigned char buffer[8] = {0};
@@ -137,6 +156,11 @@ static void test_uart_device_policy(void) {
     EXPECT_STR_CONTAINS(error, "read from write-only register");
     EXPECT_FALSE(memory_write32(&memory, EMU_DEVICE_UART_BASE, 0x41424344u, error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "unsupported write width");
+    EXPECT_FALSE(memory_write64(&memory, EMU_DEVICE_UART_BASE, 0x4142434445464748ull, error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "unsupported write width");
+    EXPECT_FALSE(memory_read16(&memory, EMU_DEVICE_UART_BASE + EMU_UART_STATUS_OFFSET, (uint16_t *)&wide, error,
+                               sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "unsupported read width");
     EXPECT_FALSE(memory_write16(&memory, EMU_DEVICE_UART_BASE + 3u, 0x4142u, error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "unaligned write access");
     EXPECT_FALSE(memory_write32(&memory, EMU_DEVICE_UART_BASE + EMU_UART_STATUS_OFFSET, 0u, error, sizeof(error)));
@@ -158,6 +182,7 @@ static void test_timer_device_policy(void) {
     uint32_t lo1 = 0;
     uint32_t hi = 0;
     uint32_t lo2 = 0;
+    uint64_t wide = 0;
 
     init_memory(&memory);
     EXPECT_TRUE(memory_read32(&memory, EMU_DEVICE_TIMER_BASE + EMU_TIMER_TICKS_LO_OFFSET, &lo1, error, sizeof(error)));
@@ -172,6 +197,10 @@ static void test_timer_device_policy(void) {
     EXPECT_U64_EQ(lo1, 0u);
     EXPECT_FALSE(memory_read8(&memory, EMU_DEVICE_TIMER_BASE, (uint8_t *)&lo2, error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "unsupported read width");
+    EXPECT_FALSE(memory_read64(&memory, EMU_DEVICE_TIMER_BASE, &wide, error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "unsupported read width");
+    EXPECT_FALSE(memory_write64(&memory, EMU_DEVICE_TIMER_BASE + EMU_TIMER_RESET_OFFSET, 0u, error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "unsupported write width");
     EXPECT_FALSE(memory_read32(&memory, EMU_DEVICE_TIMER_BASE + 1u, &lo2, error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "unaligned read access");
     EXPECT_FALSE(memory_write32(&memory, EMU_DEVICE_TIMER_BASE, 0u, error, sizeof(error)));
@@ -194,6 +223,7 @@ static void test_random_device_policy(void) {
     uint32_t first = 0;
     uint32_t second = 0;
     uint32_t seeded = 0;
+    uint64_t wide = 0;
 
     init_memory(&memory);
     EXPECT_TRUE(memory_read32(&memory, EMU_DEVICE_RANDOM_BASE + EMU_RANDOM_VALUE_OFFSET, &first, error, sizeof(error)));
@@ -206,6 +236,10 @@ static void test_random_device_policy(void) {
     EXPECT_U64_EQ(seeded, 0x722d9803u);
     EXPECT_FALSE(memory_read16(&memory, EMU_DEVICE_RANDOM_BASE, (uint16_t *)&seeded, error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "unsupported read width");
+    EXPECT_FALSE(memory_read64(&memory, EMU_DEVICE_RANDOM_BASE, &wide, error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "unsupported read width");
+    EXPECT_FALSE(memory_write64(&memory, EMU_DEVICE_RANDOM_BASE + EMU_RANDOM_VALUE_OFFSET, 0u, error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "unsupported write width");
     EXPECT_FALSE(memory_write32(&memory, EMU_DEVICE_RANDOM_BASE + EMU_RANDOM_VALUE_OFFSET, 0u, error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "write to read-only register");
     EXPECT_FALSE(memory_read32(&memory, EMU_DEVICE_RANDOM_BASE + 0x20u, &seeded, error, sizeof(error)));
@@ -279,7 +313,90 @@ static void test_cpu_device_integration(void) {
     EXPECT_STR_CONTAINS(error, "unsupported write width");
     EXPECT_SIZE_EQ(read_tmp(out, buffer, sizeof(buffer)), 1u);
 
+    memory_reset_devices(&memory);
+    write_word(&memory, 0x1000u, op_movz_x(0, 0xfffcu, 0));
+    write_word(&memory, 0x1004u, op_movk_x(0, 0x0900u, 16));
+    write_word(&memory, 0x1008u, op_ldr_pre_w(3, 0, 4));
+    write_word(&memory, 0x100cu, op_hlt());
+    cpu_init(&cpu, 0x1000u, EMU_MEMORY_SIZE);
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_OK);
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_OK);
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_OK);
+    EXPECT_U64_EQ(cpu.x[0], EMU_DEVICE_TIMER_BASE);
+    EXPECT_U64_EQ(cpu.x[3], 0u);
+
+    write_word(&memory, 0x1000u, op_movz_x(0, 0x0000u, 0));
+    write_word(&memory, 0x1004u, op_movk_x(0, 0x0900u, 16));
+    write_word(&memory, 0x1008u, op_movz_w(1, 'P'));
+    write_word(&memory, 0x100cu, op_str_post_b(1, 0, 4));
+    write_word(&memory, 0x1010u, op_hlt());
+    cpu_init(&cpu, 0x1000u, EMU_MEMORY_SIZE);
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_OK);
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_OK);
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_OK);
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_OK);
+    EXPECT_U64_EQ(cpu.x[0], EMU_DEVICE_UART_BASE + 4u);
+    EXPECT_SIZE_EQ(read_tmp(out, buffer, sizeof(buffer)), 2u);
+    EXPECT_U64_EQ(buffer[1], 'P');
+
+    write_word(&memory, 0x1000u, op_movz_x(0, 0x0000u, 0));
+    write_word(&memory, 0x1004u, op_movk_x(0, 0x0901u, 16));
+    write_word(&memory, 0x1008u, op_ldr_x(4, 0, EMU_UART_STATUS_OFFSET));
+    cpu_init(&cpu, 0x1000u, EMU_MEMORY_SIZE);
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_OK);
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_OK);
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_ERROR);
+    EXPECT_STR_CONTAINS(error, "unsupported read width");
+
+    write_word(&memory, 0x1000u, op_movz_x(0, 0x0000u, 0));
+    write_word(&memory, 0x1004u, op_movk_x(0, 0x0900u, 16));
+    write_word(&memory, 0x1008u, op_str_x(4, 0, 0));
+    cpu_init(&cpu, 0x1000u, EMU_MEMORY_SIZE);
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_OK);
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_OK);
+    EXPECT_TRUE(cpu_step(&cpu, &memory, error, sizeof(error)) == EMU_ERROR);
+    EXPECT_STR_CONTAINS(error, "unsupported write width");
+
     memory_free(&memory);
+    fclose(out);
+}
+
+static void test_device_execution_and_limits(void) {
+    /* TC-V13-EDGE-012 and direct fetch-from-device policy. */
+    Emulator emu;
+    char error[512];
+    FILE *out = tmpfile();
+    unsigned char buffer[8] = {0};
+
+    EXPECT_TRUE(out != NULL);
+    EXPECT_TRUE(emulator_init(&emu, error, sizeof(error)));
+    emu.instruction_limit = 8u;
+    emu.stdout_stream = out;
+    memory_set_uart_output(&emu.memory, out);
+    memory_clear_mappings(&emu.memory);
+    EXPECT_TRUE(memory_map_range(&emu.memory, 0x1000u, EMU_PAGE_SIZE, EMU_MAP_READ | EMU_MAP_WRITE | EMU_MAP_EXEC,
+                                 "text", error, sizeof(error)));
+    write_word(&emu.memory, 0x1000u, op_movz_x(0, 0x0000u, 0));
+    write_word(&emu.memory, 0x1004u, op_movk_x(0, 0x0900u, 16));
+    write_word(&emu.memory, 0x1008u, op_movz_w(1, 'L'));
+    write_word(&emu.memory, 0x100cu, op_strb(1, 0, 0));
+    write_word(&emu.memory, 0x1010u, op_b(-4));
+    cpu_init(&emu.cpu, 0x1000u, EMU_MEMORY_SIZE);
+    EXPECT_TRUE(emulator_run(&emu, error, sizeof(error)) == EMU_ERROR);
+    EXPECT_STR_CONTAINS(error, "instruction limit reached");
+    EXPECT_SIZE_EQ(read_tmp(out, buffer, sizeof(buffer)), 3u);
+    EXPECT_U64_EQ(buffer[0], 'L');
+    EXPECT_U64_EQ(buffer[1], 'L');
+    EXPECT_U64_EQ(buffer[2], 'L');
+    emulator_free(&emu);
+
+    cpu_init(&emu.cpu, 0x1000u, EMU_MEMORY_SIZE);
+    init_memory(&emu.memory);
+    memory_clear_mappings(&emu.memory);
+    cpu_init(&emu.cpu, EMU_DEVICE_UART_BASE, EMU_MEMORY_SIZE);
+    EXPECT_TRUE(cpu_step(&emu.cpu, &emu.memory, error, sizeof(error)) == EMU_ERROR);
+    EXPECT_STR_CONTAINS(error, "reserved non-executable device range");
+    memory_free(&emu.memory);
     fclose(out);
 }
 
@@ -293,7 +410,7 @@ static void test_loader_device_boundaries(void) {
                                   "bad-device-overlap", error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "reserved device range");
     EXPECT_FALSE(memory_check_execute(&memory, EMU_DEVICE_UART_BASE, 4u, error, sizeof(error)));
-    EXPECT_STR_CONTAINS(error, "out of bounds");
+    EXPECT_STR_CONTAINS(error, "reserved non-executable device range");
     memory_free(&memory);
 }
 
@@ -303,6 +420,7 @@ int main(void) {
     test_timer_device_policy();
     test_random_device_policy();
     test_cpu_device_integration();
+    test_device_execution_and_limits();
     test_loader_device_boundaries();
     if (tests_failed != 0) {
         fprintf(stderr, "%d/%d tests failed\n", tests_failed, tests_run);

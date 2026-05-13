@@ -10,6 +10,7 @@ contains() { grep -Fq "$2" "$1" || fail "expected $1 to contain: $2"; }
 not_contains_i() { if grep -Eiq "$2" "$1"; then fail "stale/overclaim text in $1 matching: $2"; fi; }
 
 need_file docs/test-plan-v1.3.md
+need_file docs/test-plan-v1.3-traceability.md
 need_file lessons/v1.3-memory-mapped-devices.md
 need_file examples/v1_3/README.md
 need_file examples/v1_3/generate_device_fixtures.py
@@ -20,6 +21,7 @@ need_file tests/v1_3/test_debugger_devices.sh
 need_file tests/v1_3/test_docs_devices.sh
 
 contains README.md "v1.3 Test Plan"
+contains README.md "v1.3 Test Traceability"
 contains README.md "v1.3 Lesson"
 contains README.md "implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**"
 contains README.md "v0.1 through v1.3 deterministic test suite"
@@ -49,5 +51,18 @@ contains lessons/v1.3-memory-mapped-devices.md "unsupported write width"
 contains lessons/v1.3-memory-mapped-devices.md "write to read-only register"
 contains examples/v1_3/README.md "make examples/v1_3/mmio_uart_hello.bin"
 contains examples/v1_3/README.md "./emulator run examples/v1_3/mmio_uart_hello.bin"
+
+python3 - <<'PY'
+import re
+from pathlib import Path
+plan = Path('docs/test-plan-v1.3.md').read_text()
+trace = Path('docs/test-plan-v1.3-traceability.md').read_text()
+ids = re.findall(r'### (TC-V13-[A-Z]+-\d{3}) —', plan)
+missing = [tc for tc in ids if f'`{tc}`' not in trace]
+if missing:
+    raise SystemExit('missing v1.3 traceability rows: ' + ', '.join(missing))
+if len(ids) != 101:
+    raise SystemExit(f'expected 101 v1.3 acceptance cases, found {len(ids)}')
+PY
 
 printf '%s\n' "v1.3 docs device tests passed"

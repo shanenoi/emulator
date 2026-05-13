@@ -90,12 +90,19 @@ and can observe how simple hardware registers differ from ordinary RAM.
 These assumptions should become explicit implementation decisions before tests are
 finalized.
 
+For this version, "register devices" means **install the fixed teaching devices
+listed below during memory initialization**. v1.3 intentionally does not expose a
+general dynamic device-registration API. Registration-style acceptance cases are
+therefore retained as design guardrails and marked in the traceability checklist
+as not applicable to the fixed-device v1.3 surface.
+
 1. The guest address type remains 64-bit.
 2. The v1.2 RAM capacity remains deterministic, but device addresses may live
    outside the RAM byte-array size.
 3. Device access is only for data reads/writes, not instruction fetch.
 4. Instruction fetch from a device address must fail deterministically as a
-   non-executable/unmapped execute fault according to the documented v1.3 policy.
+   reserved non-executable device-range execute fault according to the documented
+   v1.3 policy.
 5. Device ranges do not overlap RAM mappings.
 6. Device ranges do not overlap each other.
 7. Device range start and size are stable and documented.

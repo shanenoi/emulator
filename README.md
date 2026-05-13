@@ -28,6 +28,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v1.1 Test Plan — Mach-O Loader](docs/test-plan-v1.1.md)
 - [v1.2 Test Plan — Virtual Memory and Page Permissions](docs/test-plan-v1.2.md)
 - [v1.3 Test Plan — Memory-Mapped Devices](docs/test-plan-v1.3.md)
+- [v1.3 Test Traceability — Memory-Mapped Devices](docs/test-plan-v1.3-traceability.md)
 
 ## Lessons
 

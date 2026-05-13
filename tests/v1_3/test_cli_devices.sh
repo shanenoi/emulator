@@ -36,6 +36,13 @@ head -c 3 "$TMP/uart_nul_high.out" >"$TMP/uart_nul_high.prefix"
 printf '\000X\377' >"$TMP/uart_nul_high.expected"
 cmp "$TMP/uart_nul_high.expected" "$TMP/uart_nul_high.prefix" || fail "UART NUL/high-bit byte output mismatch"
 
+./emulator run "$TMP/uart_after_hlt.bin" >"$TMP/uart_after_hlt.out" 2>"$TMP/uart_after_hlt.err"
+[ ! -s "$TMP/uart_after_hlt.err" ] || fail "uart_after_hlt stderr was not empty"
+head -c 1 "$TMP/uart_after_hlt.out" >"$TMP/uart_after_hlt.prefix"
+printf 'A' >"$TMP/uart_after_hlt.expected"
+cmp "$TMP/uart_after_hlt.expected" "$TMP/uart_after_hlt.prefix" || fail "UART after-HLT output mismatch"
+not_contains "$TMP/uart_after_hlt.out" "Z"
+
 ./emulator run "$TMP/uart_large.bin" >"$TMP/uart_large.out" 2>"$TMP/uart_large.err"
 [ ! -s "$TMP/uart_large.err" ] || fail "uart_large stderr was not empty"
 python3 - <<'PY'
@@ -82,6 +89,18 @@ fi
 contains "$TMP/bad_width.err" "unsupported write width"
 contains "$TMP/bad_width.err" "device=uart"
 
+if ./emulator run "$TMP/uart_half_width.bin" >"$TMP/half_width.out" 2>"$TMP/half_width.err"; then
+    fail "unsupported UART halfword width unexpectedly succeeded"
+fi
+[ ! -s "$TMP/half_width.out" ] || fail "unsupported UART halfword emitted partial stdout"
+contains "$TMP/half_width.err" "unsupported write width"
+
+if ./emulator run "$TMP/uart_cross_register.bin" >"$TMP/cross_register.out" 2>"$TMP/cross_register.err"; then
+    fail "UART cross-register write unexpectedly succeeded"
+fi
+[ ! -s "$TMP/cross_register.out" ] || fail "UART cross-register write emitted partial stdout"
+contains "$TMP/cross_register.err" "unaligned write access"
+
 if ./emulator run "$TMP/uart_bad_offset.bin" >"$TMP/bad_offset.out" 2>"$TMP/bad_offset.err"; then
     fail "invalid UART offset unexpectedly succeeded"
 fi
@@ -94,10 +113,29 @@ if ./emulator run "$TMP/timer_unaligned.bin" >"$TMP/timer_unaligned.out" 2>"$TMP
 fi
 contains "$TMP/timer_unaligned.err" "unaligned read access"
 
+./emulator regs "$TMP/timer_reset.bin" >"$TMP/timer_reset.out" 2>"$TMP/timer_reset.err"
+[ ! -s "$TMP/timer_reset.err" ] || fail "timer reset stderr was not empty"
+contains "$TMP/timer_reset.out" "x1  = 0x0000000000000000"
+contains "$TMP/timer_reset.out" "x2  = 0x0000000000000000"
+
+if ./emulator run "$TMP/timer_byte.bin" >"$TMP/timer_byte.out" 2>"$TMP/timer_byte.err"; then
+    fail "timer byte read unexpectedly succeeded"
+fi
+contains "$TMP/timer_byte.err" "unsupported read width"
+
 if ./emulator run "$TMP/random_invalid.bin" >"$TMP/random_invalid.out" 2>"$TMP/random_invalid.err"; then
     fail "invalid random offset unexpectedly succeeded"
 fi
 contains "$TMP/random_invalid.err" "invalid read register"
+
+./emulator regs "$TMP/random_seed.bin" >"$TMP/random_seed.out" 2>"$TMP/random_seed.err"
+[ ! -s "$TMP/random_seed.err" ] || fail "random seed stderr was not empty"
+contains "$TMP/random_seed.out" "x2  = 0x00000000722d9803"
+
+if ./emulator run "$TMP/random_half.bin" >"$TMP/random_half.out" 2>"$TMP/random_half.err"; then
+    fail "random halfword read unexpectedly succeeded"
+fi
+contains "$TMP/random_half.err" "unsupported read width"
 
 if ./emulator run "$TMP/edge_device_boundary.bin" >"$TMP/cross.out" 2>"$TMP/cross.err"; then
     fail "cross-device-boundary access unexpectedly succeeded"
@@ -131,6 +169,18 @@ if ./emulator run "$TMP/stp_device.bin" >"$TMP/stp.out" 2>"$TMP/stp.err"; then
     fail "STP to device unexpectedly succeeded"
 fi
 contains "$TMP/stp.err" "unsupported write width"
+
+./emulator regs "$TMP/pre_index_timer.bin" >"$TMP/pre_index.out" 2>"$TMP/pre_index.err"
+[ ! -s "$TMP/pre_index.err" ] || fail "pre-index timer stderr was not empty"
+contains "$TMP/pre_index.out" "x0  = 0x0000000009010000"
+contains "$TMP/pre_index.out" "x1  = 0x0000000000000000"
+
+./emulator regs "$TMP/post_index_uart.bin" >"$TMP/post_index.out" 2>"$TMP/post_index.err"
+[ ! -s "$TMP/post_index.err" ] || fail "post-index UART stderr was not empty"
+head -c 1 "$TMP/post_index.out" >"$TMP/post_index.prefix"
+printf 'P' >"$TMP/post_index.expected"
+cmp "$TMP/post_index.expected" "$TMP/post_index.prefix" || fail "post-index UART output mismatch"
+contains "$TMP/post_index.out" "x0  = 0x0000000009000004"
 
 ./emulator help >"$TMP/help.out" 2>"$TMP/help.err"
 [ ! -s "$TMP/help.err" ] || fail "help stderr was not empty"

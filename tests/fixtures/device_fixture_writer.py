@@ -192,7 +192,6 @@ def main() -> int:
     emit(out / "random_half.bin", mov_abs(0, RANDOM) + [ldr(1, 0, 1, 0), hlt()])
 
     emit(out / "edge_device_boundary.bin", mov_abs(0, UART + 0xFFF) + [movz(1, 0x41, 0, x=False), str_(1, 0, 1), hlt()])
-    emit(out / "entry_device_branch.bin", [branch_from(LOAD, UART), hlt()])
     emit(out / "stp_device.bin", mov_abs(0, UART) + [stp(1, 2, 0), hlt()])
     emit(out / "pre_index_timer.bin", mov_abs(0, TIMER - 4) + [ldr_pre(1, 0, 2, 4), hlt()])
     emit(out / "post_index_uart.bin", mov_abs(0, UART) + [movz(1, ord("P"), 0, x=False), str_post(1, 0, 0, 4), hlt()])

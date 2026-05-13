@@ -300,6 +300,7 @@ release-docs-check:
 		for version in v0.1 v0.2 v0.3 v0.4 v0.5 v0.6 v0.7 v0.8 v0.9 v1.0 v1.1 v1.2 v1.3; do \
 			need_file "docs/test-plan-$$version.md"; \
 		done; \
+		need_file docs/test-plan-v1.3-traceability.md; \
 		for lesson in \
 			lessons/v0.1-instruction-sandbox.md \
 			lessons/v0.2-branches-and-loops.md \
@@ -347,6 +348,7 @@ release-docs-check:
 		grep -q "v1.1 Test Plan" README.md || fail "README does not link the v1.1 test plan"; \
 		grep -q "v1.2 Test Plan" README.md || fail "README does not link the v1.2 test plan"; \
 		grep -q "v1.3 Test Plan" README.md || fail "README does not link the v1.3 test plan"; \
+		grep -q "v1.3 Test Traceability" README.md || fail "README does not link the v1.3 traceability checklist"; \
 		grep -q "v1.1 Lesson" README.md || fail "README does not link the v1.1 lesson"; \
 		grep -q "v1.2 Lesson" README.md || fail "README does not link the v1.2 lesson"; \
 		grep -q "v1.3 Lesson" README.md || fail "README does not link the v1.3 lesson"; \

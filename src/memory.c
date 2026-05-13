@@ -295,6 +295,21 @@ bool memory_check_access(const Memory *memory, uint64_t address, uint64_t width,
         *fault_kind = EMU_MEMORY_FAULT_NONE;
     }
 
+    if ((required & EMU_MAP_EXEC) != 0) {
+        const EmuDeviceRange *device = memory_find_device(memory, address);
+        if (device != NULL) {
+            if (fault_kind != NULL) {
+                *fault_kind = EMU_MEMORY_FAULT_EXEC_PERMISSION;
+            }
+            snprintf(error, error_size,
+                     "memory fault: execute from reserved non-executable device range: address=0x%016" PRIx64
+                     " width=0x%016" PRIx64 " device=%s range=0x%016" PRIx64 "-0x%016" PRIx64,
+                     address, width, device->name[0] == '\0' ? "device" : device->name, device->start,
+                     device->start + device->size);
+            return false;
+        }
+    }
+
     if ((required & EMU_MAP_EXEC) == 0) {
         const EmuDeviceRange *device = memory_find_device(memory, address);
         if (device != NULL) {
