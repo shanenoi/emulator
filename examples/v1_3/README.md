@@ -34,5 +34,6 @@ The UART program demonstrates the main v1.3 idea:
 STRB to 0x09000000 -> device write -> stdout byte
 ```
 
-The timer and random fixtures are intentionally quiet. They are useful for
-tracing, debugger stepping, and future tests that inspect register results.
+The timer and random fixtures are intentionally quiet and deterministic. They
+are useful for tracing, debugger stepping, and tests that inspect register
+results without depending on host wall-clock time or host entropy.

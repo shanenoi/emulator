@@ -47,7 +47,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, and the initial implementation for **v1.3 — Memory-Mapped Devices**. v1.3 adds a fixed device bus, UART/timer/random device ranges, deterministic device-register behavior, and learner-facing documentation/examples; dedicated v1.3 coverage is the next testing milestone.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, and the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**. v1.3 adds a fixed device bus, UART/timer/random device ranges, deterministic device-register behavior, learner-facing documentation/examples, and dedicated device unit/CLI/debugger/docs coverage.
 
 Implemented now:
 
@@ -196,7 +196,7 @@ Implemented now:
   - documents the current v1.2 behavior in `examples/v1_2/README.md` and `lessons/v1.2-virtual-memory.md`
   - includes v1.2 unit, CLI, debugger, docs, clean, and fresh-archive release tests
 - v1.3 memory-mapped-device teaching profile:
-  - adds fixed device ranges for UART, timer, and deterministic random devices
+  - adds fixed device ranges for UART 0x09000000, timer 0x09010000, and random 0x09020000 devices
   - routes CPU data loads/stores through RAM or device-register handlers
   - keeps instruction fetch restricted to executable RAM mappings
   - supports byte writes to UART DATA at `0x09000000` for stdout output
@@ -207,6 +207,7 @@ Implemented now:
   - extends `info` and debugger `maps` / `map <address>` output with device ranges
   - adds deterministic generated v1.3 examples in `examples/v1_3/`
   - documents the current v1.3 behavior in `examples/v1_3/README.md` and `lessons/v1.3-memory-mapped-devices.md`
+  - includes v1.3 unit, CLI, debugger, docs, clean, and fresh-archive release tests
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -231,8 +232,9 @@ Implemented now:
   - v1.0 release tests for CLI stability, docs consistency, optional release examples, repository hygiene, clean-artifact validation, and fresh-archive full deterministic-suite validation
   - v1.1 Mach-O tests for deterministic fixture generation, loader metadata, segment mapping, zero-fill behavior, entry resolution, unsupported runtime command rejection, CLI `run`/`trace`/`regs`/`dump`/`debug`/`info` behavior, docs consistency, and optional Mach-O toolchain smoke checks
   - v1.2 virtual-memory tests for page mapping, R/W/X permission enforcement, loader-created mappings, stack guard behavior, CPU fault ordering, CLI `info`/`run`/`trace`/`regs`/`dump`, debugger `maps`/`map`, docs consistency, generated fixtures, clean behavior, and fresh-archive release coverage
+  - v1.3 memory-mapped-device tests for fixed device ranges, RAM/device routing, UART output and faults, timer/random determinism, width/alignment/boundary edge cases, CPU load/store integration, raw and ELF loader integration, CLI `info`/`run`/`trace`/`regs`/`dump`, debugger `maps`/`map`/`mem`, docs consistency, generated fixtures, clean behavior, and fresh-archive release coverage
 
-The full v0.1 through v1.2 deterministic test suite runs with `make test`. The release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
+The full v0.1 through v1.3 deterministic test suite runs with `make test`. The release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
 
 ## Build and Run
 
@@ -406,6 +408,7 @@ This is a stable learning emulator, not a complete ARM64/Linux emulator. The cur
 - real Linux syscall handling beyond the fake `write = 64` and `exit = 93` ABI,
 - `argv`, `envp`, or auxiliary-vector setup,
 - real ARM MMU/page tables beyond the v1.2 teaching permission model,
+- interrupts, DMA, real wall-clock timers, host entropy, or production system-on-chip behavior beyond the v1.3 deterministic teaching devices,
 - floating point, SIMD, or NEON,
 - normal macOS/iOS Mach-O applications, fat/universal Mach-O slice selection, `dyld`, shared libraries, rebasing/binding, code signing behavior, Objective-C/Swift runtimes, and real Darwin syscalls.
 
@@ -1079,7 +1082,7 @@ Definition of done for the v1.2 teaching profile:
 
 **Goal:** introduce simple hardware-device emulation.
 
-Planning reference: [v1.3 Test Plan — Memory-Mapped Devices](docs/test-plan-v1.3.md). The initial implementation and learner-facing examples/docs are in place; the v1.3 test suite is still the next step.
+Planning reference: [v1.3 Test Plan — Memory-Mapped Devices](docs/test-plan-v1.3.md). The implementation, deterministic fixture generator, learner-facing examples/docs, and dedicated v1.3 unit/CLI/debugger/docs tests are in place.
 
 Added device bus:
 
@@ -1140,7 +1143,7 @@ Definition of done:
 - A program can print through memory-mapped UART without using fake syscalls.
 - Device reads/writes have deterministic behavior.
 - The memory map is documented in `lessons/v1.3-memory-mapped-devices.md` and `examples/v1_3/README.md`.
-- Device reads/writes are tested in the upcoming v1.3 test pass.
+- Device reads/writes are covered by the v1.3 unit, CLI, and debugger tests.
 
 ### v1.4 — Toy Kernel Mode
 

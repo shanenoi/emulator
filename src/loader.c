@@ -277,6 +277,25 @@ static bool range_fits_memory(uint64_t address, uint64_t length, const Memory *m
     return checked_u64_add(address, length, &end) && end <= (uint64_t)memory->size;
 }
 
+static bool range_overlaps_device(const Memory *memory, uint64_t address, uint64_t length,
+                                  const EmuDeviceRange **out_device) {
+    uint64_t end = 0;
+    if (length == 0 || !checked_u64_add(address, length, &end)) {
+        return false;
+    }
+    for (size_t i = 0; i < memory->devices.range_count; i++) {
+        const EmuDeviceRange *device = &memory->devices.ranges[i];
+        uint64_t device_end = device->start + device->size;
+        if (address < device_end && device->start < end) {
+            if (out_device != NULL) {
+                *out_device = device;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool ranges_overlap(uint64_t a_start, uint64_t a_length, uint64_t b_start, uint64_t b_length) {
     uint64_t a_end = 0;
     uint64_t b_end = 0;
@@ -531,6 +550,15 @@ static bool load_elf64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t fi
                      p_offset, p_filesz, file_size);
             return false;
         }
+        const EmuDeviceRange *overlapped_device = NULL;
+        if (range_overlaps_device(&emu->memory, p_vaddr, p_memsz, &overlapped_device)) {
+            snprintf(error, error_size,
+                     "ELF loader error: PT_LOAD memory range overlaps reserved device range: vaddr=0x%016" PRIx64
+                     " memsz=0x%016" PRIx64 " device=%s range=0x%016" PRIx64 "-0x%016" PRIx64,
+                     p_vaddr, p_memsz, overlapped_device->name, overlapped_device->start,
+                     overlapped_device->start + overlapped_device->size);
+            return false;
+        }
         if (!range_fits_memory(p_vaddr, p_memsz, &emu->memory)) {
             snprintf(error, error_size,
                      "ELF loader error: PT_LOAD memory range outside emulator memory: vaddr=0x%016" PRIx64
@@ -551,6 +579,14 @@ static bool load_elf64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t fi
     if ((e_entry & 0x3u) != 0) {
         snprintf(error, error_size, "ELF loader error: entry point is not 4-byte aligned: entry=0x%016" PRIx64,
                  e_entry);
+        return false;
+    }
+    const EmuDeviceRange *entry_device = memory_find_device(&emu->memory, e_entry);
+    if (entry_device != NULL) {
+        snprintf(error, error_size,
+                 "ELF loader error: entry point is inside reserved non-executable device range: entry=0x%016" PRIx64
+                 " device=%s range=0x%016" PRIx64 "-0x%016" PRIx64,
+                 e_entry, entry_device->name, entry_device->start, entry_device->start + entry_device->size);
         return false;
     }
     if (!entry_is_mapped(program, e_entry)) {
@@ -789,6 +825,16 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
                          "Mach-O loader error: LC_SEGMENT_64 file range outside file: fileoff=0x%016" PRIx64
                          " filesize=0x%016" PRIx64 " file_size=0x%zx",
                          fileoff, filesize, file_size);
+                return false;
+            }
+            const EmuDeviceRange *overlapped_device = NULL;
+            if (range_overlaps_device(&emu->memory, vmaddr, vmsize, &overlapped_device)) {
+                snprintf(error, error_size,
+                         "Mach-O loader error: LC_SEGMENT_64 memory range overlaps reserved device range: "
+                         "vmaddr=0x%016" PRIx64 " vmsize=0x%016" PRIx64
+                         " device=%s range=0x%016" PRIx64 "-0x%016" PRIx64,
+                         vmaddr, vmsize, overlapped_device->name, overlapped_device->start,
+                         overlapped_device->start + overlapped_device->size);
                 return false;
             }
             if (!range_fits_memory(vmaddr, vmsize, &emu->memory)) {

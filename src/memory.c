@@ -444,7 +444,27 @@ bool memory_map_range(Memory *memory, uint64_t address, uint64_t length, uint8_t
     }
 
     uint64_t end = 0;
-    if (!checked_add_u64(address, length, &end) || end > (uint64_t)memory->size) {
+    if (!checked_add_u64(address, length, &end)) {
+        snprintf(error, error_size,
+                 "memory map error: mapping outside memory: address=0x%016" PRIx64 " length=0x%016" PRIx64
+                 " memory_size=0x%zx",
+                 address, length, memory->size);
+        return false;
+    }
+
+    for (size_t i = 0; i < memory->devices.range_count; i++) {
+        const EmuDeviceRange *device = &memory->devices.ranges[i];
+        uint64_t device_end = device->start + device->size;
+        if (address < device_end && device->start < end) {
+            snprintf(error, error_size,
+                     "memory map error: mapping overlaps reserved device range: 0x%016" PRIx64
+                     "-0x%016" PRIx64 " overlaps %s 0x%016" PRIx64 "-0x%016" PRIx64,
+                     address, end, device->name[0] == '\0' ? "device" : device->name, device->start, device_end);
+            return false;
+        }
+    }
+
+    if (end > (uint64_t)memory->size) {
         snprintf(error, error_size,
                  "memory map error: mapping outside memory: address=0x%016" PRIx64 " length=0x%016" PRIx64
                  " memory_size=0x%zx",

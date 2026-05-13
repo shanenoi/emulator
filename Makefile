@@ -180,6 +180,7 @@ V1_0_RELEASE_TESTS := \
 
 V1_1_TEST_FIXTURE_MARKER := tests/v1_1/tmp/.fixtures.stamp
 V1_2_TEST_FIXTURE_MARKER := tests/v1_2/tmp/.fixtures.stamp
+V1_3_TEST_FIXTURE_MARKER := tests/v1_3/tmp/.fixtures.stamp
 
 clean:
 	rm -f $(TARGET) $(OBJ) tests/v0_1/*.o tests/v0_1/test_v0_1 tests/v0_2/*.o tests/v0_2/test_v0_2 \
@@ -187,7 +188,7 @@ clean:
 		tests/v0_5/*.o tests/v0_5/test_v0_5 tests/v0_6/*.o tests/v0_6/test_v0_6 \
 		tests/v0_7/*.o tests/v0_7/test_v0_7 tests/v0_8/*.o tests/v0_8/test_v0_8 \
 		tests/v0_9/*.o tests/v0_9/test_v0_9 tests/v1_1/*.o tests/v1_1/test_v1_1 \
-		tests/v1_2/*.o tests/v1_2/test_v1_2 \
+		tests/v1_2/*.o tests/v1_2/test_v1_2 tests/v1_3/*.o tests/v1_3/test_v1_3 \
 		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
 		examples/v0_3/*.o examples/v0_3/*.bin examples/v0_4/*.o examples/v0_4/*.bin \
 		examples/v0_7/*.o examples/v0_7/*.bin examples/v0_8/*.o examples/v0_8/*.elf \
@@ -195,7 +196,7 @@ clean:
 		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/* tests/v0_4/tmp/* tests/v0_5/tmp/* \
 		tests/v0_6/tmp/* tests/v0_7/tmp/* tests/v0_8/tmp/* tests/v0_9/tmp/* tests/v1_0/tmp/*
 	rm -f examples/v1_2/mapping_inspection.txt
-	rm -rf tests/v1_1/tmp/* tests/v1_1/tmp/.fixtures.stamp tests/v1_2/tmp/* tests/v1_2/tmp/.fixtures.stamp tests/v1_3/tmp/*
+	rm -rf tests/v1_1/tmp/* tests/v1_1/tmp/.fixtures.stamp tests/v1_2/tmp/* tests/v1_2/tmp/.fixtures.stamp tests/v1_3/tmp/* tests/v1_3/tmp/.fixtures.stamp
 
 $(V1_1_TEST_FIXTURE_MARKER): tests/fixtures/macho_fixture_writer.py
 	mkdir -p tests/v1_1/tmp
@@ -206,6 +207,11 @@ $(V1_2_TEST_FIXTURE_MARKER): tests/fixtures/vm_fixture_writer.py tests/fixtures/
 	mkdir -p tests/v1_2/tmp
 	python3 tests/fixtures/vm_fixture_writer.py --output-dir tests/v1_2/tmp
 	python3 tests/fixtures/macho_fixture_writer.py --output-dir tests/v1_2/tmp
+	touch $@
+
+$(V1_3_TEST_FIXTURE_MARKER): tests/fixtures/device_fixture_writer.py
+	mkdir -p tests/v1_3/tmp
+	python3 tests/fixtures/device_fixture_writer.py --output-dir tests/v1_3/tmp
 	touch $@
 
 tests/v0_1/test_v0_1: tests/v0_1/test_v0_1.o $(CORE_OBJ)
@@ -241,7 +247,10 @@ tests/v1_1/test_v1_1: tests/v1_1/test_v1_1.o $(CORE_OBJ)
 tests/v1_2/test_v1_2: tests/v1_2/test_v1_2.o $(CORE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^
 
-test: all $(TEST_EXAMPLES) $(V1_1_TEST_FIXTURE_MARKER) $(V1_2_TEST_FIXTURE_MARKER) tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_3 tests/v0_4/test_v0_4 tests/v0_5/test_v0_5 tests/v0_6/test_v0_6 tests/v0_7/test_v0_7 tests/v0_8/test_v0_8 tests/v0_9/test_v0_9 tests/v1_1/test_v1_1 tests/v1_2/test_v1_2
+tests/v1_3/test_v1_3: tests/v1_3/test_v1_3.o $(CORE_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+test: all $(TEST_EXAMPLES) $(V1_1_TEST_FIXTURE_MARKER) $(V1_2_TEST_FIXTURE_MARKER) $(V1_3_TEST_FIXTURE_MARKER) tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_3 tests/v0_4/test_v0_4 tests/v0_5/test_v0_5 tests/v0_6/test_v0_6 tests/v0_7/test_v0_7 tests/v0_8/test_v0_8 tests/v0_9/test_v0_9 tests/v1_1/test_v1_1 tests/v1_2/test_v1_2 tests/v1_3/test_v1_3
 	./tests/v0_1/test_v0_1
 	./tests/v0_1/test_cli.sh
 	./tests/v0_2/test_v0_2
@@ -278,6 +287,11 @@ test: all $(TEST_EXAMPLES) $(V1_1_TEST_FIXTURE_MARKER) $(V1_2_TEST_FIXTURE_MARKE
 	./tests/v1_2/test_cli_virtual_memory.sh
 	./tests/v1_2/test_debugger_virtual_memory.sh
 	./tests/v1_2/test_docs_virtual_memory.sh
+	mkdir -p tests/v1_3/tmp
+	./tests/v1_3/test_v1_3
+	./tests/v1_3/test_cli_devices.sh
+	./tests/v1_3/test_debugger_devices.sh
+	./tests/v1_3/test_docs_devices.sh
 
 release-docs-check:
 	@set -eu; \
@@ -324,6 +338,11 @@ release-docs-check:
 		need_file tests/v1_2/test_cli_virtual_memory.sh; \
 		need_file tests/v1_2/test_debugger_virtual_memory.sh; \
 		need_file tests/v1_2/test_docs_virtual_memory.sh; \
+		need_file tests/fixtures/device_fixture_writer.py; \
+		need_file tests/v1_3/test_v1_3.c; \
+		need_file tests/v1_3/test_cli_devices.sh; \
+		need_file tests/v1_3/test_debugger_devices.sh; \
+		need_file tests/v1_3/test_docs_devices.sh; \
 		need_file README.md; \
 		grep -q "v1.1 Test Plan" README.md || fail "README does not link the v1.1 test plan"; \
 		grep -q "v1.2 Test Plan" README.md || fail "README does not link the v1.2 test plan"; \
@@ -331,7 +350,7 @@ release-docs-check:
 		grep -q "v1.1 Lesson" README.md || fail "README does not link the v1.1 lesson"; \
 		grep -q "v1.2 Lesson" README.md || fail "README does not link the v1.2 lesson"; \
 		grep -q "v1.3 Lesson" README.md || fail "README does not link the v1.3 lesson"; \
-		grep -q "v0.1 through v1.2" README.md || fail "README does not describe current deterministic tests"; \
+		grep -q "v0.1 through v1.3" README.md || fail "README does not describe current deterministic tests"; \
 		grep -q "make release-check" README.md || fail "README does not document make release-check"; \
 		grep -q "make test-asan" README.md || fail "README does not document optional sanitizer checks"; \
 		grep -q "fresh archive.*full deterministic test suite\|fresh-archive full deterministic-suite" README.md || fail "README does not document full deterministic-suite archive validation"; \
@@ -341,6 +360,7 @@ release-docs-check:
 		grep -q "page" README.md || fail "README does not describe page mappings"; \
 		grep -q "Memory-Mapped Devices" README.md || fail "README does not describe v1.3 memory-mapped devices"; \
 		grep -q "UART" README.md || fail "README does not describe the v1.3 UART device"; \
+		grep -q "implemented/tested teaching profile for \*\*v1.3" README.md || fail "README does not describe v1.3 as implemented/tested"; \
 		grep -q "dynamic linking" README.md || fail "README does not list stable limitations"; \
 		if grep -qi "no ELF loader yet" README.md; then fail "README still says there is no ELF loader"; fi; \
 		if grep -qi "v0.8 tests are missing\|v0.9 tests are missing" README.md; then fail "README contains stale missing-test wording for implemented versions"; fi; \
@@ -383,7 +403,7 @@ release-clean-check:
 			-o -path './tests/v0_5/test_v0_5' -o -path './tests/v0_6/test_v0_6' \
 			-o -path './tests/v0_7/test_v0_7' -o -path './tests/v0_8/test_v0_8' \
 			-o -path './tests/v0_9/test_v0_9' -o -path './tests/v1_1/test_v1_1' \
-			-o -path './tests/v1_2/test_v1_2' \
+			-o -path './tests/v1_2/test_v1_2' -o -path './tests/v1_3/test_v1_3' \
 			\) -print | sort); \
 		if [ -n "$$leftovers" ]; then echo "$$leftovers" >&2; fail "make clean left generated artifacts behind"; fi; \
 		printf '%s\n' "v1.3 release clean-artifact check passed"
