@@ -50,7 +50,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, and the implemented non-test development profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, and runnable generated examples. v1.4 dedicated tests remain outside this non-test development slice.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, and the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests.
 
 Implemented now:
 
@@ -143,7 +143,7 @@ Implemented now:
   - `x8 = 93` implements fake `exit(status)` and maps the low 8 bits to the CLI exit status
   - syscall arguments use `x0` through `x2`; return values are written to `x0`
   - invalid write fds return fake `-EBADF`; host stream write failures return fake `-EIO`; unknown syscalls return fake `-ENOSYS`
-  - non-zero `SVC` immediates and invalid guest write buffers are emulator runtime errors
+  - in the v0.7 syscall profile, non-zero `SVC` immediates and invalid guest write buffers are emulator runtime errors; v1.4 can instead route non-zero `SVC` through a configured exception vector
   - standalone examples live in `examples/v0_7/`
 - v0.8 ELF64 loader:
   - loader auto-detects ELF files by `\x7fELF` magic and keeps non-ELF files on the raw-binary path
@@ -237,7 +237,8 @@ Implemented now:
   - v1.2 virtual-memory tests for page mapping, R/W/X permission enforcement, loader-created mappings, stack guard behavior, CPU fault ordering, CLI `info`/`run`/`trace`/`regs`/`dump`, debugger `maps`/`map`, docs consistency, generated fixtures, clean behavior, and fresh-archive release coverage
   - v1.3 memory-mapped-device tests for fixed device ranges, RAM/device routing, UART output and faults, timer/random determinism, width/alignment/boundary edge cases, CPU load/store integration, raw and ELF loader integration, CLI `info`/`run`/`trace`/`regs`/`dump`, debugger `maps`/`map`/`mem`, docs consistency, generated fixtures, clean behavior, and fresh-archive release coverage
 
-The full v0.1 through v1.3 deterministic test suite runs with `make test`. The release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
+The full v0.1 through v1.4 deterministic test suite runs with `make test`. The release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
+Historical release milestones remain covered inside that command: the v0.1 through v1.0 stable-learning checks still run, and the v0.1 through v1.3 deterministic test suite is preserved as the regression base for v1.4.
 
 ## Build and Run
 
@@ -375,7 +376,7 @@ Run the named v1.0 release gate for the current deterministic suite:
 make release-check
 ```
 
-The test target builds the emulator, assembles the regression examples through v0.8, compiles the v0.1 through v0.9 C test runners, and runs all v0.1 through v1.0 CLI/release checks. The v0.9 and v1.0 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain.
+The test target builds the emulator, assembles the regression examples through v0.8, generates deterministic v1.1 through v1.4 fixtures, compiles the v0.1 through v1.4 C test runners, and runs all v0.1 through v1.4 CLI/debugger/docs/release checks. The v0.9 and v1.0 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain.
 
 `make release-check` checks v1.0 documentation links/status, repository hygiene, clean-artifact behavior after generating representative artifacts, and a fresh archive that runs the full deterministic suite after extraction. Use `make test` when you want to run the same deterministic suite directly in the current checkout.
 
@@ -1167,6 +1168,7 @@ Add a simplified exception model:
 - Selected fetch/decode/memory/device faults become catchable when a vector is configured.
 - A deterministic instruction-count timer interrupt.
 - Host/CLI vector setup through `--exception-vector <address>`.
+- CLI timer setup through `--timer-interrupt <interval>`, `--queue-timer`, and `--interrupts on|off`.
 - Guest vector setup through the exception-controller MMIO device at `0x09030000`.
 - Trace lines for exception entry and exception return.
 - Debugger inspection through the `exception` command.
@@ -1177,7 +1179,7 @@ Definition of done:
 - A tiny handler can receive a trap/fault context and return with simplified `ERET`.
 - The control transfer is visible in trace/debug output.
 - Generated examples demonstrate CLI-configured traps, guest-MMIO-configured traps, a skipped device fault, and a one-shot timer interrupt.
-- Dedicated v1.4 tests and fixtures cover the exception paths in the follow-up testing slice.
+- Dedicated v1.4 unit, CLI, debugger, docs, fixture-generation, release, and regression tests cover the exception paths.
 
 ### v1.5 — Toy Kernel Mode
 

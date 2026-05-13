@@ -164,12 +164,20 @@ static EmuStatus maybe_raise_exception(Emulator *emu, EmuExceptionCause cause, u
                                        uint64_t interrupted_pc, uint64_t resume_pc, char *error,
                                        size_t error_size) {
     if (!emu->exceptions.vector_configured) {
-        (void)cause;
-        (void)fault_address;
-        (void)interrupted_pc;
+        char detail[512];
+        snprintf(detail, sizeof(detail), "%s", error != NULL ? error : "");
+        if (detail[0] != '\0') {
+            snprintf(error, error_size,
+                     "unhandled exception: cause=%s(0x%02x) fault_address=0x%016" PRIx64
+                     " interrupted_pc=0x%016" PRIx64 " (%s)",
+                     exception_cause_name(cause), (unsigned)cause, fault_address, interrupted_pc, detail);
+        } else {
+            snprintf(error, error_size,
+                     "unhandled exception: cause=%s(0x%02x) fault_address=0x%016" PRIx64
+                     " interrupted_pc=0x%016" PRIx64,
+                     exception_cause_name(cause), (unsigned)cause, fault_address, interrupted_pc);
+        }
         (void)resume_pc;
-        (void)error;
-        (void)error_size;
         return EMU_ERROR;
     }
     return emulator_raise_exception(emu, cause, fault_address, interrupted_pc, resume_pc, error, error_size);

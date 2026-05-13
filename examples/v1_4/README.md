@@ -15,6 +15,12 @@ Exception controller = 0x09030000
 
 The generated fixtures use vector address `0x1080`.
 
+Cause names used by the examples and tests include `BREAKPOINT_OR_TRAP`,
+`SVC_TRAP`, `DEVICE_FAULT`, and `TIMER_INTERRUPT`. The fixture set keeps `BRK`
+as the primary explicit trap example; the v1.4 tests add a nonzero `SVC #1`
+fixture to pin the `SVC_TRAP` policy while preserving `SVC #0` fake syscalls.
+This is not a full ARM exception-level, GIC, or production-kernel model.
+
 Generated fixtures:
 
 ```text
