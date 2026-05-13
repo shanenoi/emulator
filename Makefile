@@ -96,8 +96,13 @@ V1_3_EXAMPLES := \
 	examples/v1_3/mmio_uart_hello.bin \
 	examples/v1_3/mmio_timer_read.bin \
 	examples/v1_3/mmio_random_read.bin
+V1_4_EXAMPLES := \
+	examples/v1_4/cli_handled_brk.bin \
+	examples/v1_4/mmio_handled_brk.bin \
+	examples/v1_4/mmio_skip_device_fault.bin \
+	examples/v1_4/mmio_timer_once.bin
 
-examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES) $(V0_9_EXAMPLES) $(V1_1_EXAMPLES) $(V1_2_EXAMPLES) $(V1_3_EXAMPLES)
+examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES) $(V0_9_EXAMPLES) $(V1_1_EXAMPLES) $(V1_2_EXAMPLES) $(V1_3_EXAMPLES) $(V1_4_EXAMPLES)
 
 TEST_EXAMPLES := $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES)
 
@@ -170,6 +175,9 @@ $(V1_2_EXAMPLES): examples/v1_2/generate_vm_fixtures.py
 $(V1_3_EXAMPLES): examples/v1_3/generate_device_fixtures.py
 	python3 examples/v1_3/generate_device_fixtures.py --output-dir examples/v1_3
 
+$(V1_4_EXAMPLES): examples/v1_4/generate_exception_fixtures.py
+	python3 examples/v1_4/generate_exception_fixtures.py --output-dir examples/v1_4
+
 run-demo: all examples/v0_1/add.bin
 	./$(TARGET) run examples/v0_1/add.bin
 
@@ -193,7 +201,7 @@ clean:
 		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
 		examples/v0_3/*.o examples/v0_3/*.bin examples/v0_4/*.o examples/v0_4/*.bin \
 		examples/v0_7/*.o examples/v0_7/*.bin examples/v0_8/*.o examples/v0_8/*.elf \
-		examples/v0_9/*.o examples/v0_9/*.elf examples/v1_1/*.macho examples/v1_2/*.bin examples/v1_3/*.bin \
+		examples/v0_9/*.o examples/v0_9/*.elf examples/v1_1/*.macho examples/v1_2/*.bin examples/v1_3/*.bin examples/v1_4/*.bin \
 		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/* tests/v0_4/tmp/* tests/v0_5/tmp/* \
 		tests/v0_6/tmp/* tests/v0_7/tmp/* tests/v0_8/tmp/* tests/v0_9/tmp/* tests/v1_0/tmp/*
 	rm -f examples/v1_2/mapping_inspection.txt

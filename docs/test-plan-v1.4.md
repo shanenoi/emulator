@@ -495,21 +495,24 @@ v1.4 is accepted when all of the following are true:
 | Context storage creates new memory-permission loopholes. | Route all context accesses through documented safe helpers and test permissions. |
 | Docs overclaim real kernel readiness. | Add docs tests that check for scope/limitation language. |
 
-## Open Decisions to Resolve Before Implementation
+## Implementation Decisions Captured Before Tests
 
-- How does guest code configure the vector base: API-only for tests, special
-  instruction, fake syscall, MMIO control register, or loader metadata?
-- Is exception context register-backed, memory-backed, or exposed through a small
-  MMIO exception-controller range?
-- Is exception return a new pseudo-instruction, a specific existing instruction
-  pattern, or a fake syscall?
-- Do memory/device faults resume by retrying the faulting instruction, skipping
-  it, or using handler-written resume address?
-- Which causes are catchable in v1.4, and which remain terminal emulator errors?
-- Are nested exceptions supported, masked, or rejected?
-- What is the priority order among breakpoint, synchronous exception, pending
-  interrupt, instruction limit, and halt?
-- Is the timer interrupt armed through the existing timer device or through a new
-  exception-controller register?
-- Should CLI `info` expose vector/exception state, or should that remain debugger
-  and test-only for v1.4?
+- Guest code configures the vector through the exception-controller MMIO device
+  at `0x09030000`; host fixtures can also use `--exception-vector <address>`.
+- Exception entry is register-backed for the beginner ABI (`x0` through `x3`),
+  while the exception-controller MMIO device exposes read-only context registers.
+- Exception return uses the decoded `ERET` instruction.
+- Memory/device/fetch/decode faults default to retrying the faulting instruction;
+  a handler can write a new return target by changing `x3` before `ERET`.
+- `BRK`, nonzero `SVC`, invalid decode, selected fetch/memory/device faults,
+  execute/read/write permission faults, and timer interrupts are catchable when
+  a valid vector is configured.
+- Nested exceptions are rejected as deterministic double faults in v1.4.
+- Instruction limit and `HLT` remain terminal host-control events; synchronous
+  exceptions from the current instruction are delivered before pending timer
+  interrupts are sampled at the between-instruction boundary.
+- The v1.4 timer interrupt is instruction-count based and can be armed through
+  the C API, CLI option, or exception-controller MMIO register. It is separate
+  from the v1.3 tick-reading timer device.
+- CLI `info` exposes exception-vector, interrupt, pending-timer, and saved
+  context state; the debugger also exposes the same state through `exception`.

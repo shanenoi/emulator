@@ -7,12 +7,12 @@
 #include <string.h>
 
 static void print_usage(FILE *stream) {
-    fprintf(stream, "usage: emulator run <program>\n");
-    fprintf(stream, "       emulator trace <program>\n");
-    fprintf(stream, "       emulator regs <program>\n");
-    fprintf(stream, "       emulator dump <program> <address> <length>\n");
-    fprintf(stream, "       emulator info <program>\n");
-    fprintf(stream, "       emulator debug <program>\n");
+    fprintf(stream, "usage: emulator run <program> [options]\n");
+    fprintf(stream, "       emulator trace <program> [options]\n");
+    fprintf(stream, "       emulator regs <program> [options]\n");
+    fprintf(stream, "       emulator dump <program> <address> <length> [options]\n");
+    fprintf(stream, "       emulator info <program> [options]\n");
+    fprintf(stream, "       emulator debug <program> [options]\n");
     fprintf(stream, "       emulator help\n");
     fprintf(stream, "\n");
     fprintf(stream, "<program> may be a raw little-endian AArch64 binary loaded at 0x%llx\n",
@@ -20,6 +20,11 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "or a supported little-endian AArch64 ELF64 ET_EXEC file,\n");
     fprintf(stream, "or a supported little-endian arm64 Mach-O MH_EXECUTE file.\n");
     fprintf(stream, "v1.3 registers fixed MMIO teaching devices: UART 0x09000000, timer 0x09010000, random 0x09020000.\n");
+    fprintf(stream, "v1.4 adds an exception-controller MMIO device at 0x09030000.\n");
+    fprintf(stream, "options: --exception-vector <address>  enable v1.4 vector before running\n");
+    fprintf(stream, "         --timer-interrupt <interval> deterministic instruction-count timer interrupt\n");
+    fprintf(stream, "         --queue-timer              queue one timer interrupt before running\n");
+    fprintf(stream, "         --interrupts on|off        set initial interrupt mask\n");
     fprintf(stream, "info and debugger maps show RAM mappings and MMIO device ranges.\n");
     fprintf(stream, "dump inspects ordinary readable RAM; CPU loads/stores are what trigger device behavior.\n");
     fprintf(stream, "dump <address> and <length> accept decimal or 0x-prefixed hexadecimal values.\n");
@@ -32,6 +37,16 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "       emulator info <raw-binary>\n");
     fprintf(stream, "       emulator debug <raw-binary>\n");
 }
+
+typedef struct {
+    bool has_exception_vector;
+    uint64_t exception_vector;
+    bool has_timer_interval;
+    uint64_t timer_interval;
+    bool queue_timer;
+    bool has_interrupts_enabled;
+    bool interrupts_enabled;
+} CliOptions;
 
 static const char *program_format_name(EmuProgramFormat format) {
     switch (format) {
@@ -91,6 +106,81 @@ static bool parse_u64(const char *text, uint64_t *out) {
     return true;
 }
 
+static bool parse_cli_options(int argc, char **argv, int start, CliOptions *options, char *error, size_t error_size) {
+    memset(options, 0, sizeof(*options));
+    for (int i = start; i < argc; i++) {
+        if (strcmp(argv[i], "--exception-vector") == 0) {
+            if (i + 1 >= argc || !parse_u64(argv[i + 1], &options->exception_vector)) {
+                snprintf(error, error_size, "invalid or missing --exception-vector address");
+                return false;
+            }
+            options->has_exception_vector = true;
+            i++;
+        } else if (strcmp(argv[i], "--timer-interrupt") == 0) {
+            if (i + 1 >= argc || !parse_u64(argv[i + 1], &options->timer_interval)) {
+                snprintf(error, error_size, "invalid or missing --timer-interrupt interval");
+                return false;
+            }
+            options->has_timer_interval = true;
+            i++;
+        } else if (strcmp(argv[i], "--queue-timer") == 0) {
+            options->queue_timer = true;
+        } else if (strcmp(argv[i], "--interrupts") == 0) {
+            if (i + 1 >= argc) {
+                snprintf(error, error_size, "missing --interrupts value; expected on or off");
+                return false;
+            }
+            if (strcmp(argv[i + 1], "on") == 0) {
+                options->interrupts_enabled = true;
+            } else if (strcmp(argv[i + 1], "off") == 0) {
+                options->interrupts_enabled = false;
+            } else {
+                snprintf(error, error_size, "invalid --interrupts value: %s", argv[i + 1]);
+                return false;
+            }
+            options->has_interrupts_enabled = true;
+            i++;
+        } else {
+            snprintf(error, error_size, "unknown option: %s", argv[i]);
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool apply_cli_options(Emulator *emu, const CliOptions *options, char *error, size_t error_size) {
+    if (options->has_exception_vector &&
+        !emulator_configure_exception_vector(emu, options->exception_vector, error, error_size)) {
+        return false;
+    }
+    if (options->has_timer_interval) {
+        emulator_configure_timer_interrupt(emu, options->timer_interval);
+    }
+    if (options->has_interrupts_enabled) {
+        emulator_set_interrupts_enabled(emu, options->interrupts_enabled);
+    }
+    if (options->queue_timer) {
+        emulator_queue_timer_interrupt(emu);
+    }
+    return true;
+}
+
+static void print_exception_info(const Emulator *emu, FILE *stream) {
+    const EmuExceptionContext *context = emulator_get_exception_context(emu);
+    fprintf(stream, "exception_vector_configured: %s\n", emu->exceptions.vector_configured ? "yes" : "no");
+    fprintf(stream, "exception_vector_base: 0x%016" PRIx64 "\n", emu->exceptions.vector_base);
+    fprintf(stream, "exception_active: %s\n", emu->exceptions.active ? "yes" : "no");
+    fprintf(stream, "interrupts_enabled: %s\n", emu->exceptions.interrupts_enabled ? "yes" : "no");
+    fprintf(stream, "timer_interrupt_interval: 0x%016" PRIx64 "\n", emu->exceptions.timer_interval);
+    fprintf(stream, "next_timer_deadline: 0x%016" PRIx64 "\n", emu->exceptions.next_timer_deadline);
+    fprintf(stream, "pending_timer_interrupt: %s\n", emu->exceptions.pending_timer_interrupt ? "yes" : "no");
+    fprintf(stream, "exception_cause: 0x%02x\n", (unsigned)context->cause);
+    fprintf(stream, "exception_fault_address: 0x%016" PRIx64 "\n", context->fault_address);
+    fprintf(stream, "exception_interrupted_pc: 0x%016" PRIx64 "\n", context->interrupted_pc);
+    fprintf(stream, "exception_resume_pc: 0x%016" PRIx64 "\n", context->resume_pc);
+    fprintf(stream, "exception_depth: %u\n", context->depth);
+}
+
 static bool dump_memory(const Memory *memory, uint64_t address, uint64_t length, FILE *stream, char *error,
                         size_t error_size) {
     if (address > (uint64_t)memory->size || length > (uint64_t)memory->size ||
@@ -144,19 +234,40 @@ int main(int argc, char **argv) {
         return 2;
     }
 
-    if (argc != 3 && argc != 5) {
+    if (argc < 3) {
+        print_usage(stderr);
+        return 2;
+    }
+
+    int option_start = 3;
+    if (strcmp(argv[1], "dump") == 0) {
+        option_start = 5;
+    }
+    if (argc < option_start) {
+        print_usage(stderr);
+        return 2;
+    }
+
+    CliOptions options;
+    if (!parse_cli_options(argc, argv, option_start, &options, error, sizeof(error))) {
+        fprintf(stderr, "error: %s\n", error);
         print_usage(stderr);
         return 2;
     }
 
     if (strcmp(argv[1], "debug") == 0) {
-        if (argc != 3) {
+        if (argc < 3) {
             print_usage(stderr);
             return 2;
         }
         Debugger debugger;
         if (!debugger_init(&debugger, argv[2], error, sizeof(error))) {
             fprintf(stderr, "error: %s\n", error);
+            return 1;
+        }
+        if (!apply_cli_options(&debugger.emu, &options, error, sizeof(error))) {
+            fprintf(stderr, "error: %s\n", error);
+            debugger_free(&debugger);
             return 1;
         }
         int status = debugger_repl(&debugger, stdin, stdout, stderr);
@@ -170,19 +281,19 @@ int main(int argc, char **argv) {
     uint64_t dump_address = 0;
     uint64_t dump_length = 0;
     if (strcmp(argv[1], "trace") == 0) {
-        if (argc != 3) {
+        if (argc < 3) {
             print_usage(stderr);
             return 2;
         }
         trace_enabled = true;
     } else if (strcmp(argv[1], "regs") == 0) {
-        if (argc != 3) {
+        if (argc < 3) {
             print_usage(stderr);
             return 2;
         }
         regs_only = true;
     } else if (strcmp(argv[1], "dump") == 0) {
-        if (argc != 5) {
+        if (argc < 5) {
             print_usage(stderr);
             return 2;
         }
@@ -193,7 +304,7 @@ int main(int argc, char **argv) {
             return 2;
         }
     } else if (strcmp(argv[1], "info") == 0) {
-        if (argc != 3) {
+        if (argc < 3) {
             print_usage(stderr);
             return 2;
         }
@@ -201,7 +312,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "error: unknown command: %s\n", argv[1]);
         print_usage(stderr);
         return 2;
-    } else if (argc != 3) {
+    } else if (argc < 3) {
         print_usage(stderr);
         return 2;
     }
@@ -220,8 +331,15 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    if (!apply_cli_options(&emu, &options, error, sizeof(error))) {
+        fprintf(stderr, "error: %s\n", error);
+        emulator_free(&emu);
+        return 1;
+    }
+
     if (strcmp(argv[1], "info") == 0) {
         print_program_info(&program, &emu.memory, stdout);
+        print_exception_info(&emu, stdout);
         emulator_free(&emu);
         return 0;
     }

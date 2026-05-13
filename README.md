@@ -50,7 +50,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, and the initial development slice for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**. v1.4 adds the exception-controller data model, vector configuration API, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, a deterministic timer-interrupt skeleton, and debugger exception-context inspection. v1.4 dedicated tests remain outside this non-test development slice.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, and the implemented non-test development profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, and runnable generated examples. v1.4 dedicated tests remain outside this non-test development slice.
 
 Implemented now:
 
@@ -1139,6 +1139,8 @@ Generate and run the v1.3 UART example with:
 make examples/v1_3/mmio_uart_hello.bin
 ./emulator run examples/v1_3/mmio_uart_hello.bin
 ./emulator info examples/v1_3/mmio_uart_hello.bin
+./emulator trace examples/v1_4/cli_handled_brk.bin --exception-vector 0x1080
+./emulator trace examples/v1_4/mmio_handled_brk.bin
 ```
 
 Definition of done:
@@ -1163,7 +1165,10 @@ Add a simplified exception model:
 - Nonzero `SVC #imm` as a catchable trap when a vector is configured, while preserving `SVC #0` toy syscalls.
 - Simplified `ERET` return from an active exception.
 - Selected fetch/decode/memory/device faults become catchable when a vector is configured.
-- A deterministic pending timer-interrupt skeleton.
+- A deterministic instruction-count timer interrupt.
+- Host/CLI vector setup through `--exception-vector <address>`.
+- Guest vector setup through the exception-controller MMIO device at `0x09030000`.
+- Trace lines for exception entry and exception return.
 - Debugger inspection through the `exception` command.
 
 Definition of done:
@@ -1171,7 +1176,8 @@ Definition of done:
 - Old fatal behavior remains stable when no vector is configured.
 - A tiny handler can receive a trap/fault context and return with simplified `ERET`.
 - The control transfer is visible in trace/debug output.
-- Dedicated v1.4 tests and fixtures cover the exception paths in the follow-up testing slice; this change starts the implementation hooks first.
+- Generated examples demonstrate CLI-configured traps, guest-MMIO-configured traps, a skipped device fault, and a one-shot timer interrupt.
+- Dedicated v1.4 tests and fixtures cover the exception paths in the follow-up testing slice.
 
 ### v1.5 — Toy Kernel Mode
 

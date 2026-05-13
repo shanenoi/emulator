@@ -14,6 +14,7 @@ static bool checked_add_u64(uint64_t left, uint64_t right, uint64_t *out) {
 }
 
 static void memory_install_default_devices(Memory *memory) {
+    EmuExceptionController *exceptions = memory->devices.exceptions;
     memory->devices.range_count = 3;
     memory->devices.ranges[0] = (EmuDeviceRange){EMU_DEVICE_UART_BASE, EMU_DEVICE_SIZE,
                                                   EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_UART, "uart"};
@@ -21,9 +22,15 @@ static void memory_install_default_devices(Memory *memory) {
                                                    EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_TIMER, "timer"};
     memory->devices.ranges[2] = (EmuDeviceRange){EMU_DEVICE_RANDOM_BASE, EMU_DEVICE_SIZE,
                                                    EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_RANDOM, "random"};
+    if (exceptions != NULL) {
+        memory->devices.ranges[memory->devices.range_count++] =
+            (EmuDeviceRange){EMU_DEVICE_EXCEPTION_BASE, EMU_DEVICE_SIZE, EMU_MAP_READ | EMU_MAP_WRITE,
+                             EMU_DEVICE_EXCEPTION, "exception"};
+    }
     memory->devices.timer_ticks = 0;
     memory->devices.random_state = 0x00c0ffeeu;
     memory->devices.uart_output = stdout;
+    memory->devices.exceptions = exceptions;
 }
 
 static bool device_contains_range(const EmuDeviceRange *device, uint64_t address, uint64_t width) {
@@ -107,6 +114,45 @@ static uint32_t random_next(uint32_t state) {
     return state * 1664525u + 1013904223u;
 }
 
+static bool exception_vector_is_valid_for_device(const Memory *memory, uint64_t vector_base, char *error,
+                                                 size_t error_size) {
+    if ((vector_base & 0x3ull) != 0) {
+        snprintf(error, error_size, "device fault: exception vector must be 4-byte aligned: 0x%016" PRIx64,
+                 vector_base);
+        return false;
+    }
+    if (memory_find_device(memory, vector_base) != NULL) {
+        snprintf(error, error_size, "device fault: exception vector cannot point at a device range: 0x%016" PRIx64,
+                 vector_base);
+        return false;
+    }
+    if (!memory_check_execute(memory, vector_base, sizeof(uint32_t), error, error_size)) {
+        char detail[256];
+        snprintf(detail, sizeof(detail), "%s", error);
+        snprintf(error, error_size, "device fault: exception vector is not executable: 0x%016" PRIx64 " (%s)",
+                 vector_base, detail);
+        return false;
+    }
+    return true;
+}
+
+static uint32_t exception_control_bits(const EmuExceptionController *exceptions) {
+    if (exceptions == NULL) {
+        return 0;
+    }
+    uint32_t bits = 0;
+    if (exceptions->vector_configured) {
+        bits |= EMU_EXCEPTION_CONTROL_VECTOR_ENABLE;
+    }
+    if (exceptions->interrupts_enabled) {
+        bits |= EMU_EXCEPTION_CONTROL_INTERRUPTS_ENABLE;
+    }
+    if (exceptions->pending_timer_interrupt) {
+        bits |= EMU_EXCEPTION_CONTROL_QUEUE_TIMER;
+    }
+    return bits;
+}
+
 static bool device_read(Memory *memory, const EmuDeviceRange *device, uint64_t address, uint64_t width, uint64_t *out,
                         char *error, size_t error_size) {
     uint64_t offset = address - device->start;
@@ -170,6 +216,54 @@ static bool device_read(Memory *memory, const EmuDeviceRange *device, uint64_t a
             return device_reject_writeonly(device, offset, error, error_size);
         }
         return device_reject_invalid_register(device, offset, width, "read", error, error_size);
+
+    case EMU_DEVICE_EXCEPTION: {
+        EmuExceptionController *exceptions = memory->devices.exceptions;
+        if (exceptions == NULL) {
+            snprintf(error, error_size, "device fault: exception controller is not connected");
+            return false;
+        }
+        if (!device_reject_if_unaligned(device, offset, width, "read", error, error_size)) {
+            return false;
+        }
+        if (offset == EMU_EXCEPTION_VECTOR_OFFSET && width == 8) {
+            *out = exceptions->vector_base;
+            return true;
+        }
+        if (offset == EMU_EXCEPTION_CONTROL_OFFSET && width == 4) {
+            *out = exception_control_bits(exceptions);
+            return true;
+        }
+        if (offset == EMU_EXCEPTION_TIMER_INTERVAL_OFFSET && width == 8) {
+            *out = exceptions->timer_interval;
+            return true;
+        }
+        if (offset == EMU_EXCEPTION_PENDING_OFFSET && width == 4) {
+            *out = exceptions->pending_timer_interrupt ? 1u : 0u;
+            return true;
+        }
+        if (offset == EMU_EXCEPTION_CAUSE_OFFSET && width == 4) {
+            *out = (uint32_t)exceptions->context.cause;
+            return true;
+        }
+        if (offset == EMU_EXCEPTION_FAULT_ADDRESS_OFFSET && width == 8) {
+            *out = exceptions->context.fault_address;
+            return true;
+        }
+        if (offset == EMU_EXCEPTION_INTERRUPTED_PC_OFFSET && width == 8) {
+            *out = exceptions->context.interrupted_pc;
+            return true;
+        }
+        if (offset == EMU_EXCEPTION_RESUME_PC_OFFSET && width == 8) {
+            *out = exceptions->context.resume_pc;
+            return true;
+        }
+        if (offset == EMU_EXCEPTION_DEPTH_OFFSET && width == 4) {
+            *out = exceptions->context.depth;
+            return true;
+        }
+        return device_reject_invalid_register(device, offset, width, "read", error, error_size);
+    }
     }
 
     snprintf(error, error_size, "device fault: unknown device kind");
@@ -237,6 +331,56 @@ static bool device_write(Memory *memory, const EmuDeviceRange *device, uint64_t 
             return device_reject_readonly(device, offset, error, error_size);
         }
         return device_reject_invalid_register(device, offset, width, "write", error, error_size);
+
+    case EMU_DEVICE_EXCEPTION: {
+        EmuExceptionController *exceptions = memory->devices.exceptions;
+        if (exceptions == NULL) {
+            snprintf(error, error_size, "device fault: exception controller is not connected");
+            return false;
+        }
+        if (!device_reject_if_unaligned(device, offset, width, "write", error, error_size)) {
+            return false;
+        }
+        if (offset == EMU_EXCEPTION_VECTOR_OFFSET && width == 8) {
+            exceptions->vector_base = value;
+            return true;
+        }
+        if (offset == EMU_EXCEPTION_CONTROL_OFFSET && width == 4) {
+            uint32_t bits = (uint32_t)value;
+            if ((bits & EMU_EXCEPTION_CONTROL_VECTOR_ENABLE) != 0) {
+                if (!exception_vector_is_valid_for_device(memory, exceptions->vector_base, error, error_size)) {
+                    return false;
+                }
+                exceptions->vector_configured = true;
+            } else {
+                exceptions->vector_configured = false;
+            }
+            exceptions->interrupts_enabled = (bits & EMU_EXCEPTION_CONTROL_INTERRUPTS_ENABLE) != 0;
+            if ((bits & EMU_EXCEPTION_CONTROL_QUEUE_TIMER) != 0) {
+                exceptions->pending_timer_interrupt = true;
+            }
+            if ((bits & EMU_EXCEPTION_CONTROL_CLEAR_PENDING) != 0) {
+                exceptions->pending_timer_interrupt = false;
+            }
+            return true;
+        }
+        if (offset == EMU_EXCEPTION_TIMER_INTERVAL_OFFSET && width == 8) {
+            exceptions->timer_interval = value;
+            exceptions->next_timer_deadline = value;
+            exceptions->pending_timer_interrupt = false;
+            return true;
+        }
+        if (offset == EMU_EXCEPTION_PENDING_OFFSET && width == 4) {
+            exceptions->pending_timer_interrupt = value != 0;
+            return true;
+        }
+        if (offset == EMU_EXCEPTION_CAUSE_OFFSET || offset == EMU_EXCEPTION_FAULT_ADDRESS_OFFSET ||
+            offset == EMU_EXCEPTION_INTERRUPTED_PC_OFFSET || offset == EMU_EXCEPTION_RESUME_PC_OFFSET ||
+            offset == EMU_EXCEPTION_DEPTH_OFFSET) {
+            return device_reject_readonly(device, offset, error, error_size);
+        }
+        return device_reject_invalid_register(device, offset, width, "write", error, error_size);
+    }
     }
 
     snprintf(error, error_size, "device fault: unknown device kind");
@@ -761,9 +905,14 @@ void memory_print_mappings(const Memory *memory, FILE *stream) {
 }
 
 void memory_print_devices(const Memory *memory, FILE *stream) {
-    fprintf(stream, "devices: %zu\n", memory != NULL ? memory->devices.range_count : 0u);
     if (memory == NULL) {
+        fprintf(stream, "devices: 0\n");
         return;
+    }
+    if (memory->devices.range_count == 4 && memory->devices.ranges[3].kind == EMU_DEVICE_EXCEPTION) {
+        fprintf(stream, "devices: 3 legacy + 1 exception\n");
+    } else {
+        fprintf(stream, "devices: %zu\n", memory->devices.range_count);
     }
     for (size_t i = 0; i < memory->devices.range_count; i++) {
         const EmuDeviceRange *device = &memory->devices.ranges[i];

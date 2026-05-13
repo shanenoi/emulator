@@ -10,7 +10,7 @@ From the repository root:
 make examples
 ```
 
-This assembles the raw-binary examples, links the v0.8 ELF examples, and builds the v0.9 freestanding C ELF examples. Generated `.bin`, `.o`, and `.elf` files are ignored by Git. v0.9 C examples use `clang --target=aarch64-none-elf` and `ld.lld` when available; if those tools are missing, their recipes print a skip message instead of failing. A skip message means the requested v0.9 `.elf` file was **not** produced, so install or expose the tools before running that particular example.
+This assembles the raw-binary examples, links the v0.8 ELF examples, builds the v0.9 freestanding C ELF examples, and generates the later binary fixtures. Generated `.bin`, `.o`, and `.elf` files are ignored by Git. v0.9 C examples use `clang --target=aarch64-none-elf` and `ld.lld` when available; if those tools are missing, their recipes print a skip message instead of failing. A skip message means the requested v0.9 `.elf` file was **not** produced, so install or expose the tools before running that particular example.
 
 The build flow is:
 
@@ -34,21 +34,27 @@ example.o + examples/v0_9/start.o
 example.elf
 ```
 
-The emulator supports two input formats:
+The emulator supports three input formats:
 
 ```text
-raw .bin files      loaded at 0x1000
-ELF64 ET_EXEC files loaded from PT_LOAD program headers
+raw .bin files             loaded at 0x1000
+ELF64 ET_EXEC/DYN files    loaded from PT_LOAD program headers
+Mach-O arm64 MH_EXECUTE    loaded from supported LC_SEGMENT_64 records
 ```
 
-It still does not load Mach-O, DWARF, source-level debug information, dynamically linked Linux programs, shared libraries, or PIE executables.
+It still does not load DWARF, source-level debug information, dynamically linked Linux programs, shared libraries, or PIE-style host-runtime dependencies.
 
 ## v1.4 exception examples
 
-The `examples/v1_4/` directory currently documents the planned exception,
-trap, and interrupt fixtures for the v1.4 implementation slice. Generated v1.4
-fixture binaries will be added with the dedicated v1.4 tests so the runtime and
-test artifacts stay reviewable separately.
+The `examples/v1_4/` directory contains generated raw fixtures for the v1.4 exception, trap, and interrupt runtime. Build and run them with:
+
+```sh
+make examples/v1_4/cli_handled_brk.bin
+./emulator trace examples/v1_4/cli_handled_brk.bin --exception-vector 0x1080
+./emulator trace examples/v1_4/mmio_handled_brk.bin
+./emulator trace examples/v1_4/mmio_skip_device_fault.bin
+./emulator trace examples/v1_4/mmio_timer_once.bin
+```
 
 ## Run an example
 
@@ -178,6 +184,10 @@ examples/v0_7/    toy-syscall standalone examples
 examples/v0_8/    simple static ELF64 examples
 examples/v0_9/    tiny freestanding C ELF examples
 examples/v1_0/    release smoke manifest and stability notes
+examples/v1_1/    generated Mach-O loader fixtures
+examples/v1_2/    generated virtual-memory fixtures
+examples/v1_3/    generated MMIO device fixtures
+examples/v1_4/    generated exception/trap/interrupt fixtures
 ```
 
 `examples/v1_0/smoke_manifest.txt` is not a new program format. It is a compact checklist of representative examples that should keep working together for the stable v1.0 learning release.

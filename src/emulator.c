@@ -39,6 +39,10 @@ static bool check_syscall_buffer(const Memory *memory, uint64_t address, uint64_
     return true;
 }
 
+static FILE *emulator_trace_stream(Emulator *emu) {
+    return emu->trace_stream != NULL ? emu->trace_stream : stdout;
+}
+
 static const char *exception_cause_name(EmuExceptionCause cause) {
     switch (cause) {
     case EMU_EXCEPTION_NONE:
@@ -175,7 +179,7 @@ static void update_timer_interrupt_deadline(Emulator *emu) {
     if (emu->exceptions.timer_interval == 0 || emu->exceptions.active) {
         return;
     }
-    if (emu->memory.devices.timer_ticks >= emu->exceptions.next_timer_deadline) {
+    if (emu->cpu.instructions_executed >= emu->exceptions.next_timer_deadline) {
         emu->exceptions.pending_timer_interrupt = true;
         emu->exceptions.next_timer_deadline += emu->exceptions.timer_interval;
     }
@@ -186,6 +190,8 @@ bool emulator_init(Emulator *emu, char *error, size_t error_size) {
     if (!memory_init(&emu->memory, EMU_MEMORY_SIZE, error, error_size)) {
         return false;
     }
+    emu->memory.devices.exceptions = &emu->exceptions;
+    memory_reset_devices(&emu->memory);
     cpu_init(&emu->cpu, EMU_LOAD_ADDRESS, EMU_MEMORY_SIZE);
     emu->instruction_limit = EMU_DEFAULT_INSTRUCTION_LIMIT;
     emu->trace_enabled = false;
@@ -291,7 +297,7 @@ bool emulator_queue_timer_interrupt(Emulator *emu) {
 
 void emulator_configure_timer_interrupt(Emulator *emu, uint64_t interval) {
     emu->exceptions.timer_interval = interval;
-    emu->exceptions.next_timer_deadline = interval;
+    emu->exceptions.next_timer_deadline = interval == 0 ? 0 : emu->cpu.instructions_executed + interval;
     emu->exceptions.pending_timer_interrupt = false;
 }
 
@@ -327,6 +333,14 @@ EmuStatus emulator_raise_exception(Emulator *emu, EmuExceptionCause cause, uint6
     cpu_write_register(&emu->cpu, 2, true, interrupted_pc);
     cpu_write_register(&emu->cpu, 3, true, resume_pc);
     emu->cpu.pc = emu->exceptions.vector_base;
+    if (emu->trace_enabled) {
+        fprintf(emulator_trace_stream(emu),
+                "trace exception-enter cause=%s(0x%02x) fault=0x%016" PRIx64
+                " interrupted_pc=0x%016" PRIx64 " resume_pc=0x%016" PRIx64
+                " vector=0x%016" PRIx64 "\n",
+                exception_cause_name(cause), (unsigned)cause, fault_address, interrupted_pc, resume_pc,
+                emu->exceptions.vector_base);
+    }
     return EMU_OK;
 }
 
@@ -335,20 +349,27 @@ bool emulator_exception_return(Emulator *emu, char *error, size_t error_size) {
         snprintf(error, error_size, "eret without active exception");
         return false;
     }
-    if ((emu->exceptions.context.resume_pc & 0x3ull) != 0) {
-        snprintf(error, error_size, "exception return target is misaligned: 0x%016" PRIx64,
-                 emu->exceptions.context.resume_pc);
+    uint64_t return_pc = cpu_read_register(&emu->cpu, 3);
+    if ((return_pc & 0x3ull) != 0) {
+        snprintf(error, error_size, "exception return target is misaligned: 0x%016" PRIx64, return_pc);
         return false;
     }
-    if (!memory_check_execute(&emu->memory, emu->exceptions.context.resume_pc, sizeof(uint32_t), error, error_size)) {
+    if (!memory_check_execute(&emu->memory, return_pc, sizeof(uint32_t), error, error_size)) {
         char detail[256];
         snprintf(detail, sizeof(detail), "%s", error);
         snprintf(error, error_size, "exception return target is not executable: 0x%016" PRIx64 " (%s)",
-                 emu->exceptions.context.resume_pc, detail);
+                 return_pc, detail);
         return false;
     }
+    emu->exceptions.context.resume_pc = return_pc;
     emu->cpu.flags = emu->exceptions.context.flags;
-    emu->cpu.pc = emu->exceptions.context.resume_pc;
+    emu->cpu.pc = return_pc;
+    if (emu->trace_enabled) {
+        fprintf(emulator_trace_stream(emu),
+                "trace exception-return cause=%s(0x%02x) resume_pc=0x%016" PRIx64 "\n",
+                exception_cause_name(emu->exceptions.context.cause), (unsigned)emu->exceptions.context.cause,
+                emu->exceptions.context.resume_pc);
+    }
     emu->exceptions.active = false;
     emu->exceptions.interrupts_enabled = true;
     emu->exceptions.context.depth = 0;

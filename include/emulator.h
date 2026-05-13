@@ -18,6 +18,7 @@
 #define EMU_DEVICE_UART_BASE 0x09000000ull
 #define EMU_DEVICE_TIMER_BASE 0x09010000ull
 #define EMU_DEVICE_RANDOM_BASE 0x09020000ull
+#define EMU_DEVICE_EXCEPTION_BASE 0x09030000ull
 #define EMU_DEVICE_SIZE 0x00001000ull
 
 #define EMU_UART_DATA_OFFSET 0x00ull
@@ -27,6 +28,20 @@
 #define EMU_TIMER_RESET_OFFSET 0x08ull
 #define EMU_RANDOM_VALUE_OFFSET 0x00ull
 #define EMU_RANDOM_SEED_OFFSET 0x04ull
+#define EMU_EXCEPTION_VECTOR_OFFSET 0x00ull
+#define EMU_EXCEPTION_CONTROL_OFFSET 0x08ull
+#define EMU_EXCEPTION_TIMER_INTERVAL_OFFSET 0x10ull
+#define EMU_EXCEPTION_PENDING_OFFSET 0x18ull
+#define EMU_EXCEPTION_CAUSE_OFFSET 0x20ull
+#define EMU_EXCEPTION_FAULT_ADDRESS_OFFSET 0x28ull
+#define EMU_EXCEPTION_INTERRUPTED_PC_OFFSET 0x30ull
+#define EMU_EXCEPTION_RESUME_PC_OFFSET 0x38ull
+#define EMU_EXCEPTION_DEPTH_OFFSET 0x40ull
+
+#define EMU_EXCEPTION_CONTROL_VECTOR_ENABLE 0x1u
+#define EMU_EXCEPTION_CONTROL_INTERRUPTS_ENABLE 0x2u
+#define EMU_EXCEPTION_CONTROL_QUEUE_TIMER 0x4u
+#define EMU_EXCEPTION_CONTROL_CLEAR_PENDING 0x8u
 
 #define EMU_MAP_READ 0x1u
 #define EMU_MAP_WRITE 0x2u
@@ -231,6 +246,7 @@ typedef enum {
     EMU_DEVICE_UART = 0,
     EMU_DEVICE_TIMER,
     EMU_DEVICE_RANDOM,
+    EMU_DEVICE_EXCEPTION,
 } EmuDeviceKind;
 
 typedef struct {
@@ -242,11 +258,12 @@ typedef struct {
 } EmuDeviceRange;
 
 typedef struct {
-    EmuDeviceRange ranges[3];
+    EmuDeviceRange ranges[4];
     size_t range_count;
     uint64_t timer_ticks;
     uint32_t random_state;
     FILE *uart_output;
+    EmuExceptionController *exceptions;
 } EmuDeviceBus;
 
 typedef struct {
