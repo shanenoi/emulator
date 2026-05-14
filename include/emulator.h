@@ -43,6 +43,15 @@
 #define EMU_EXCEPTION_CONTROL_QUEUE_TIMER 0x4u
 #define EMU_EXCEPTION_CONTROL_CLEAR_PENDING 0x8u
 
+#define EMU_TOY_KERNEL_MAX_TASKS 8u
+#define EMU_TOY_KERNEL_STACK_SIZE (16u * 1024u)
+#define EMU_TOY_KERNEL_BOOT_INFO_MAGIC 0x454d554b45524e31ull /* "EMUKERN1" */
+#define EMU_TOY_KERNEL_BOOT_INFO_VERSION 1u
+#define EMU_TOY_KERNEL_TRAP_YIELD 0x150u
+#define EMU_TOY_KERNEL_TRAP_TASK_EXIT 0x151u
+#define EMU_TOY_KERNEL_TRAP_PANIC 0x152u
+#define EMU_TOY_KERNEL_TRAP_CONSOLE_WRITE 0x153u
+
 #define EMU_MAP_READ 0x1u
 #define EMU_MAP_WRITE 0x2u
 #define EMU_MAP_EXEC 0x4u
@@ -236,6 +245,61 @@ typedef struct {
     EmuExceptionContext context;
 } EmuExceptionController;
 
+typedef enum {
+    EMU_TOY_TASK_EMPTY = 0,
+    EMU_TOY_TASK_READY,
+    EMU_TOY_TASK_RUNNING,
+    EMU_TOY_TASK_BLOCKED,
+    EMU_TOY_TASK_EXITED,
+    EMU_TOY_TASK_FAULTED,
+} EmuToyTaskState;
+
+typedef struct {
+    uint64_t magic;
+    uint32_t version;
+    uint32_t size;
+    uint64_t memory_base;
+    uint64_t memory_size;
+    uint64_t kernel_stack_base;
+    uint64_t kernel_stack_size;
+    uint64_t task_stack_base;
+    uint64_t task_stack_size;
+    uint64_t task_count;
+    uint64_t uart_base;
+    uint64_t timer_base;
+    uint64_t random_base;
+    uint64_t exception_controller_base;
+} EmuToyKernelBootInfo;
+
+typedef struct {
+    EmuToyTaskState state;
+    uint64_t x[31];
+    uint64_t sp;
+    uint64_t pc;
+    EmuFlags flags;
+    uint64_t entry;
+    uint64_t stack_base;
+    uint64_t stack_size;
+    uint64_t exit_code;
+    uint64_t yields;
+} EmuToyTask;
+
+typedef struct {
+    bool enabled;
+    bool boot_info_enabled;
+    bool tasks_started;
+    bool panic;
+    uint64_t panic_code;
+    uint64_t boot_info_address;
+    uint64_t kernel_entry;
+    uint64_t kernel_stack_top;
+    uint64_t task_stack_next;
+    size_t task_count;
+    size_t current_task;
+    EmuToyTask tasks[EMU_TOY_KERNEL_MAX_TASKS];
+    EmuToyKernelBootInfo boot_info;
+} EmuToyKernel;
+
 typedef struct {
     uint64_t start;
     uint64_t size;
@@ -330,6 +394,7 @@ typedef struct {
     uint8_t guest_exit_code;
     bool guest_exited;
     EmuExceptionController exceptions;
+    EmuToyKernel toy_kernel;
 } Emulator;
 
 typedef struct {
@@ -413,6 +478,9 @@ void emulator_set_interrupts_enabled(Emulator *emu, bool enabled);
 bool emulator_queue_timer_interrupt(Emulator *emu);
 void emulator_configure_timer_interrupt(Emulator *emu, uint64_t interval);
 const EmuExceptionContext *emulator_get_exception_context(const Emulator *emu);
+bool emulator_enable_toy_kernel(Emulator *emu, bool with_boot_info, char *error, size_t error_size);
+bool emulator_toy_kernel_add_task(Emulator *emu, uint64_t entry, char *error, size_t error_size);
+const EmuToyKernel *emulator_get_toy_kernel(const Emulator *emu);
 EmuStatus emulator_step(Emulator *emu, char *error, size_t error_size);
 EmuStatus emulator_run(Emulator *emu, char *error, size_t error_size);
 

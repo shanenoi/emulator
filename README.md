@@ -48,10 +48,13 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v1.2 Lesson — Virtual Memory and Page Permissions](lessons/v1.2-virtual-memory.md)
 - [v1.3 Lesson — Memory-Mapped Devices](lessons/v1.3-memory-mapped-devices.md)
 - [v1.4 Lesson — Exceptions, Traps, and Interrupt Skeleton](lessons/v1.4-exceptions-and-interrupts.md)
+- [v1.5 Lesson — Toy Kernel Boot and Cooperative Tasks](lessons/v1.5-toy-kernel-and-cooperative-tasks.md)
 
 ## Current Implementation Status
 
 The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, and the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests.
+
+The first **v1.5 — Toy Kernel Boot and Cooperative Tasks** development pass is now present but not yet covered by dedicated v1.5 tests. It adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, deterministic cooperative round-robin scheduling, toy-kernel `BRK` traps for yield/exit/panic/console output, and `info`/trace visibility for scheduler state.
 
 Implemented now:
 
@@ -212,6 +215,17 @@ Implemented now:
   - adds deterministic generated v1.3 examples in `examples/v1_3/`
   - documents the current v1.3 behavior in `examples/v1_3/README.md` and `lessons/v1.3-memory-mapped-devices.md`
   - includes v1.3 unit, CLI, debugger, docs, clean, and fresh-archive release tests
+- v1.5 toy-kernel development profile:
+  - opt-in with `--kernel`, leaving older raw, ELF64, Mach-O, syscall, and v1.4 exception behavior unchanged by default
+  - optional boot-info block with `--kernel-boot-info`, passed in `x0`/`x1`
+  - repeatable `--kernel-task <address>` entries for host-created cooperative tasks
+  - fixed maximum of 8 tasks, each with a separate 16 KiB guest stack
+  - task states: `EMPTY`, `READY`, `RUNNING`, `BLOCKED`, `EXITED`, and `FAULTED`
+  - deterministic round-robin scheduling for `READY` tasks
+  - toy-kernel `BRK` traps: `0x150` yield, `0x151` task exit, `0x152` panic, and `0x153` console write
+  - `emulator info` prints toy-kernel profile and task-table metadata
+  - trace mode prints scheduler switch and completion events
+  - dedicated v1.5 tests and generated fixtures are still pending
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -1185,24 +1199,25 @@ Definition of done:
 
 ### v1.5 — Toy Kernel Mode
 
-**Goal:** introduce the first small kernel/user boundary on top of the v1.4 exception and trap foundation.
+**Goal:** introduce the first deterministic toy-kernel execution profile on top of the v1.4 exception and trap foundation.
 
-Layer the toy-kernel teaching contract on top of v1.4:
+Current development pass:
 
-- A clear distinction between normal user program flow and kernel handler flow.
-- A stable trap/syscall entry path that beginner kernel examples can use.
-- A simple convention for passing trap context into kernel code.
-- A controlled return path from kernel handler code back to the interrupted or next user instruction.
-- Documentation and examples that explain how the vector handler acts like the first tiny kernel entry point.
-- Toy-kernel examples that show a user program entering a toy kernel handler and returning.
+- Opt-in `--kernel` profile so older programs keep their existing behavior.
+- Optional `--kernel-boot-info` metadata block for kernel-shaped programs.
+- Repeatable `--kernel-task <address>` entries for host-created cooperative tasks.
+- Fixed task table and fixed task stacks for deterministic scheduling lessons.
+- `BRK #0x150` yield, `BRK #0x151` task exit, `BRK #0x152` panic, and `BRK #0x153` console write.
+- Round-robin scheduling over `READY` tasks, skipping `EXITED` tasks.
+- `info` and trace output for the toy-kernel profile and scheduler events.
 
-Definition of done:
+Remaining definition of done before calling v1.5 fully tested:
 
-- Toy-kernel mode can be enabled without changing older v1.4 exception behavior.
-- A tiny user program can enter a toy kernel handler through a trap/syscall path.
-- The toy kernel can inspect trap context, perform a small service, and return to user code.
-- Debugger and trace output make the user/kernel transition visible.
-- Dedicated v1.5 tests and fixtures cover the toy-kernel entry/return path.
+- Add deterministic generated v1.5 fixtures.
+- Add unit tests for boot state, task setup, context save/restore, scheduling, and trap behavior.
+- Add CLI/debugger/docs tests for the new profile.
+- Add negative tests for bad entries, bad stacks, bad boot-info use, panic, and unknown traps.
+- Promote v1.5 into the release docs and fresh-archive gate after the dedicated tests exist.
 
 ### v1.6 — Tiny OS Lab
 
@@ -1212,8 +1227,8 @@ Add OS-lab features:
 
 - Load multiple user programs.
 - Maintain per-task CPU state.
-- Simple cooperative scheduler.
-- Basic task switching.
+- Extend the v1.5 cooperative scheduler into a guest-managed task API.
+- Add richer task switching examples and failure handling.
 - Per-task memory regions or simplified address spaces.
 - Syscall table managed by the toy kernel.
 

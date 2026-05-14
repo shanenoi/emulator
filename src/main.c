@@ -21,10 +21,14 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "or a supported little-endian arm64 Mach-O MH_EXECUTE file.\n");
     fprintf(stream, "v1.3 registers fixed MMIO teaching devices: UART 0x09000000, timer 0x09010000, random 0x09020000.\n");
     fprintf(stream, "v1.4 adds an exception-controller MMIO device at 0x09030000.\n");
+    fprintf(stream, "v1.5 adds an opt-in toy-kernel profile with cooperative BRK traps.\n");
     fprintf(stream, "options: --exception-vector <address>  enable v1.4 vector before running\n");
     fprintf(stream, "         --timer-interrupt <interval> deterministic instruction-count timer interrupt\n");
     fprintf(stream, "         --queue-timer              queue one timer interrupt before running\n");
     fprintf(stream, "         --interrupts on|off        set initial interrupt mask\n");
+    fprintf(stream, "         --kernel                   enable v1.5 toy-kernel boot profile\n");
+    fprintf(stream, "         --kernel-boot-info         pass a guest-readable boot-info block in x0/x1\n");
+    fprintf(stream, "         --kernel-task <address>    add a cooperative task entry point; may repeat\n");
     fprintf(stream, "info and debugger maps show RAM mappings and MMIO device ranges.\n");
     fprintf(stream, "dump inspects ordinary readable RAM; CPU loads/stores are what trigger device behavior.\n");
     fprintf(stream, "dump <address> and <length> accept decimal or 0x-prefixed hexadecimal values.\n");
@@ -46,6 +50,10 @@ typedef struct {
     bool queue_timer;
     bool has_interrupts_enabled;
     bool interrupts_enabled;
+    bool kernel_enabled;
+    bool kernel_boot_info;
+    uint64_t kernel_tasks[EMU_TOY_KERNEL_MAX_TASKS];
+    size_t kernel_task_count;
 } CliOptions;
 
 static const char *program_format_name(EmuProgramFormat format) {
@@ -140,6 +148,23 @@ static bool parse_cli_options(int argc, char **argv, int start, CliOptions *opti
             }
             options->has_interrupts_enabled = true;
             i++;
+        } else if (strcmp(argv[i], "--kernel") == 0) {
+            options->kernel_enabled = true;
+        } else if (strcmp(argv[i], "--kernel-boot-info") == 0) {
+            options->kernel_enabled = true;
+            options->kernel_boot_info = true;
+        } else if (strcmp(argv[i], "--kernel-task") == 0) {
+            if (options->kernel_task_count >= EMU_TOY_KERNEL_MAX_TASKS) {
+                snprintf(error, error_size, "too many --kernel-task entries: max=%u", EMU_TOY_KERNEL_MAX_TASKS);
+                return false;
+            }
+            if (i + 1 >= argc || !parse_u64(argv[i + 1], &options->kernel_tasks[options->kernel_task_count])) {
+                snprintf(error, error_size, "invalid or missing --kernel-task address");
+                return false;
+            }
+            options->kernel_enabled = true;
+            options->kernel_task_count++;
+            i++;
         } else {
             snprintf(error, error_size, "unknown option: %s", argv[i]);
             return false;
@@ -162,7 +187,60 @@ static bool apply_cli_options(Emulator *emu, const CliOptions *options, char *er
     if (options->queue_timer) {
         emulator_queue_timer_interrupt(emu);
     }
+    if (options->kernel_enabled) {
+        if (!emulator_enable_toy_kernel(emu, options->kernel_boot_info, error, error_size)) {
+            return false;
+        }
+        for (size_t i = 0; i < options->kernel_task_count; i++) {
+            if (!emulator_toy_kernel_add_task(emu, options->kernel_tasks[i], error, error_size)) {
+                return false;
+            }
+        }
+    }
     return true;
+}
+
+static const char *toy_task_state_name_for_cli(EmuToyTaskState state) {
+    switch (state) {
+    case EMU_TOY_TASK_EMPTY:
+        return "empty";
+    case EMU_TOY_TASK_READY:
+        return "ready";
+    case EMU_TOY_TASK_RUNNING:
+        return "running";
+    case EMU_TOY_TASK_BLOCKED:
+        return "blocked";
+    case EMU_TOY_TASK_EXITED:
+        return "exited";
+    case EMU_TOY_TASK_FAULTED:
+        return "faulted";
+    }
+    return "unknown";
+}
+
+static void print_toy_kernel_info(const Emulator *emu, FILE *stream) {
+    const EmuToyKernel *kernel = emulator_get_toy_kernel(emu);
+    fprintf(stream, "toy_kernel_enabled: %s\n", kernel->enabled ? "yes" : "no");
+    if (!kernel->enabled) {
+        return;
+    }
+    fprintf(stream, "toy_kernel_boot_info: %s\n", kernel->boot_info_enabled ? "yes" : "no");
+    fprintf(stream, "toy_kernel_boot_info_address: 0x%016" PRIx64 "\n", kernel->boot_info_address);
+    fprintf(stream, "toy_kernel_entry: 0x%016" PRIx64 "\n", kernel->kernel_entry);
+    fprintf(stream, "toy_kernel_stack_top: 0x%016" PRIx64 "\n", kernel->kernel_stack_top);
+    fprintf(stream, "toy_kernel_task_count: %zu\n", kernel->task_count);
+    fprintf(stream, "toy_kernel_current_task: %zu\n", kernel->current_task);
+    fprintf(stream, "toy_kernel_panic: %s\n", kernel->panic ? "yes" : "no");
+    fprintf(stream, "toy_kernel_panic_code: 0x%016" PRIx64 "\n", kernel->panic_code);
+    for (size_t i = 0; i < kernel->task_count; i++) {
+        const EmuToyTask *task = &kernel->tasks[i];
+        fprintf(stream,
+                "  task[%zu]: state=%s entry=0x%016" PRIx64 " pc=0x%016" PRIx64
+                " sp=0x%016" PRIx64 " stack=0x%016" PRIx64 "+0x%016" PRIx64
+                " exit=0x%016" PRIx64 " yields=0x%016" PRIx64 "\n",
+                i, toy_task_state_name_for_cli(task->state), task->entry, task->pc, task->sp, task->stack_base,
+                task->stack_size, task->exit_code, task->yields);
+    }
 }
 
 static void print_exception_info(const Emulator *emu, FILE *stream) {
@@ -340,6 +418,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "info") == 0) {
         print_program_info(&program, &emu.memory, stdout);
         print_exception_info(&emu, stdout);
+        print_toy_kernel_info(&emu, stdout);
         emulator_free(&emu);
         return 0;
     }
