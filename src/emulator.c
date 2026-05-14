@@ -153,10 +153,47 @@ static bool exception_fault_address_from_instruction(const Cpu *cpu, const Memor
     return false;
 }
 
+static EmuStatus toy_kernel_schedule_after_current(Emulator *emu, uint64_t resume_pc, bool exiting,
+                                                   uint64_t exit_code, char *error, size_t error_size);
+static EmuStatus toy_kernel_fault_current_task(Emulator *emu, EmuExceptionCause cause, uint64_t fault_address,
+                                               uint64_t interrupted_pc, uint64_t resume_pc, char *error,
+                                               size_t error_size);
+static bool toy_kernel_running_task(const EmuToyKernel *kernel);
+
+static bool toy_kernel_wake_sleepers(EmuToyKernel *kernel) {
+    bool woke_any = false;
+    for (size_t i = 0; i < kernel->task_count; i++) {
+        EmuToyTask *task = &kernel->tasks[i];
+        if (task->state == EMU_TOY_TASK_BLOCKED && task->wake_tick <= kernel->timer_ticks) {
+            task->state = EMU_TOY_TASK_READY;
+            task->wake_tick = 0;
+            woke_any = true;
+        }
+    }
+    return woke_any;
+}
+
+static bool toy_kernel_running_task(const EmuToyKernel *kernel) {
+    return kernel->enabled && kernel->tasks_started && kernel->current_task < kernel->task_count &&
+           kernel->tasks[kernel->current_task].state == EMU_TOY_TASK_RUNNING;
+}
+
 static EmuStatus sample_pending_interrupt(Emulator *emu, char *error, size_t error_size) {
     if (!emu->exceptions.interrupts_enabled || emu->exceptions.active || !emu->exceptions.pending_timer_interrupt) {
         return EMU_OK;
     }
+
+    if (emu->toy_kernel.enabled && emu->toy_kernel.tasks_started && !emu->exceptions.vector_configured) {
+        emu->exceptions.pending_timer_interrupt = false;
+        emu->toy_kernel.timer_ticks++;
+        (void)toy_kernel_wake_sleepers(&emu->toy_kernel);
+        if (toy_kernel_running_task(&emu->toy_kernel)) {
+            emu->toy_kernel.timer_schedules++;
+            return toy_kernel_schedule_after_current(emu, emu->cpu.pc, false, 0, error, error_size);
+        }
+        return EMU_OK;
+    }
+
     emu->exceptions.pending_timer_interrupt = false;
     return emulator_raise_exception(emu, EMU_EXCEPTION_TIMER_INTERRUPT, 0, emu->cpu.pc, emu->cpu.pc, error,
                                     error_size);
@@ -165,6 +202,11 @@ static EmuStatus sample_pending_interrupt(Emulator *emu, char *error, size_t err
 static EmuStatus maybe_raise_exception(Emulator *emu, EmuExceptionCause cause, uint64_t fault_address,
                                        uint64_t interrupted_pc, uint64_t resume_pc, char *error,
                                        size_t error_size) {
+    if (emu->toy_kernel.enabled && emu->toy_kernel.tasks_started && !emu->exceptions.active &&
+        !emu->exceptions.vector_configured && toy_kernel_running_task(&emu->toy_kernel)) {
+        return toy_kernel_fault_current_task(emu, cause, fault_address, interrupted_pc, resume_pc, error,
+                                             error_size);
+    }
     if (!emu->exceptions.vector_configured) {
         char detail[512];
         snprintf(detail, sizeof(detail), "%s", error != NULL ? error : "");
@@ -308,6 +350,15 @@ static bool toy_kernel_has_runnable_task(const EmuToyKernel *kernel) {
     return false;
 }
 
+static bool toy_kernel_has_blocked_task(const EmuToyKernel *kernel) {
+    for (size_t i = 0; i < kernel->task_count; i++) {
+        if (kernel->tasks[i].state == EMU_TOY_TASK_BLOCKED) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool toy_kernel_pick_next_task(EmuToyKernel *kernel, size_t *out) {
     if (kernel->task_count == 0) {
         return false;
@@ -321,6 +372,19 @@ static bool toy_kernel_pick_next_task(EmuToyKernel *kernel, size_t *out) {
         }
     }
     return false;
+}
+
+static EmuStatus toy_kernel_complete(Emulator *emu, uint8_t status, uint64_t pc) {
+    emu->toy_kernel.completed = true;
+    emu->guest_exited = true;
+    emu->guest_exit_code = status;
+    emu->cpu.halted = true;
+    emu->cpu.pc = pc;
+    if (emu->trace_enabled) {
+        fprintf(emulator_trace_stream(emu), "trace kernel-complete tasks=%zu status=%u\n",
+                emu->toy_kernel.task_count, (unsigned)status);
+    }
+    return EMU_HALTED;
 }
 
 static EmuStatus toy_kernel_switch_to_task(Emulator *emu, size_t index, char *error, size_t error_size) {
@@ -341,10 +405,18 @@ static EmuStatus toy_kernel_switch_to_task(Emulator *emu, size_t index, char *er
     return EMU_OK;
 }
 
-static EmuStatus toy_kernel_start_tasks_if_needed(Emulator *emu, char *error, size_t error_size) {
+static EmuStatus toy_kernel_start_scheduler(Emulator *emu, uint64_t resume_pc, char *error, size_t error_size) {
     EmuToyKernel *kernel = &emu->toy_kernel;
-    if (!kernel->enabled || kernel->tasks_started || kernel->task_count == 0) {
-        return EMU_OK;
+    if (!kernel->enabled) {
+        snprintf(error, error_size, "toy kernel profile is not enabled");
+        return EMU_ERROR;
+    }
+    if (kernel->tasks_started) {
+        snprintf(error, error_size, "toy kernel scheduler has already started");
+        return EMU_ERROR;
+    }
+    if (kernel->task_count == 0) {
+        return toy_kernel_complete(emu, 0, resume_pc);
     }
     kernel->tasks_started = true;
     kernel->current_task = kernel->task_count;
@@ -352,6 +424,9 @@ static EmuStatus toy_kernel_start_tasks_if_needed(Emulator *emu, char *error, si
     if (!toy_kernel_pick_next_task(kernel, &next)) {
         snprintf(error, error_size, "toy kernel has tasks but none are ready");
         return EMU_ERROR;
+    }
+    if (emu->trace_enabled) {
+        fprintf(emulator_trace_stream(emu), "trace kernel-start-tasks count=%zu\n", kernel->task_count);
     }
     return toy_kernel_switch_to_task(emu, next, error, error_size);
 }
@@ -376,14 +451,18 @@ static EmuStatus toy_kernel_schedule_after_current(Emulator *emu, uint64_t resum
     }
 
     if (!toy_kernel_has_runnable_task(kernel)) {
-        emu->guest_exited = true;
-        emu->guest_exit_code = 0;
-        emu->cpu.halted = true;
-        emu->cpu.pc = resume_pc;
-        if (emu->trace_enabled) {
-            fprintf(emulator_trace_stream(emu), "trace kernel-complete tasks=%zu\n", kernel->task_count);
+        if (toy_kernel_has_blocked_task(kernel)) {
+            snprintf(error, error_size, "toy kernel deadlock: no ready tasks and at least one task is blocked");
+            return EMU_ERROR;
         }
-        return EMU_HALTED;
+        uint8_t status = 0;
+        for (size_t i = 0; i < kernel->task_count; i++) {
+            if (kernel->tasks[i].state == EMU_TOY_TASK_FAULTED) {
+                status = 71;
+                break;
+            }
+        }
+        return toy_kernel_complete(emu, status, resume_pc);
     }
 
     size_t next = 0;
@@ -398,9 +477,66 @@ static EmuStatus toy_kernel_schedule_after_current(Emulator *emu, uint64_t resum
     return toy_kernel_switch_to_task(emu, next, error, error_size);
 }
 
+static EmuStatus toy_kernel_sleep_current(Emulator *emu, uint64_t resume_pc, uint64_t ticks, char *error,
+                                          size_t error_size) {
+    EmuToyKernel *kernel = &emu->toy_kernel;
+    size_t current = kernel->current_task;
+    if (!toy_kernel_running_task(kernel)) {
+        snprintf(error, error_size, "toy kernel sleep without a running task");
+        return EMU_ERROR;
+    }
+    if (ticks == 0) {
+        ticks = 1;
+    }
+    toy_task_save_from_cpu(&kernel->tasks[current], &emu->cpu, resume_pc);
+    kernel->tasks[current].state = EMU_TOY_TASK_BLOCKED;
+    kernel->tasks[current].wake_tick = kernel->timer_ticks + ticks;
+    size_t next = 0;
+    if (toy_kernel_pick_next_task(kernel, &next)) {
+        return toy_kernel_switch_to_task(emu, next, error, error_size);
+    }
+    emu->cpu.pc = resume_pc;
+    emu->cpu.halted = true;
+    snprintf(error, error_size, "toy kernel deadlock: all tasks are blocked at timer tick 0x%016" PRIx64,
+             kernel->timer_ticks);
+    return EMU_ERROR;
+}
+
+static EmuStatus toy_kernel_fault_current_task(Emulator *emu, EmuExceptionCause cause, uint64_t fault_address,
+                                               uint64_t interrupted_pc, uint64_t resume_pc, char *error,
+                                               size_t error_size) {
+    EmuToyKernel *kernel = &emu->toy_kernel;
+    if (!toy_kernel_running_task(kernel)) {
+        return EMU_ERROR;
+    }
+    size_t current = kernel->current_task;
+    toy_task_save_from_cpu(&kernel->tasks[current], &emu->cpu, resume_pc);
+    kernel->tasks[current].state = EMU_TOY_TASK_FAULTED;
+    kernel->tasks[current].fault_cause = cause;
+    kernel->tasks[current].fault_address = fault_address;
+    if (emu->trace_enabled) {
+        fprintf(emulator_trace_stream(emu),
+                "trace kernel-task-fault index=%zu cause=%s(0x%02x) fault=0x%016" PRIx64
+                " interrupted_pc=0x%016" PRIx64 "\n",
+                current, exception_cause_name(cause), (unsigned)cause, fault_address, interrupted_pc);
+    }
+    size_t next = 0;
+    if (toy_kernel_pick_next_task(kernel, &next)) {
+        return toy_kernel_switch_to_task(emu, next, error, error_size);
+    }
+    snprintf(error, error_size,
+             "toy kernel all runnable tasks finished or faulted; last fault task=%zu cause=%s(0x%02x)"
+             " fault_address=0x%016" PRIx64,
+             current, exception_cause_name(cause), (unsigned)cause, fault_address);
+    return toy_kernel_complete(emu, 71, resume_pc);
+}
+
 static EmuStatus toy_kernel_handle_brk(Emulator *emu, const EmuDecodedInstruction *instruction, uint64_t current_pc,
                                        char *error, size_t error_size) {
     switch (instruction->imm) {
+    case EMU_TOY_KERNEL_TRAP_START_TASKS:
+        emu->cpu.instructions_executed++;
+        return toy_kernel_start_scheduler(emu, current_pc + 4u, error, error_size);
     case EMU_TOY_KERNEL_TRAP_YIELD:
         emu->cpu.instructions_executed++;
         return toy_kernel_schedule_after_current(emu, current_pc + 4u, false, 0, error, error_size);
@@ -434,11 +570,66 @@ static EmuStatus toy_kernel_handle_brk(Emulator *emu, const EmuDecodedInstructio
         cpu_write_register(&emu->cpu, 0, true, length);
         emu->cpu.pc = current_pc + 4u;
         emu->cpu.instructions_executed++;
+        update_timer_interrupt_deadline(emu);
+        return sample_pending_interrupt(emu, error, error_size);
+    }
+    case EMU_TOY_KERNEL_TRAP_SLEEP: {
+        emu->cpu.instructions_executed++;
+        return toy_kernel_sleep_current(emu, current_pc + 4u, cpu_read_register(&emu->cpu, 0), error, error_size);
+    }
+    default:
+        break;
+    }
+    snprintf(error, error_size, "unsupported toy-kernel task trap: #0x%llx",
+             (unsigned long long)instruction->imm);
+    return EMU_ERROR;
+}
+
+static bool toy_kernel_is_trap(uint64_t imm) {
+    return imm == EMU_TOY_KERNEL_TRAP_YIELD || imm == EMU_TOY_KERNEL_TRAP_TASK_EXIT ||
+           imm == EMU_TOY_KERNEL_TRAP_PANIC || imm == EMU_TOY_KERNEL_TRAP_CONSOLE_WRITE ||
+           imm == EMU_TOY_KERNEL_TRAP_START_TASKS || imm == EMU_TOY_KERNEL_TRAP_SLEEP;
+}
+
+static EmuStatus toy_kernel_handle_kernel_brk(Emulator *emu, const EmuDecodedInstruction *instruction,
+                                              uint64_t current_pc, char *error, size_t error_size) {
+    switch (instruction->imm) {
+    case EMU_TOY_KERNEL_TRAP_START_TASKS:
+        emu->cpu.instructions_executed++;
+        return toy_kernel_start_scheduler(emu, current_pc + 4u, error, error_size);
+    case EMU_TOY_KERNEL_TRAP_PANIC:
+        emu->cpu.instructions_executed++;
+        emu->toy_kernel.panic = true;
+        emu->toy_kernel.panic_code = cpu_read_register(&emu->cpu, 0);
+        snprintf(error, error_size, "toy kernel panic: code=0x%016" PRIx64, emu->toy_kernel.panic_code);
+        return EMU_ERROR;
+    case EMU_TOY_KERNEL_TRAP_CONSOLE_WRITE: {
+        uint64_t address = cpu_read_register(&emu->cpu, 0);
+        uint64_t length = cpu_read_register(&emu->cpu, 1);
+        if (!check_syscall_buffer(&emu->memory, address, length, error, error_size)) {
+            char detail[256];
+            snprintf(detail, sizeof(detail), "%s", error);
+            snprintf(error, error_size, "toy kernel console buffer is invalid: %s", detail);
+            return EMU_ERROR;
+        }
+        if (length > 0) {
+            FILE *stream = emu->stdout_stream != NULL ? emu->stdout_stream : stdout;
+            if (fwrite(&emu->memory.bytes[address], 1, (size_t)length, stream) != (size_t)length ||
+                fflush(stream) != 0) {
+                snprintf(error, error_size, "toy kernel console write failed");
+                return EMU_ERROR;
+            }
+        }
+        cpu_write_register(&emu->cpu, 0, true, length);
+        emu->cpu.pc = current_pc + 4u;
+        emu->cpu.instructions_executed++;
         return EMU_OK;
     }
     default:
         break;
     }
+    snprintf(error, error_size, "unsupported toy-kernel boot trap: #0x%llx",
+             (unsigned long long)instruction->imm);
     return EMU_ERROR;
 }
 
@@ -609,7 +800,9 @@ bool emulator_toy_kernel_add_task(Emulator *emu, uint64_t entry, char *error, si
     kernel->task_stack_next = task->stack_base - EMU_PAGE_SIZE;
     if (kernel->boot_info_enabled) {
         kernel->boot_info.task_count = kernel->task_count;
-        kernel->boot_info.task_stack_base = kernel->task_stack_next;
+        if (kernel->task_count == 1u || task->stack_base < kernel->boot_info.task_stack_base) {
+            kernel->boot_info.task_stack_base = task->stack_base;
+        }
         if (!toy_kernel_write_boot_info(emu, error, error_size)) {
             return false;
         }
@@ -722,12 +915,6 @@ EmuStatus emulator_step(Emulator *emu, char *error, size_t error_size) {
         return EMU_HALTED;
     }
 
-    EmuStatus kernel_start_status = toy_kernel_start_tasks_if_needed(emu, error, error_size);
-    if (kernel_start_status != EMU_OK) {
-        return kernel_start_status;
-    }
-    current_pc = emu->cpu.pc;
-
     if (!cpu_fetch(&emu->cpu, &emu->memory, &opcode, error, error_size)) {
         EmuExceptionCause cause = strstr(error, "execute permission") != NULL ||
                                           strstr(error, "non-executable") != NULL
@@ -764,9 +951,12 @@ EmuStatus emulator_step(Emulator *emu, char *error, size_t error_size) {
     }
 
     if (instruction.kind == EMU_INST_BRK) {
+        if (emu->toy_kernel.enabled && !emu->exceptions.active && !emu->toy_kernel.tasks_started &&
+            toy_kernel_is_trap(instruction.imm)) {
+            return toy_kernel_handle_kernel_brk(emu, &instruction, current_pc, error, error_size);
+        }
         if (emu->toy_kernel.enabled && emu->toy_kernel.tasks_started && !emu->exceptions.active &&
-            (instruction.imm == EMU_TOY_KERNEL_TRAP_YIELD || instruction.imm == EMU_TOY_KERNEL_TRAP_TASK_EXIT ||
-             instruction.imm == EMU_TOY_KERNEL_TRAP_PANIC || instruction.imm == EMU_TOY_KERNEL_TRAP_CONSOLE_WRITE)) {
+            toy_kernel_is_trap(instruction.imm)) {
             return toy_kernel_handle_brk(emu, &instruction, current_pc, error, error_size);
         }
         emu->cpu.instructions_executed++;
@@ -794,6 +984,11 @@ EmuStatus emulator_step(Emulator *emu, char *error, size_t error_size) {
             exception_cause_from_memory_error(error, &instruction, &cause)) {
             return maybe_raise_exception(emu, cause, fault_address, current_pc, current_pc, error, error_size);
         }
+        if (emu->toy_kernel.enabled && emu->toy_kernel.tasks_started && !emu->exceptions.active &&
+            !emu->exceptions.vector_configured && toy_kernel_running_task(&emu->toy_kernel)) {
+            return toy_kernel_fault_current_task(emu, EMU_EXCEPTION_INVALID_INSTRUCTION, 0, current_pc, current_pc,
+                                                 error, error_size);
+        }
         return EMU_ERROR;
     }
     update_timer_interrupt_deadline(emu);
@@ -818,11 +1013,6 @@ EmuStatus emulator_run(Emulator *emu, char *error, size_t error_size) {
                          emu->cpu.pc, (unsigned long long)emu->instruction_limit, fetch_error);
             }
             return EMU_ERROR;
-        }
-
-        EmuStatus kernel_start_status = toy_kernel_start_tasks_if_needed(emu, error, error_size);
-        if (kernel_start_status != EMU_OK) {
-            return kernel_start_status;
         }
 
         if (emu->trace_enabled) {

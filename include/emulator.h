@@ -51,6 +51,8 @@
 #define EMU_TOY_KERNEL_TRAP_TASK_EXIT 0x151u
 #define EMU_TOY_KERNEL_TRAP_PANIC 0x152u
 #define EMU_TOY_KERNEL_TRAP_CONSOLE_WRITE 0x153u
+#define EMU_TOY_KERNEL_TRAP_START_TASKS 0x154u
+#define EMU_TOY_KERNEL_TRAP_SLEEP 0x155u
 
 #define EMU_MAP_READ 0x1u
 #define EMU_MAP_WRITE 0x2u
@@ -282,14 +284,20 @@ typedef struct {
     uint64_t stack_size;
     uint64_t exit_code;
     uint64_t yields;
+    uint64_t wake_tick;
+    EmuExceptionCause fault_cause;
+    uint64_t fault_address;
 } EmuToyTask;
 
 typedef struct {
     bool enabled;
     bool boot_info_enabled;
     bool tasks_started;
+    bool completed;
     bool panic;
     uint64_t panic_code;
+    uint64_t timer_ticks;
+    uint64_t timer_schedules;
     uint64_t boot_info_address;
     uint64_t kernel_entry;
     uint64_t kernel_stack_top;

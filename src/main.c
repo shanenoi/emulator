@@ -230,6 +230,10 @@ static void print_toy_kernel_info(const Emulator *emu, FILE *stream) {
     fprintf(stream, "toy_kernel_stack_top: 0x%016" PRIx64 "\n", kernel->kernel_stack_top);
     fprintf(stream, "toy_kernel_task_count: %zu\n", kernel->task_count);
     fprintf(stream, "toy_kernel_current_task: %zu\n", kernel->current_task);
+    fprintf(stream, "toy_kernel_tasks_started: %s\n", kernel->tasks_started ? "yes" : "no");
+    fprintf(stream, "toy_kernel_completed: %s\n", kernel->completed ? "yes" : "no");
+    fprintf(stream, "toy_kernel_timer_ticks: 0x%016" PRIx64 "\n", kernel->timer_ticks);
+    fprintf(stream, "toy_kernel_timer_schedules: 0x%016" PRIx64 "\n", kernel->timer_schedules);
     fprintf(stream, "toy_kernel_panic: %s\n", kernel->panic ? "yes" : "no");
     fprintf(stream, "toy_kernel_panic_code: 0x%016" PRIx64 "\n", kernel->panic_code);
     for (size_t i = 0; i < kernel->task_count; i++) {
@@ -237,10 +241,28 @@ static void print_toy_kernel_info(const Emulator *emu, FILE *stream) {
         fprintf(stream,
                 "  task[%zu]: state=%s entry=0x%016" PRIx64 " pc=0x%016" PRIx64
                 " sp=0x%016" PRIx64 " stack=0x%016" PRIx64 "+0x%016" PRIx64
-                " exit=0x%016" PRIx64 " yields=0x%016" PRIx64 "\n",
+                " exit=0x%016" PRIx64 " yields=0x%016" PRIx64
+                " wake=0x%016" PRIx64 " fault=0x%02x/0x%016" PRIx64 "\n",
                 i, toy_task_state_name_for_cli(task->state), task->entry, task->pc, task->sp, task->stack_base,
-                task->stack_size, task->exit_code, task->yields);
+                task->stack_size, task->exit_code, task->yields, task->wake_tick, (unsigned)task->fault_cause,
+                task->fault_address);
     }
+}
+
+static int toy_kernel_error_status(const Emulator *emu) {
+    const EmuToyKernel *kernel = emulator_get_toy_kernel(emu);
+    if (!kernel->enabled) {
+        return 1;
+    }
+    if (kernel->panic) {
+        return 70;
+    }
+    for (size_t i = 0; i < kernel->task_count; i++) {
+        if (kernel->tasks[i].state == EMU_TOY_TASK_FAULTED) {
+            return 71;
+        }
+    }
+    return 1;
 }
 
 static void print_exception_info(const Emulator *emu, FILE *stream) {
@@ -443,6 +465,7 @@ int main(int argc, char **argv) {
 
     fprintf(stderr, "error: %s\n", error);
     cpu_dump(&emu.cpu, stderr);
+    int cli_error_status = toy_kernel_error_status(&emu);
     emulator_free(&emu);
-    return 1;
+    return cli_error_status;
 }

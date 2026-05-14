@@ -90,6 +90,7 @@ static void debugger_print_help(FILE *stream) {
     fprintf(stream, "  continue | c                 resume until breakpoint, halt, error, or limit\n");
     fprintf(stream, "  regs                         print registers\n");
     fprintf(stream, "  exception                    print the current exception context\n");
+    fprintf(stream, "  kernel                       print toy-kernel task state\n");
     fprintf(stream, "  mem | x <address> <length>   dump memory\n");
     fprintf(stream, "  maps                         list mapped memory ranges\n");
     fprintf(stream, "  map <address>                show mapping containing one address\n");
@@ -98,6 +99,48 @@ static void debugger_print_help(FILE *stream) {
     fprintf(stream, "  breakpoints                  list breakpoints\n");
     fprintf(stream, "  trace on|off                 toggle pc trace\n");
     fprintf(stream, "  quit | q                     exit debugger\n");
+}
+
+static const char *debugger_toy_task_state_name(EmuToyTaskState state) {
+    switch (state) {
+    case EMU_TOY_TASK_EMPTY:
+        return "empty";
+    case EMU_TOY_TASK_READY:
+        return "ready";
+    case EMU_TOY_TASK_RUNNING:
+        return "running";
+    case EMU_TOY_TASK_BLOCKED:
+        return "blocked";
+    case EMU_TOY_TASK_EXITED:
+        return "exited";
+    case EMU_TOY_TASK_FAULTED:
+        return "faulted";
+    }
+    return "unknown";
+}
+
+static void debugger_print_kernel_context(const Debugger *debugger, FILE *stream) {
+    const EmuToyKernel *kernel = emulator_get_toy_kernel(&debugger->emu);
+    fprintf(stream, "toy_kernel_enabled = %s\n", kernel->enabled ? "yes" : "no");
+    if (!kernel->enabled) {
+        return;
+    }
+    fprintf(stream, "tasks_started = %s\n", kernel->tasks_started ? "yes" : "no");
+    fprintf(stream, "completed = %s\n", kernel->completed ? "yes" : "no");
+    fprintf(stream, "current_task = %zu\n", kernel->current_task);
+    fprintf(stream, "task_count = %zu\n", kernel->task_count);
+    fprintf(stream, "timer_ticks = 0x%016" PRIx64 "\n", kernel->timer_ticks);
+    fprintf(stream, "timer_schedules = 0x%016" PRIx64 "\n", kernel->timer_schedules);
+    fprintf(stream, "panic = %s code=0x%016" PRIx64 "\n", kernel->panic ? "yes" : "no", kernel->panic_code);
+    for (size_t i = 0; i < kernel->task_count; i++) {
+        const EmuToyTask *task = &kernel->tasks[i];
+        fprintf(stream,
+                "task[%zu] state=%s entry=0x%016" PRIx64 " pc=0x%016" PRIx64
+                " sp=0x%016" PRIx64 " wake=0x%016" PRIx64
+                " exit=0x%016" PRIx64 " fault=0x%02x/0x%016" PRIx64 "\n",
+                i, debugger_toy_task_state_name(task->state), task->entry, task->pc, task->sp, task->wake_tick,
+                task->exit_code, (unsigned)task->fault_cause, task->fault_address);
+    }
 }
 
 static bool dump_memory_debug(const Memory *memory, uint64_t address, uint64_t length, FILE *stream, char *error,
@@ -400,6 +443,13 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
                 continue;
             }
             debugger_print_exception_context(debugger, output);
+            continue;
+        }
+        if (strcmp(command, "kernel") == 0) {
+            if (!require_no_extra_args(&cursor, "kernel", error_stream)) {
+                continue;
+            }
+            debugger_print_kernel_context(debugger, output);
             continue;
         }
         if (strcmp(command, "breakpoints") == 0) {

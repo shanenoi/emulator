@@ -54,7 +54,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, and the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests.
 
-The first **v1.5 — Toy Kernel Boot and Cooperative Tasks** development pass is now present but not yet covered by dedicated v1.5 tests. It adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, deterministic cooperative round-robin scheduling, toy-kernel `BRK` traps for yield/exit/panic/console output, and `info`/trace visibility for scheduler state.
+The **v1.5 — Toy Kernel Boot and Cooperative Tasks** implementation is now present but not yet covered by dedicated v1.5 tests. It adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, and `info`/trace/debugger visibility for scheduler state.
 
 Implemented now:
 
@@ -221,10 +221,14 @@ Implemented now:
   - repeatable `--kernel-task <address>` entries for host-created cooperative tasks
   - fixed maximum of 8 tasks, each with a separate 16 KiB guest stack
   - task states: `EMPTY`, `READY`, `RUNNING`, `BLOCKED`, `EXITED`, and `FAULTED`
-  - deterministic round-robin scheduling for `READY` tasks
-  - toy-kernel `BRK` traps: `0x150` yield, `0x151` task exit, `0x152` panic, and `0x153` console write
-  - `emulator info` prints toy-kernel profile and task-table metadata
-  - trace mode prints scheduler switch and completion events
+  - deterministic round-robin scheduling for `READY` tasks after the kernel calls `BRK #0x154` to start tasks
+  - instruction-count timer ticks can request deterministic scheduler switches when no exception vector is installed
+  - `BRK #0x155` blocks the current task until a future toy-kernel timer tick
+  - task faults are recorded on the faulting task and skipped; remaining ready tasks keep running
+  - toy-kernel `BRK` traps: `0x150` yield, `0x151` task exit, `0x152` panic, `0x153` console write, `0x154` start tasks, and `0x155` sleep
+  - `emulator info` prints toy-kernel profile, timer counters, task states, wake ticks, and fault metadata
+  - trace mode prints scheduler start, switch, timer scheduling, task fault, and completion events
+  - debugger `kernel` prints live toy-kernel state
   - dedicated v1.5 tests and generated fixtures are still pending
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
@@ -1207,13 +1211,15 @@ Current development pass:
 - Optional `--kernel-boot-info` metadata block for kernel-shaped programs.
 - Repeatable `--kernel-task <address>` entries for host-created cooperative tasks.
 - Fixed task table and fixed task stacks for deterministic scheduling lessons.
-- `BRK #0x150` yield, `BRK #0x151` task exit, `BRK #0x152` panic, and `BRK #0x153` console write.
-- Round-robin scheduling over `READY` tasks, skipping `EXITED` tasks.
-- `info` and trace output for the toy-kernel profile and scheduler events.
+- Explicit boot handoff: the loaded kernel runs first and starts the scheduler with `BRK #0x154`.
+- `BRK #0x150` yield, `BRK #0x151` task exit, `BRK #0x152` panic, `BRK #0x153` console write, `BRK #0x154` start tasks, and `BRK #0x155` sleep.
+- Round-robin scheduling over `READY` tasks, skipping `EXITED`, `FAULTED`, and `BLOCKED` tasks.
+- Deterministic timer interaction through `--timer-interrupt <interval>` when no exception vector is installed.
+- Per-task fault capture for unhandled task exceptions.
+- `info`, trace output, and debugger `kernel` output for the toy-kernel profile and scheduler events.
 
 Remaining definition of done before calling v1.5 fully tested:
 
-- Add deterministic generated v1.5 fixtures.
 - Add unit tests for boot state, task setup, context save/restore, scheduling, and trap behavior.
 - Add CLI/debugger/docs tests for the new profile.
 - Add negative tests for bad entries, bad stacks, bad boot-info use, panic, and unknown traps.

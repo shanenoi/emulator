@@ -1,37 +1,63 @@
 # v1.5 Toy Kernel Examples
 
 v1.5 introduces an opt-in toy-kernel profile for cooperative task scheduling.
-The first development pass exposes the profile through CLI flags and public C
-APIs; deterministic binary fixtures and automated tests are intentionally still
-to be added.
+The profile is implemented, but the dedicated v1.5 automated tests are still to
+be added.
 
 ## CLI surface
 
 ```sh
 ./emulator run <program> --kernel
 ./emulator run <program> --kernel --kernel-boot-info
-./emulator trace <program> --kernel --kernel-task 0x1000 --kernel-task 0x1040
-./emulator info <program> --kernel --kernel-task 0x1000
+./emulator trace <program> --kernel --kernel-task 0x1040 --kernel-task 0x1080
+./emulator trace <program> --kernel --timer-interrupt 8 --kernel-task 0x1040
+./emulator info <program> --kernel --kernel-task 0x1040
+./emulator debug <program> --kernel --kernel-task 0x1040
 ```
+
+A toy-kernel image runs at the normal program entry first. It must explicitly
+hand off to the scheduler with `BRK #0x154`. This keeps boot/init code visible
+instead of silently jumping straight into the first task.
 
 ## Toy-kernel traps
 
 ```text
-BRK #0x150   yield
+BRK #0x150   yield from the running task
 BRK #0x151   task_exit(x0)
 BRK #0x152   panic(x0)
 BRK #0x153   console_write(x0=buffer, x1=length)
+BRK #0x154   start host-configured tasks from kernel boot code
+BRK #0x155   sleep current task until x0 toy-kernel timer ticks pass
 ```
 
-These traps are recognized only after `--kernel` is enabled and scheduling has
-started. Outside toy-kernel mode, `BRK` keeps the v1.4 exception behavior.
+Task traps are recognized only after `--kernel` is enabled and scheduling has
+started. Boot traps are recognized while the kernel entry code is still running.
+Outside toy-kernel mode, `BRK` keeps the v1.4 exception behavior.
 
-## Current status
+## Current behavior
 
 - The profile is opt-in and does not change older raw, ELF64, Mach-O, syscall,
   or exception-vector runs.
 - Host-created tasks are supported through repeatable `--kernel-task` flags and
   `emulator_toy_kernel_add_task()`.
 - Each task receives its own fixed 16 KiB stack.
-- The scheduler is deterministic round-robin and cooperative only.
-- Tests and generated fixtures are the next step.
+- The scheduler is deterministic round-robin.
+- A task can cooperatively yield, exit, sleep, panic, or write to the toy console.
+- If no exception vector is configured, unhandled task exceptions mark only the
+  current task as `FAULTED`; other ready tasks continue.
+- `--timer-interrupt <interval>` increments a toy-kernel tick counter and can
+  request scheduler switches at deterministic instruction-count boundaries.
+- `emulator info` and debugger command `kernel` show task state, wake ticks, and
+  fault metadata.
+
+## Fixture generator
+
+`generate_kernel_fixtures.py` writes tiny deterministic raw binaries for manual
+experimentation. Generated `.bin` files are intentionally ignored by git until
+v1.5 tests are added.
+
+```sh
+python3 examples/v1_5/generate_kernel_fixtures.py /tmp/v1_5_fixtures
+./emulator trace /tmp/v1_5_fixtures/two_task_yield.bin --kernel \
+  --kernel-task 0x1008 --kernel-task 0x1014
+```
