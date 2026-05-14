@@ -4,15 +4,50 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from struct import pack
+from struct import pack, pack_into
 
 LOAD = 0x1000
 VECTOR = 0x1080
 EXC = 0x09030000
 UART = 0x09000000
+ELF64_EHDR_SIZE = 64
+ELF64_PHDR_SIZE = 56
+ET_EXEC = 2
+EM_AARCH64 = 183
+PT_LOAD = 1
+PF_X = 1
+PF_W = 2
+PF_R = 4
 
 def emit(path: Path, words: list[int]) -> None:
     path.write_bytes(b''.join(pack('<I', w & 0xffffffff) for w in words))
+
+def words_bytes(words: list[int]) -> bytes:
+    return b''.join(pack('<I', w & 0xffffffff) for w in words)
+
+def emit_elf(path: Path, entry: int, segments: list[dict[str, object]]) -> None:
+    phnum = len(segments)
+    size = max([ELF64_EHDR_SIZE + phnum * ELF64_PHDR_SIZE] +
+               [int(seg.get('offset', 0)) + len(seg.get('data', b'')) for seg in segments])
+    buf = bytearray(size)
+    buf[0:4] = b'\x7fELF'
+    buf[4] = 2
+    buf[5] = 1
+    buf[6] = 1
+    pack_into('<HHIQQQ', buf, 16, ET_EXEC, EM_AARCH64, 1, entry, ELF64_EHDR_SIZE, 0)
+    pack_into('<IHHHHHH', buf, 48, 0, ELF64_EHDR_SIZE, ELF64_PHDR_SIZE, phnum, 0, 0, 0)
+    for i, seg in enumerate(segments):
+        off = ELF64_EHDR_SIZE + i * ELF64_PHDR_SIZE
+        data = seg.get('data', b'')
+        file_offset = int(seg.get('offset', 0))
+        filesz = int(seg.get('filesz', len(data)))
+        memsz = int(seg.get('memsz', filesz))
+        vaddr = int(seg.get('vaddr', 0))
+        flags = int(seg.get('flags', PF_R | PF_X))
+        pack_into('<IIQQQQQQ', buf, off, PT_LOAD, flags, file_offset, vaddr, vaddr, filesz, memsz, 0x1000)
+        if data:
+            buf[file_offset:file_offset + len(data)] = data
+    path.write_bytes(buf)
 
 def movz(rd: int, imm: int, shift: int = 0, is64: bool = True) -> int:
     return (0xd2800000 if is64 else 0x52800000) | (((shift // 16) & 3) << 21) | ((imm & 0xffff) << 5) | (rd & 31)
@@ -103,7 +138,7 @@ def mmio_timer_once() -> list[int]:
     install_vector(w)
     w.append(movz(6, 12))
     w.append(str_x(6, 0, 0x10))
-    w += [nop()] * 8
+    w += [nop()] * 16
     w.append(hlt())
     pad(w); w.extend(handler_disable_timer()); return w
 
@@ -142,6 +177,18 @@ FIXTURES = {
     'queued_timer_masked.bin': queued_timer_masked,
 }
 
+def elf_handled_brk(path: Path) -> None:
+    text = bytearray(0x1000)
+    text[0:8] = words_bytes([brk(0x55), hlt()])
+    text[VECTOR - LOAD:VECTOR - LOAD + 4] = words_bytes([eret()])
+    emit_elf(path, LOAD, [{'offset': 0x1000, 'vaddr': LOAD, 'data': bytes(text), 'flags': PF_R | PF_X}])
+
+def elf_nonexec_vector(path: Path) -> None:
+    emit_elf(path, LOAD, [
+        {'offset': 0x1000, 'vaddr': LOAD, 'data': words_bytes([hlt()]), 'flags': PF_R | PF_X},
+        {'offset': 0x2000, 'vaddr': 0x3000, 'data': words_bytes([eret()]), 'flags': PF_R | PF_W},
+    ])
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--output-dir', default='tests/v1_4/tmp')
@@ -150,6 +197,8 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     for name, fn in FIXTURES.items():
         emit(out / name, fn())
+    elf_handled_brk(out / 'elf_handled_brk.elf')
+    elf_nonexec_vector(out / 'elf_nonexec_vector.elf')
     return 0
 
 if __name__ == '__main__':

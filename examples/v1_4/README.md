@@ -51,6 +51,7 @@ The MMIO fixtures demonstrate guest-side configuration:
 ```text
 STR Xvector, [0x09030000 + 0x00]  -> set vector base
 STR Wcontrol, [0x09030000 + 0x08] -> enable vector and interrupts
+STR Xinterval, [0x09030000 + 0x10] -> arm a relative instruction-count timer
 ```
 
 Exception entry uses the teaching ABI described in the lesson:

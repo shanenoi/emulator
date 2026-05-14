@@ -51,6 +51,18 @@ contains "$TMP/timer.out" "trace exception-enter cause=timer-interrupt(0x40)"
 contains "$TMP/timer.out" "trace exception-return cause=timer-interrupt(0x40)"
 contains "$TMP/timer.out" "x0  = 0x0000000009030000"
 
+./emulator trace "$TMP/elf_handled_brk.elf" --exception-vector 0x1080 >"$TMP/elf_brk.out" 2>"$TMP/elf_brk.err"
+[ ! -s "$TMP/elf_brk.err" ] || fail "ELF handled BRK stderr was not empty"
+contains "$TMP/elf_brk.out" "trace exception-enter cause=breakpoint-or-trap(0x02)"
+contains "$TMP/elf_brk.out" "fault=0x0000000000000055"
+contains "$TMP/elf_brk.out" "halted"
+
+if ./emulator run "$TMP/elf_nonexec_vector.elf" --exception-vector 0x3000 >"$TMP/elf_badvec.out" 2>"$TMP/elf_badvec.err"; then
+    fail "non-executable ELF vector unexpectedly succeeded"
+fi
+contains "$TMP/elf_badvec.err" "exception vector is not executable"
+contains "$TMP/elf_badvec.err" "execute permission denied"
+
 ./emulator info "$TMP/cli_handled_brk.bin" --exception-vector 0x1080 --timer-interrupt 7 --queue-timer --interrupts off >"$TMP/info.out" 2>"$TMP/info.err"
 [ ! -s "$TMP/info.err" ] || fail "info stderr was not empty"
 contains "$TMP/info.out" "exception_vector_configured: yes"

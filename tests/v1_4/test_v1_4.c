@@ -41,11 +41,27 @@ static uint32_t op_nop(void) { return 0xd503201fu; }
 static uint32_t op_eret(void) { return 0xd69f03e0u; }
 static uint32_t op_brk(unsigned imm) { return 0xd4200000u | ((imm & 0xffffu) << 5u); }
 static uint32_t op_svc(unsigned imm) { return 0xd4000001u | ((imm & 0xffffu) << 5u); }
+static uint32_t op_b(int offset_bytes) { return 0x14000000u | (((uint32_t)(offset_bytes / 4)) & 0x03ffffffu); }
 static uint32_t op_add_x_imm(unsigned rd, unsigned rn, unsigned imm) {
     return 0x91000000u | ((imm & 0xfffu) << 10u) | ((rn & 31u) << 5u) | (rd & 31u);
 }
 static uint32_t op_ldr_w(unsigned rt, unsigned rn, unsigned imm) {
     return 0xb9400000u | (((imm / 4u) & 0xfffu) << 10u) | ((rn & 31u) << 5u) | (rt & 31u);
+}
+static uint32_t op_ldr_x(unsigned rt, unsigned rn, unsigned imm) {
+    return 0xf9400000u | (((imm / 8u) & 0xfffu) << 10u) | ((rn & 31u) << 5u) | (rt & 31u);
+}
+static uint32_t op_str_x(unsigned rt, unsigned rn, unsigned imm) {
+    return 0xf9000000u | (((imm / 8u) & 0xfffu) << 10u) | ((rn & 31u) << 5u) | (rt & 31u);
+}
+static uint32_t op_str_post_x(unsigned rt, unsigned rn, int offset) {
+    return 0xf8000400u | (((uint32_t)offset & 0x1ffu) << 12u) | ((rn & 31u) << 5u) | (rt & 31u);
+}
+static uint32_t op_ldp_x(unsigned rt, unsigned rt2, unsigned rn) {
+    return 0xa9400000u | ((rt2 & 31u) << 10u) | ((rn & 31u) << 5u) | (rt & 31u);
+}
+static uint32_t op_stp_x(unsigned rt, unsigned rt2, unsigned rn) {
+    return 0xa9000000u | ((rt2 & 31u) << 10u) | ((rn & 31u) << 5u) | (rt & 31u);
 }
 static uint32_t op_udiv_x(unsigned rd, unsigned rn, unsigned rm) {
     return 0x9ac00800u | ((rm & 31u) << 16u) | ((rn & 31u) << 5u) | (rd & 31u);
@@ -66,6 +82,14 @@ static void init_emu(Emulator *emu) {
 static void configure_vector_or_fail(Emulator *emu) {
     char error[512];
     EXPECT_TRUE(emulator_configure_exception_vector(emu, VECTOR, error, sizeof(error)));
+}
+
+static void install_paged_text_or_fail(Emulator *emu) {
+    char error[512];
+    memory_clear_mappings(&emu->memory);
+    EXPECT_TRUE(memory_map_range(&emu->memory, 0x1000u, EMU_PAGE_SIZE, EMU_MAP_READ | EMU_MAP_EXEC, "text", error,
+                                 sizeof(error)));
+    configure_vector_or_fail(emu);
 }
 
 static void test_default_and_vector_configuration(void) {
@@ -224,6 +248,170 @@ static void test_return_and_nested_fault_errors(void) {
     emulator_free(&emu);
 }
 
+static void test_fetch_and_permission_faults(void) {
+    /* TC-V14-SYNC-005/006/007/008/009/010/012 and v1.2 permission interaction. */
+    Emulator emu;
+    char error[512] = {0};
+    init_emu(&emu);
+    install_paged_text_or_fail(&emu);
+
+    write_word(&emu.memory, 0x1000u, op_b(0x5000 - 0x1000));
+    write_word(&emu.memory, VECTOR, op_eret());
+    EXPECT_U64_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_U64_EQ(emu.cpu.pc, 0x5000u);
+    EXPECT_U64_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_TRUE(emu.exceptions.active);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 0), EMU_EXCEPTION_FETCH_FAULT);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 1), 0x5000u);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 2), 0x5000u);
+    emulator_free(&emu);
+
+    init_emu(&emu);
+    install_paged_text_or_fail(&emu);
+    EXPECT_TRUE(memory_map_range(&emu.memory, 0x3000u, EMU_PAGE_SIZE, EMU_MAP_READ, "ro-data", error,
+                                 sizeof(error)));
+    write_word(&emu.memory, 0x1000u, op_b(0x3000 - 0x1000));
+    write_word(&emu.memory, 0x3000u, op_hlt());
+    EXPECT_U64_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_U64_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_TRUE(emu.exceptions.active);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 0), EMU_EXCEPTION_EXEC_PERMISSION_FAULT);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 1), 0x3000u);
+    emulator_free(&emu);
+
+    init_emu(&emu);
+    install_paged_text_or_fail(&emu);
+    emu.cpu.pc = EMU_DEVICE_UART_BASE;
+    EXPECT_U64_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_TRUE(emu.exceptions.active);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 0), EMU_EXCEPTION_EXEC_PERMISSION_FAULT);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 1), EMU_DEVICE_UART_BASE);
+    emulator_free(&emu);
+
+    init_emu(&emu);
+    install_paged_text_or_fail(&emu);
+    EXPECT_TRUE(memory_map_range(&emu.memory, 0x4000u, EMU_PAGE_SIZE, EMU_MAP_EXEC, "exec-only", error,
+                                 sizeof(error)));
+    cpu_write_register(&emu.cpu, 4, true, 0x4000u);
+    cpu_write_register(&emu.cpu, 5, true, 0xaaaa5555u);
+    write_word(&emu.memory, 0x1000u, op_ldr_x(5, 4, 0));
+    EXPECT_U64_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_TRUE(emu.exceptions.active);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 0), EMU_EXCEPTION_READ_PERMISSION_FAULT);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 1), 0x4000u);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 5), 0xaaaa5555u);
+    emulator_free(&emu);
+
+    init_emu(&emu);
+    install_paged_text_or_fail(&emu);
+    EXPECT_TRUE(memory_map_range(&emu.memory, 0x3000u, EMU_PAGE_SIZE, EMU_MAP_READ, "ro-data", error,
+                                 sizeof(error)));
+    cpu_write_register(&emu.cpu, 4, true, 0x3000u);
+    cpu_write_register(&emu.cpu, 5, true, 0x1111222233334444ull);
+    write_word(&emu.memory, 0x1000u, op_str_x(5, 4, 0));
+    EXPECT_U64_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_TRUE(emu.exceptions.active);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 0), EMU_EXCEPTION_WRITE_PERMISSION_FAULT);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 1), 0x3000u);
+    uint64_t stored = 0;
+    EXPECT_TRUE(memory_read64(&emu.memory, 0x3000u, &stored, error, sizeof(error)));
+    EXPECT_U64_EQ(stored, 0u);
+    emulator_free(&emu);
+}
+
+static void test_exception_return_to_unmapped_target(void) {
+    /* TC-V14-RET-008: return validation still respects the page map. */
+    Emulator emu;
+    char error[512] = {0};
+    init_emu(&emu);
+    install_paged_text_or_fail(&emu);
+    EXPECT_U64_EQ(emulator_raise_exception(&emu, EMU_EXCEPTION_BREAKPOINT_OR_TRAP, 0, 0x1000u, 0x1004u, error,
+                                           sizeof(error)), EMU_OK);
+    cpu_write_register(&emu.cpu, 3, true, 0x5000u);
+    EXPECT_FALSE(emulator_exception_return(&emu, error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "not executable");
+    emulator_free(&emu);
+}
+
+static void test_sequential_handled_exceptions(void) {
+    /* TC-V14-EDGE-001: two handled traps in one run return independently. */
+    Emulator emu;
+    char error[512] = {0};
+    init_emu(&emu);
+    configure_vector_or_fail(&emu);
+    write_word(&emu.memory, 0x1000u, op_brk(0x11));
+    write_word(&emu.memory, 0x1004u, op_brk(0x22));
+    write_word(&emu.memory, 0x1008u, op_hlt());
+    write_word(&emu.memory, VECTOR, op_eret());
+
+    EXPECT_U64_EQ(emulator_run(&emu, error, sizeof(error)), EMU_HALTED);
+    EXPECT_FALSE(emu.exceptions.active);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 0), EMU_EXCEPTION_BREAKPOINT_OR_TRAP);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 1), 0x22u);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 2), 0x1004u);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 3), 0x1008u);
+    emulator_free(&emu);
+}
+
+static void test_faulting_memory_operations_are_atomic(void) {
+    /* TC-V14-EDGE-002/003/004: no write-back, register, or partial-memory update on faults. */
+    Emulator emu;
+    char error[512] = {0};
+    uint64_t value = 0;
+    init_emu(&emu);
+    install_paged_text_or_fail(&emu);
+    EXPECT_TRUE(memory_map_range(&emu.memory, 0x3000u, EMU_PAGE_SIZE, EMU_MAP_READ, "ro-data", error,
+                                 sizeof(error)));
+    cpu_write_register(&emu.cpu, 4, true, 0x3000u);
+    cpu_write_register(&emu.cpu, 5, true, 0x777788889999aaaau);
+    write_word(&emu.memory, 0x1000u, op_str_post_x(5, 4, 8));
+    EXPECT_U64_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_TRUE(emu.exceptions.active);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 0), EMU_EXCEPTION_WRITE_PERMISSION_FAULT);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 4), 0x3000u);
+    EXPECT_TRUE(memory_read64(&emu.memory, 0x3000u, &value, error, sizeof(error)));
+    EXPECT_U64_EQ(value, 0u);
+    emulator_free(&emu);
+
+    init_emu(&emu);
+    install_paged_text_or_fail(&emu);
+    EXPECT_TRUE(memory_map_range(&emu.memory, 0x3000u, EMU_PAGE_SIZE, EMU_MAP_READ | EMU_MAP_WRITE, "rw-data", error,
+                                 sizeof(error)));
+    EXPECT_TRUE(memory_map_range(&emu.memory, 0x4000u, EMU_PAGE_SIZE, EMU_MAP_READ, "ro-data", error,
+                                 sizeof(error)));
+    EXPECT_TRUE(memory_write64(&emu.memory, 0x3ff8u, 0xaaaaaaaaaaaaaaaau, error, sizeof(error)));
+    cpu_write_register(&emu.cpu, 4, true, 0x3ff8u);
+    cpu_write_register(&emu.cpu, 5, true, 0x1111111111111111u);
+    cpu_write_register(&emu.cpu, 6, true, 0x2222222222222222u);
+    write_word(&emu.memory, 0x1000u, op_stp_x(5, 6, 4));
+    EXPECT_U64_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_TRUE(emu.exceptions.active);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 0), EMU_EXCEPTION_WRITE_PERMISSION_FAULT);
+    EXPECT_TRUE(memory_read64(&emu.memory, 0x3ff8u, &value, error, sizeof(error)));
+    EXPECT_U64_EQ(value, 0xaaaaaaaaaaaaaaaau);
+    EXPECT_TRUE(memory_read64(&emu.memory, 0x4000u, &value, error, sizeof(error)));
+    EXPECT_U64_EQ(value, 0u);
+    emulator_free(&emu);
+
+    init_emu(&emu);
+    install_paged_text_or_fail(&emu);
+    EXPECT_TRUE(memory_map_range(&emu.memory, 0x3000u, EMU_PAGE_SIZE, EMU_MAP_READ | EMU_MAP_WRITE, "rw-data", error,
+                                 sizeof(error)));
+    EXPECT_TRUE(memory_map_range(&emu.memory, 0x4000u, EMU_PAGE_SIZE, EMU_MAP_WRITE, "write-only", error,
+                                 sizeof(error)));
+    EXPECT_TRUE(memory_write64(&emu.memory, 0x3ff8u, 0xbbbbbbbbbbbbbbbbu, error, sizeof(error)));
+    cpu_write_register(&emu.cpu, 4, true, 0x3ff8u);
+    cpu_write_register(&emu.cpu, 5, true, 0x5555u);
+    cpu_write_register(&emu.cpu, 6, true, 0x6666u);
+    write_word(&emu.memory, 0x1000u, op_ldp_x(5, 6, 4));
+    EXPECT_U64_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_TRUE(emu.exceptions.active);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 0), EMU_EXCEPTION_READ_PERMISSION_FAULT);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 5), 0x5555u);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 6), 0x6666u);
+    emulator_free(&emu);
+}
+
 static void test_mmio_exception_controller(void) {
     /* TC-V14-CFG-002, TC-V14-CTX-001/002/003, and TC-V14-DEV-001 through register surface. */
     Emulator emu;
@@ -286,6 +474,32 @@ static void test_timer_interrupt_mask_and_delivery(void) {
     EXPECT_TRUE(emu.exceptions.interrupts_enabled);
     EXPECT_U64_EQ(emu.cpu.pc, 0x1008u);
     emulator_free(&emu);
+
+    init_emu(&emu);
+    configure_vector_or_fail(&emu);
+    emu.cpu.instructions_executed = 100u;
+    EXPECT_TRUE(memory_write64(&emu.memory, EMU_DEVICE_EXCEPTION_BASE + EMU_EXCEPTION_TIMER_INTERVAL_OFFSET, 3u,
+                               error, sizeof(error)));
+    EXPECT_TRUE(emu.exceptions.timer_deadline_relative_pending);
+    write_word(&emu.memory, 0x1000u, op_nop());
+    write_word(&emu.memory, 0x1004u, op_nop());
+    write_word(&emu.memory, 0x1008u, op_nop());
+    write_word(&emu.memory, 0x100cu, op_nop());
+    write_word(&emu.memory, 0x1010u, op_hlt());
+    write_word(&emu.memory, VECTOR, op_eret());
+    EXPECT_U64_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_FALSE(emu.exceptions.pending_timer_interrupt);
+    EXPECT_FALSE(emu.exceptions.active);
+    EXPECT_U64_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_FALSE(emu.exceptions.pending_timer_interrupt);
+    EXPECT_FALSE(emu.exceptions.active);
+    EXPECT_U64_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_FALSE(emu.exceptions.pending_timer_interrupt);
+    EXPECT_FALSE(emu.exceptions.active);
+    EXPECT_U64_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_TRUE(emu.exceptions.active);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 0), EMU_EXCEPTION_TIMER_INTERRUPT);
+    emulator_free(&emu);
 }
 
 static void test_unhandled_mode_stays_terminal(void) {
@@ -307,6 +521,10 @@ int main(void) {
     test_invalid_instruction_and_device_fault_can_skip();
     test_svc_policy_and_divide_by_zero();
     test_return_and_nested_fault_errors();
+    test_fetch_and_permission_faults();
+    test_exception_return_to_unmapped_target();
+    test_sequential_handled_exceptions();
+    test_faulting_memory_operations_are_atomic();
     test_mmio_exception_controller();
     test_timer_interrupt_mask_and_delivery();
     test_unhandled_mode_stays_terminal();

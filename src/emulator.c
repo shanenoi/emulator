@@ -187,6 +187,10 @@ static void update_timer_interrupt_deadline(Emulator *emu) {
     if (emu->exceptions.timer_interval == 0 || emu->exceptions.active) {
         return;
     }
+    if (emu->exceptions.timer_deadline_relative_pending) {
+        emu->exceptions.next_timer_deadline = emu->cpu.instructions_executed + emu->exceptions.timer_interval;
+        emu->exceptions.timer_deadline_relative_pending = false;
+    }
     if (emu->cpu.instructions_executed >= emu->exceptions.next_timer_deadline) {
         emu->exceptions.pending_timer_interrupt = true;
         emu->exceptions.next_timer_deadline += emu->exceptions.timer_interval;
@@ -306,6 +310,7 @@ bool emulator_queue_timer_interrupt(Emulator *emu) {
 void emulator_configure_timer_interrupt(Emulator *emu, uint64_t interval) {
     emu->exceptions.timer_interval = interval;
     emu->exceptions.next_timer_deadline = interval == 0 ? 0 : emu->cpu.instructions_executed + interval;
+    emu->exceptions.timer_deadline_relative_pending = false;
     emu->exceptions.pending_timer_interrupt = false;
 }
 

@@ -137,7 +137,7 @@ def mmio_timer_once() -> list[int]:
     words.append(str_w(2, 0, 0x08))
     words.append(movz(6, 12, 0))
     words.append(str_x(6, 0, 0x10))
-    for _ in range(8):
+    for _ in range(16):
         words.append(nop())
     words.append(hlt())
     pad_to(words, VECTOR)

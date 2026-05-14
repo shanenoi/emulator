@@ -1170,6 +1170,7 @@ Add a simplified exception model:
 - Host/CLI vector setup through `--exception-vector <address>`.
 - CLI timer setup through `--timer-interrupt <interval>`, `--queue-timer`, and `--interrupts on|off`.
 - Guest vector setup through the exception-controller MMIO device at `0x09030000`.
+- Guest writes to `TIMER_INTERVAL` arm a relative instruction-count deadline after the arming instruction retires.
 - Trace lines for exception entry and exception return.
 - Debugger inspection through the `exception` command.
 

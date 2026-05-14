@@ -366,7 +366,8 @@ static bool device_write(Memory *memory, const EmuDeviceRange *device, uint64_t 
         }
         if (offset == EMU_EXCEPTION_TIMER_INTERVAL_OFFSET && width == 8) {
             exceptions->timer_interval = value;
-            exceptions->next_timer_deadline = value;
+            exceptions->next_timer_deadline = 0;
+            exceptions->timer_deadline_relative_pending = value != 0;
             exceptions->pending_timer_interrupt = false;
             return true;
         }

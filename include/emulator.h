@@ -232,6 +232,7 @@ typedef struct {
     bool pending_timer_interrupt;
     uint64_t timer_interval;
     uint64_t next_timer_deadline;
+    bool timer_deadline_relative_pending;
     EmuExceptionContext context;
 } EmuExceptionController;
 
