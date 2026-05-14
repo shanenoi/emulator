@@ -30,6 +30,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v1.3 Test Plan — Memory-Mapped Devices](docs/test-plan-v1.3.md)
 - [v1.3 Test Traceability — Memory-Mapped Devices](docs/test-plan-v1.3-traceability.md)
 - [v1.4 Test Plan — Exceptions, Traps, and Interrupt Skeleton](docs/test-plan-v1.4.md)
+- [v1.5 Test Plan — Toy Kernel Boot and Cooperative Tasks](docs/test-plan-v1.5.md)
 
 ## Lessons
 
