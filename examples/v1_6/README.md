@@ -47,5 +47,4 @@ Important ABI and memory rules:
   `WOULD_BLOCK`; undersized receive buffers return `BAD_ARGUMENT` without
   dequeuing the message.
 
-Generated `.bin` files are build artifacts and are removed by `make clean` once
-v1.6 tests are wired in.
+Generated `.bin` files are build artifacts and are removed by `make clean`.

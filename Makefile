@@ -214,6 +214,7 @@ V1_2_TEST_FIXTURE_MARKER := tests/v1_2/tmp/.fixtures.stamp
 V1_3_TEST_FIXTURE_MARKER := tests/v1_3/tmp/.fixtures.stamp
 V1_4_TEST_FIXTURE_MARKER := tests/v1_4/tmp/.fixtures.stamp
 V1_5_TEST_FIXTURE_MARKER := tests/v1_5/tmp/.fixtures.stamp
+V1_6_TEST_FIXTURE_MARKER := tests/v1_6/tmp/.fixtures.stamp
 
 clean:
 	rm -f $(TARGET) $(OBJ) tests/v0_1/*.o tests/v0_1/test_v0_1 tests/v0_2/*.o tests/v0_2/test_v0_2 \
@@ -223,6 +224,7 @@ clean:
 		tests/v0_9/*.o tests/v0_9/test_v0_9 tests/v1_1/*.o tests/v1_1/test_v1_1 \
 		tests/v1_2/*.o tests/v1_2/test_v1_2 tests/v1_3/*.o tests/v1_3/test_v1_3 \
 		tests/v1_4/*.o tests/v1_4/test_v1_4 tests/v1_5/*.o tests/v1_5/test_v1_5 \
+		tests/v1_6/*.o tests/v1_6/test_v1_6 \
 		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
 		examples/v0_3/*.o examples/v0_3/*.bin examples/v0_4/*.o examples/v0_4/*.bin \
 		examples/v0_7/*.o examples/v0_7/*.bin examples/v0_8/*.o examples/v0_8/*.elf \
@@ -230,7 +232,7 @@ clean:
 		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/* tests/v0_4/tmp/* tests/v0_5/tmp/* \
 		tests/v0_6/tmp/* tests/v0_7/tmp/* tests/v0_8/tmp/* tests/v0_9/tmp/* tests/v1_0/tmp/*
 	rm -f examples/v1_2/mapping_inspection.txt
-	rm -rf tests/v1_1/tmp/* tests/v1_1/tmp/.fixtures.stamp tests/v1_2/tmp/* tests/v1_2/tmp/.fixtures.stamp tests/v1_3/tmp/* tests/v1_3/tmp/.fixtures.stamp tests/v1_4/tmp/* tests/v1_4/tmp/.fixtures.stamp tests/v1_5/tmp/* tests/v1_5/tmp/.fixtures.stamp
+	rm -rf tests/v1_1/tmp/* tests/v1_1/tmp/.fixtures.stamp tests/v1_2/tmp/* tests/v1_2/tmp/.fixtures.stamp tests/v1_3/tmp/* tests/v1_3/tmp/.fixtures.stamp tests/v1_4/tmp/* tests/v1_4/tmp/.fixtures.stamp tests/v1_5/tmp/* tests/v1_5/tmp/.fixtures.stamp tests/v1_6/tmp/* tests/v1_6/tmp/.fixtures.stamp
 
 $(V1_1_TEST_FIXTURE_MARKER): tests/fixtures/macho_fixture_writer.py
 	mkdir -p tests/v1_1/tmp
@@ -256,6 +258,11 @@ $(V1_4_TEST_FIXTURE_MARKER): tests/fixtures/exception_fixture_writer.py
 $(V1_5_TEST_FIXTURE_MARKER): tests/fixtures/kernel_fixture_writer.py
 	mkdir -p tests/v1_5/tmp
 	python3 tests/fixtures/kernel_fixture_writer.py --output-dir tests/v1_5/tmp
+	touch $@
+
+$(V1_6_TEST_FIXTURE_MARKER): tests/fixtures/tiny_os_fixture_writer.py
+	mkdir -p tests/v1_6/tmp
+	python3 tests/fixtures/tiny_os_fixture_writer.py --output-dir tests/v1_6/tmp
 	touch $@
 
 tests/v0_1/test_v0_1: tests/v0_1/test_v0_1.o $(CORE_OBJ)
@@ -300,7 +307,10 @@ tests/v1_4/test_v1_4: tests/v1_4/test_v1_4.o $(CORE_OBJ)
 tests/v1_5/test_v1_5: tests/v1_5/test_v1_5.o $(CORE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^
 
-test: all $(TEST_EXAMPLES) $(V1_1_TEST_FIXTURE_MARKER) $(V1_2_TEST_FIXTURE_MARKER) $(V1_3_TEST_FIXTURE_MARKER) $(V1_4_TEST_FIXTURE_MARKER) $(V1_5_TEST_FIXTURE_MARKER) tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_3 tests/v0_4/test_v0_4 tests/v0_5/test_v0_5 tests/v0_6/test_v0_6 tests/v0_7/test_v0_7 tests/v0_8/test_v0_8 tests/v0_9/test_v0_9 tests/v1_1/test_v1_1 tests/v1_2/test_v1_2 tests/v1_3/test_v1_3 tests/v1_4/test_v1_4 tests/v1_5/test_v1_5
+tests/v1_6/test_v1_6: tests/v1_6/test_v1_6.o $(CORE_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+test: all $(TEST_EXAMPLES) $(V1_1_TEST_FIXTURE_MARKER) $(V1_2_TEST_FIXTURE_MARKER) $(V1_3_TEST_FIXTURE_MARKER) $(V1_4_TEST_FIXTURE_MARKER) $(V1_5_TEST_FIXTURE_MARKER) $(V1_6_TEST_FIXTURE_MARKER) tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_3 tests/v0_4/test_v0_4 tests/v0_5/test_v0_5 tests/v0_6/test_v0_6 tests/v0_7/test_v0_7 tests/v0_8/test_v0_8 tests/v0_9/test_v0_9 tests/v1_1/test_v1_1 tests/v1_2/test_v1_2 tests/v1_3/test_v1_3 tests/v1_4/test_v1_4 tests/v1_5/test_v1_5 tests/v1_6/test_v1_6
 	./tests/v0_1/test_v0_1
 	./tests/v0_1/test_cli.sh
 	./tests/v0_2/test_v0_2
@@ -353,6 +363,12 @@ test: all $(TEST_EXAMPLES) $(V1_1_TEST_FIXTURE_MARKER) $(V1_2_TEST_FIXTURE_MARKE
 	./tests/v1_5/test_debugger_kernel.sh
 	./tests/v1_5/test_docs_kernel.sh
 	./tests/v1_5/test_optional_kernel_examples.sh
+	mkdir -p tests/v1_6/tmp
+	./tests/v1_6/test_v1_6
+	./tests/v1_6/test_cli_tiny_os.sh
+	./tests/v1_6/test_debugger_tiny_os.sh
+	./tests/v1_6/test_docs_tiny_os.sh
+	./tests/v1_6/test_optional_tiny_os_examples.sh
 
 release-docs-check:
 	@set -eu; \
@@ -425,6 +441,12 @@ release-docs-check:
 		need_file tests/v1_5/test_debugger_kernel.sh; \
 		need_file tests/v1_5/test_docs_kernel.sh; \
 		need_file tests/v1_5/test_optional_kernel_examples.sh; \
+		need_file tests/fixtures/tiny_os_fixture_writer.py; \
+		need_file tests/v1_6/test_v1_6.c; \
+		need_file tests/v1_6/test_cli_tiny_os.sh; \
+		need_file tests/v1_6/test_debugger_tiny_os.sh; \
+		need_file tests/v1_6/test_docs_tiny_os.sh; \
+		need_file tests/v1_6/test_optional_tiny_os_examples.sh; \
 		need_file README.md; \
 		grep -q "v1.1 Test Plan" README.md || fail "README does not link the v1.1 test plan"; \
 		grep -q "v1.2 Test Plan" README.md || fail "README does not link the v1.2 test plan"; \
@@ -439,7 +461,7 @@ release-docs-check:
 		grep -q "v1.4 Lesson" README.md || fail "README does not link the v1.4 lesson"; \
 		grep -q "v1.5 Lesson" README.md || fail "README does not link the v1.5 lesson"; \
 		grep -q "v1.6 Lesson" README.md || fail "README does not link the v1.6 lesson"; \
-		grep -q "v0.1 through v1.5" README.md || fail "README does not describe current deterministic tests"; \
+		grep -q "v0.1 through v1.6" README.md || fail "README does not describe current deterministic tests"; \
 		grep -q "make release-check" README.md || fail "README does not document make release-check"; \
 		grep -q "make test-asan" README.md || fail "README does not document optional sanitizer checks"; \
 		grep -q "fresh archive.*full deterministic test suite\|fresh-archive full deterministic-suite" README.md || fail "README does not document full deterministic-suite archive validation"; \
@@ -458,7 +480,7 @@ release-docs-check:
 		if grep -qi "no ELF loader yet" README.md; then fail "README still says there is no ELF loader"; fi; \
 		if grep -qi "v0.8 tests are missing\|v0.9 tests are missing" README.md; then fail "README contains stale missing-test wording for implemented versions"; fi; \
 		if grep -qi "not added yet\|will be added in the v1.0 test phase\|tests/v1_0/.*planned\|tests are still pending\|tests are intentionally deferred\|fixtures/tests are deferred" README.md; then fail "README contains stale wording about missing implemented tests"; fi; \
-		printf '%s\n' "v1.5 release docs check passed"
+		printf '%s\n' "v1.6 release docs check passed"
 
 release-hygiene-check:
 	@set -eu; \
@@ -466,11 +488,11 @@ release-hygiene-check:
 		[ -d .git ] || fail "not running from a git checkout"; \
 		tracked_generated=$$(git ls-files | grep -E '(^emulator$$|\.(o|bin|elf|macho)$$|^tests/v[0-9_]+/test_v[0-9_]+$$)' || true); \
 		if [ -n "$$tracked_generated" ]; then echo "$$tracked_generated" >&2; fail "generated build outputs are tracked"; fi; \
-		for pattern in 'emulator' '*.o' '*.bin' '*.elf' '*.macho' 'tests/v0_9/tmp/' 'tests/v1_0/tmp/' 'tests/v1_1/tmp/' 'tests/v1_2/tmp/' 'tests/v1_3/tmp/' 'tests/v1_4/tmp/' 'tests/v1_5/tmp/'; do \
+		for pattern in 'emulator' '*.o' '*.bin' '*.elf' '*.macho' 'tests/v0_9/tmp/' 'tests/v1_0/tmp/' 'tests/v1_1/tmp/' 'tests/v1_2/tmp/' 'tests/v1_3/tmp/' 'tests/v1_4/tmp/' 'tests/v1_5/tmp/' 'tests/v1_6/tmp/'; do \
 			grep -Fq "$$pattern" .gitignore || fail ".gitignore does not cover $$pattern"; \
 		done; \
 		if [ -d scripts ]; then fail "./scripts must not be shipped in source"; fi; \
-		printf '%s\n' "v1.5 release hygiene check passed"
+		printf '%s\n' "v1.6 release hygiene check passed"
 
 release-clean-check:
 	@set -eu; \
@@ -487,6 +509,8 @@ release-clean-check:
 		: > tests/v1_4/tmp/clean_probe.tmp; \
 		mkdir -p tests/v1_5/tmp; \
 		: > tests/v1_5/tmp/clean_probe.tmp; \
+		mkdir -p tests/v1_6/tmp; \
+		: > tests/v1_6/tmp/clean_probe.tmp; \
 		: > examples/v1_2/mapping_inspection.txt; \
 		: > tests/v0_9/test_v0_9; \
 		if [ "$${RELEASE_CLEAN_FULL:-0}" = "1" ]; then make examples >/dev/null; make test >/dev/null; fi; \
@@ -501,9 +525,10 @@ release-clean-check:
 			-o -path './tests/v0_9/test_v0_9' -o -path './tests/v1_1/test_v1_1' \
 			-o -path './tests/v1_2/test_v1_2' -o -path './tests/v1_3/test_v1_3' \
 			-o -path './tests/v1_4/test_v1_4' -o -path './tests/v1_5/test_v1_5' \
+			-o -path './tests/v1_6/test_v1_6' \
 			\) -print | sort); \
 		if [ -n "$$leftovers" ]; then echo "$$leftovers" >&2; fail "make clean left generated artifacts behind"; fi; \
-		printf '%s\n' "v1.5 release clean-artifact check passed"
+		printf '%s\n' "v1.6 release clean-artifact check passed"
 
 release-archive-check:
 	@set -eu; \
@@ -527,10 +552,10 @@ release-archive-check:
 		EMULATOR_SKIP_OPTIONAL_REAL_TOOLCHAIN=1 make -C "$$extract_dir" -j$${RELEASE_ARCHIVE_JOBS:-4} test; \
 		[ -x "$$extract_dir/emulator" ] || fail "fresh archive did not build emulator through make test"; \
 		"$$extract_dir/emulator" help >/dev/null; \
-		printf '%s\n' "v1.5 release archive check passed: fresh archive ran the full deterministic test suite"
+		printf '%s\n' "v1.6 release archive check passed: fresh archive ran the full deterministic test suite"
 
 release-check: release-docs-check release-hygiene-check release-clean-check release-archive-check
-	@echo "v1.5 release gate passed: tests, docs, hygiene, clean-artifact, and fresh-archive full-suite checks completed successfully"
+	@echo "v1.6 release gate passed: tests, docs, hygiene, clean-artifact, and fresh-archive full-suite checks completed successfully"
 
 test-asan:
 	@set -eu; \

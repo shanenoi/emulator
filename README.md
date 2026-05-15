@@ -54,7 +54,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**, the implemented/tested teaching profile for **v1.5 — Toy Kernel Mode**, and the hardened implementation pass for **v1.6 — Tiny OS Lab**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests. v1.5 adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, generated fixtures, and dedicated v1.5 unit/CLI/debugger/docs tests. v1.6 begins the guest-managed Tiny OS Lab with a `BRK #0x160` service dispatcher, guest task creation, guest-readable/read-only boot metadata and task descriptors, deterministic task IDs/names, task information lookup, current-task ID lookup, console/panic/yield/exit/sleep services, service-discovery metadata, hardened stack validation, and a fixed-size nonblocking mailbox for simple IPC. Dedicated v1.6 automated tests are the next planned development step.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**, the implemented/tested teaching profile for **v1.5 — Toy Kernel Mode**, and the implemented/tested teaching profile for **v1.6 — Tiny OS Lab**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests. v1.5 adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, generated fixtures, and dedicated v1.5 unit/CLI/debugger/docs tests. v1.6 adds the guest-managed Tiny OS Lab with a `BRK #0x160` service dispatcher, guest task creation, guest-readable/read-only boot metadata and task descriptors, deterministic task IDs/names, task information lookup, current-task ID lookup, console/panic/yield/exit/sleep services, service-discovery metadata, hardened stack validation, fixed-size nonblocking mailbox IPC, generated fixtures, and dedicated v1.6 unit/CLI/debugger/docs/optional-example tests. It is not a real OS and does not provide production isolation.
 
 Implemented now:
 
@@ -239,7 +239,7 @@ Implemented now:
   - supports service IDs for task create, yield, exit, sleep, current task ID, task info lookup, message send, message receive, console write, and kernel panic
   - adds a deterministic per-task mailbox: 4 queued messages per task, up to 32 bytes per message, FIFO receive order, and nonblocking `WOULD_BLOCK` errors when empty/full
   - extends `info`, trace output, and debugger `kernel` output with guest-created task metadata, service trap, descriptor table, task IDs, switch counts, labels, and mailbox counts
-  - dedicated v1.6 automated tests are the next planned development step from `docs/test-plan-v1.6.md`
+  - dedicated v1.6 unit, CLI, debugger, docs, optional-example, fixture-generation, clean, and release-hygiene tests
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -266,8 +266,8 @@ Implemented now:
   - v1.2 virtual-memory tests for page mapping, R/W/X permission enforcement, loader-created mappings, stack guard behavior, CPU fault ordering, CLI `info`/`run`/`trace`/`regs`/`dump`, debugger `maps`/`map`, docs consistency, generated fixtures, clean behavior, and fresh-archive release coverage
   - v1.3 memory-mapped-device tests for fixed device ranges, RAM/device routing, UART output and faults, timer/random determinism, width/alignment/boundary edge cases, CPU load/store integration, raw and ELF loader integration, CLI `info`/`run`/`trace`/`regs`/`dump`, debugger `maps`/`map`/`mem`, docs consistency, generated fixtures, clean behavior, and fresh-archive release coverage
 
-The full v0.1 through v1.5 deterministic test suite runs with `make test`. The release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
-Historical release milestones remain covered inside that command: the v0.1 through v1.0 stable-learning checks still run, and the v0.1 through v1.4 deterministic test suite is preserved as the regression base for v1.5. Earlier milestones also preserved the v0.1 through v1.3 deterministic test suite as the regression base for v1.4, and the v0.1 through v1.4 deterministic test suite now remains the regression base for v1.5.
+The full v0.1 through v1.6 deterministic test suite runs with `make test`. The release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
+Historical release milestones remain covered inside that command: the v0.1 through v1.0 stable-learning checks still run, and the v0.1 through v1.5 deterministic test suite is preserved as the regression base for v1.6. Earlier milestones also preserved the v0.1 through v1.3 deterministic test suite as the regression base for v1.4 and the v0.1 through v1.4 deterministic test suite as the regression base for v1.5.
 
 ## Build and Run
 
@@ -405,7 +405,7 @@ Run the named v1.0 release gate for the current deterministic suite:
 make release-check
 ```
 
-The test target builds the emulator, assembles the regression examples through v0.8, generates deterministic v1.1 through v1.5 fixtures, compiles the v0.1 through v1.5 C test runners, and runs all v0.1 through v1.5 CLI/debugger/docs/release checks. The v0.9 and v1.0 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain.
+The test target builds the emulator, assembles the regression examples through v0.8, generates deterministic v1.1 through v1.6 fixtures, compiles the v0.1 through v1.6 C test runners, and runs all v0.1 through v1.6 CLI/debugger/docs/release checks. The v0.9 and v1.0 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain.
 
 `make release-check` checks v1.0 documentation links/status, repository hygiene, clean-artifact behavior after generating representative artifacts, and a fresh archive that runs the full deterministic suite after extraction. Use `make test` when you want to run the same deterministic suite directly in the current checkout.
 
@@ -1240,8 +1240,7 @@ Test coverage now includes:
 **Goal:** turn the v1.5 host-managed toy-kernel profile into a small
 guest-managed operating-systems playground.
 
-Current development status: implementation hardening pass exists; dedicated v1.6
-automated tests are the next planned development step. The comprehensive test plan is tracked in
+Current development status: the strict v1.6 Tiny OS Lab teaching contract is implemented and covered by dedicated automated tests. The comprehensive test plan is tracked in
 [`docs/test-plan-v1.6.md`](docs/test-plan-v1.6.md).
 
 Implemented OS-lab features:
@@ -1250,7 +1249,7 @@ Implemented OS-lab features:
 - Stable service dispatcher convention: `x8` contains the service ID and `x0`
   returns a task ID, byte count, descriptor pointer, or negative service error.
 - Boot-info version `2` extends the v1.5 fields with descriptor-table, mailbox,
-  and service-discovery metadata, including a supported-service bitmask.
+  and service-discovery metadata, including the `supported_services` bitmask.
 - Guest-visible task descriptor table at `0x00081000` when boot-info is enabled; boot-info and descriptors are guest-readable/read-only and internally refreshed by the emulator.
 - Fixed task descriptors containing ID, state, entry PC, saved PC/SP, stack
   range, exit code, fault cause/address, wake tick, switch count, mailbox count, origin, and label.
@@ -1258,17 +1257,18 @@ Implemented OS-lab features:
   in the first-pass model.
 - Guest services for create, yield, exit, sleep, get current ID, get task info,
   mailbox send/receive, console write, and kernel panic, with documented volatile-register and result-register behavior.
+- Documented service names: `TASK_CREATE`, `TASK_YIELD`, `TASK_EXIT`,
+  `TASK_SLEEP`, `TASK_GET_ID`, `TASK_GET_INFO`, `TASK_SEND`, `TASK_RECV`,
+  `CONSOLE_WRITE`, and `KERNEL_PANIC`.
 - Fixed per-task mailbox queues with 4 slots and 32-byte messages; send/receive are nonblocking, zero-length messages are valid, undersized receive buffers fail without dequeuing, and self-send is allowed.
 - `info`, trace, debugger `kernel`, and debugger `tasks` output expose service counters, last-service status, mailbox counters, and task metadata.
 
-Still deferred to later v1.6 implementation/test passes:
+Still out of scope for v1.6:
 
-- Dedicated v1.6 unit, CLI, debugger, docs, fixture, sanitizer, and release
-  tests.
 - ELF/Mach-O v1.6 fixture coverage.
 - Blocking IPC wakeups; v1.6 intentionally remains nonblocking.
 - Real per-process address spaces or privilege separation, which remain out of
-  scope for this toy lab.
+  scope for this toy lab. This is not a real OS.
 
 Demo idea:
 

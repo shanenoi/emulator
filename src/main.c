@@ -30,7 +30,7 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "         --kernel                   enable v1.5 toy-kernel boot profile\n");
     fprintf(stream, "         --kernel-boot-info         pass a guest-readable boot-info block in x0/x1\n");
     fprintf(stream, "         --kernel-task <address>    add a cooperative task entry point; may repeat\n");
-    fprintf(stream, "toy-kernel service IDs: 1=create, 2=yield, 3=exit, 4=sleep, 5=get-id, 6=get-info, 7=send, 8=recv, 9=console, 10=panic.\n");
+    fprintf(stream, "toy-kernel service IDs: 1=TASK_CREATE, 2=TASK_YIELD, 3=TASK_EXIT, 4=TASK_SLEEP, 5=TASK_GET_ID, 6=TASK_GET_INFO, 7=TASK_SEND, 8=TASK_RECV, 9=CONSOLE_WRITE, 10=KERNEL_PANIC.\n");
     fprintf(stream, "info and debugger maps show RAM mappings and MMIO device ranges.\n");
     fprintf(stream, "dump inspects ordinary readable RAM; CPU loads/stores are what trigger device behavior.\n");
     fprintf(stream, "dump <address> and <length> accept decimal or 0x-prefixed hexadecimal values.\n");
@@ -232,6 +232,8 @@ static void print_toy_kernel_info(const Emulator *emu, FILE *stream) {
     fprintf(stream, "toy_kernel_descriptor_size: %zu\n", sizeof(EmuToyTaskDescriptor));
     fprintf(stream, "toy_kernel_service_trap: 0x%03x\n", EMU_TOY_KERNEL_TRAP_SERVICE);
     fprintf(stream, "toy_kernel_supported_services: 0x%016" PRIx64 "\n", (uint64_t)EMU_TOY_SERVICE_SUPPORTED_MASK);
+    fprintf(stream, "toy_kernel_mailbox: slots=%u message_size=%u\n", EMU_TOY_KERNEL_MAILBOX_SLOTS,
+            EMU_TOY_KERNEL_MAILBOX_MESSAGE_SIZE);
     fprintf(stream, "toy_kernel_service_calls: 0x%016" PRIx64 "\n", kernel->service_calls);
     fprintf(stream, "toy_kernel_last_service: id=0x%016" PRIx64 " status=%" PRId64 "\n",
             kernel->last_service_id, kernel->last_service_status);
