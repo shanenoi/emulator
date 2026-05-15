@@ -31,6 +31,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v1.3 Test Traceability — Memory-Mapped Devices](docs/test-plan-v1.3-traceability.md)
 - [v1.4 Test Plan — Exceptions, Traps, and Interrupt Skeleton](docs/test-plan-v1.4.md)
 - [v1.5 Test Plan — Toy Kernel Boot and Cooperative Tasks](docs/test-plan-v1.5.md)
+- [v1.6 Test Plan — Tiny OS Lab and Guest-Managed Tasks](docs/test-plan-v1.6.md)
 
 ## Lessons
 
@@ -1226,6 +1227,10 @@ Test coverage now includes:
 ### v1.6 — Tiny OS Lab
 
 **Goal:** turn the emulator into a small operating-systems playground.
+
+Planning status: the comprehensive v1.6 test plan is now tracked in
+[`docs/test-plan-v1.6.md`](docs/test-plan-v1.6.md). Implementation has not
+started yet.
 
 Add OS-lab features:
 
