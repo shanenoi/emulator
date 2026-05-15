@@ -37,3 +37,6 @@ examples/v1_3/*.bin
 tests/v1_4/tmp/
 tests/v1_4/test_v1_4
 examples/v1_4/*.bin
+tests/v1_5/tmp/
+tests/v1_5/test_v1_5
+examples/v1_5/*.bin

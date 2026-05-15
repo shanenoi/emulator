@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate deterministic raw v1.5 toy-kernel teaching fixtures."""
+"""Generate deterministic raw v1.5 toy-kernel test fixtures."""
 
 from __future__ import annotations
 

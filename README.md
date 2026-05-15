@@ -52,9 +52,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, and the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests.
-
-The **v1.5 — Toy Kernel Boot and Cooperative Tasks** implementation is now present but not yet covered by dedicated v1.5 tests. It adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, and `info`/trace/debugger visibility for scheduler state.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**, and the implemented/tested teaching profile for **v1.5 — Toy Kernel Mode**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests. v1.5 adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, generated fixtures, and dedicated v1.5 unit/CLI/debugger/docs tests.
 
 Implemented now:
 
@@ -229,7 +227,7 @@ Implemented now:
   - `emulator info` prints toy-kernel profile, timer counters, task states, wake ticks, and fault metadata
   - trace mode prints scheduler start, switch, timer scheduling, task fault, and completion events
   - debugger `kernel` prints live toy-kernel state
-  - dedicated v1.5 tests and generated fixtures are still pending
+  - dedicated v1.5 unit, CLI, debugger, docs, optional-example, fixture-generation, clean, and fresh-archive release tests
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -256,8 +254,8 @@ Implemented now:
   - v1.2 virtual-memory tests for page mapping, R/W/X permission enforcement, loader-created mappings, stack guard behavior, CPU fault ordering, CLI `info`/`run`/`trace`/`regs`/`dump`, debugger `maps`/`map`, docs consistency, generated fixtures, clean behavior, and fresh-archive release coverage
   - v1.3 memory-mapped-device tests for fixed device ranges, RAM/device routing, UART output and faults, timer/random determinism, width/alignment/boundary edge cases, CPU load/store integration, raw and ELF loader integration, CLI `info`/`run`/`trace`/`regs`/`dump`, debugger `maps`/`map`/`mem`, docs consistency, generated fixtures, clean behavior, and fresh-archive release coverage
 
-The full v0.1 through v1.4 deterministic test suite runs with `make test`. The release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
-Historical release milestones remain covered inside that command: the v0.1 through v1.0 stable-learning checks still run, and the v0.1 through v1.3 deterministic test suite is preserved as the regression base for v1.4.
+The full v0.1 through v1.5 deterministic test suite runs with `make test`. The release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
+Historical release milestones remain covered inside that command: the v0.1 through v1.0 stable-learning checks still run, and the v0.1 through v1.4 deterministic test suite is preserved as the regression base for v1.5. Earlier milestones also preserved the v0.1 through v1.3 deterministic test suite as the regression base for v1.4, and the v0.1 through v1.4 deterministic test suite now remains the regression base for v1.5.
 
 ## Build and Run
 
@@ -395,7 +393,7 @@ Run the named v1.0 release gate for the current deterministic suite:
 make release-check
 ```
 
-The test target builds the emulator, assembles the regression examples through v0.8, generates deterministic v1.1 through v1.4 fixtures, compiles the v0.1 through v1.4 C test runners, and runs all v0.1 through v1.4 CLI/debugger/docs/release checks. The v0.9 and v1.0 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain.
+The test target builds the emulator, assembles the regression examples through v0.8, generates deterministic v1.1 through v1.5 fixtures, compiles the v0.1 through v1.5 C test runners, and runs all v0.1 through v1.5 CLI/debugger/docs/release checks. The v0.9 and v1.0 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain.
 
 `make release-check` checks v1.0 documentation links/status, repository hygiene, clean-artifact behavior after generating representative artifacts, and a fresh archive that runs the full deterministic suite after extraction. Use `make test` when you want to run the same deterministic suite directly in the current checkout.
 
@@ -1205,7 +1203,7 @@ Definition of done:
 
 **Goal:** introduce the first deterministic toy-kernel execution profile on top of the v1.4 exception and trap foundation.
 
-Current development pass:
+Current tested behavior:
 
 - Opt-in `--kernel` profile so older programs keep their existing behavior.
 - Optional `--kernel-boot-info` metadata block for kernel-shaped programs.
@@ -1218,12 +1216,12 @@ Current development pass:
 - Per-task fault capture for unhandled task exceptions.
 - `info`, trace output, and debugger `kernel` output for the toy-kernel profile and scheduler events.
 
-Remaining definition of done before calling v1.5 fully tested:
+Test coverage now includes:
 
-- Add unit tests for boot state, task setup, context save/restore, scheduling, and trap behavior.
-- Add CLI/debugger/docs tests for the new profile.
-- Add negative tests for bad entries, bad stacks, bad boot-info use, panic, and unknown traps.
-- Promote v1.5 into the release docs and fresh-archive gate after the dedicated tests exist.
+- Unit tests for boot-info setup, task creation, explicit scheduler handoff, context save/restore, flags preservation, task exit, fault isolation, timer wakeups, panic, deadlock, validation errors, and non-kernel `BRK` compatibility.
+- CLI tests for successful runs, trace scheduler events, `info` output, console writes, stable panic/fault exit codes, bad task entries, too many tasks, instruction limits, and help text.
+- Debugger tests for the `kernel` command before and after scheduler start, trace-on scheduler events, malformed `kernel` usage, and overlong input handling.
+- Docs and optional-example tests for source-controlled fixture generation and documentation consistency.
 
 ### v1.6 — Tiny OS Lab
 

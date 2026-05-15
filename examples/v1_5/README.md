@@ -1,8 +1,9 @@
 # v1.5 Toy Kernel Examples
 
 v1.5 introduces an opt-in toy-kernel profile for cooperative task scheduling.
-The profile is implemented, but the dedicated v1.5 automated tests are still to
-be added.
+The profile is intentionally small and deterministic: it is a teaching bridge
+between v1.4 exceptions/traps and later toy OS experiments, not a production
+operating system.
 
 ## CLI surface
 
@@ -53,11 +54,22 @@ Outside toy-kernel mode, `BRK` keeps the v1.4 exception behavior.
 ## Fixture generator
 
 `generate_kernel_fixtures.py` writes tiny deterministic raw binaries for manual
-experimentation. Generated `.bin` files are intentionally ignored by git until
-v1.5 tests are added.
+experimentation and the v1.5 tests. Generated `.bin` files are intentionally
+ignored by git; regenerate them when needed.
 
 ```sh
-python3 examples/v1_5/generate_kernel_fixtures.py /tmp/v1_5_fixtures
+python3 examples/v1_5/generate_kernel_fixtures.py --output-dir /tmp/v1_5_fixtures
 ./emulator trace /tmp/v1_5_fixtures/two_task_yield.bin --kernel \
   --kernel-task 0x1008 --kernel-task 0x1014
 ```
+
+Generated fixtures:
+
+- `single_task_exit.bin` — kernel starts one task, task exits with status in `x0`.
+- `two_task_yield.bin` — task 0 yields, task 1 exits, then task 0 resumes and exits.
+- `sleep_then_exit.bin` — task 0 sleeps until a deterministic toy timer tick wakes it.
+- `task_fault_then_exit.bin` — task 0 faults while task 1 still exits; CLI status is `71`.
+- `kernel_panic.bin` — kernel panics before tasks start; CLI status is `70`.
+- `console_write.bin` — kernel writes `KERN` through `BRK #0x153` then starts a task.
+- `sleep_deadlock.bin` — one task sleeps with no runnable task left, producing a stable deadlock error.
+- `infinite_task.bin` — task loops forever for instruction-limit coverage.

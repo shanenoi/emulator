@@ -185,6 +185,17 @@ panic(code)
 console_write(buffer, length) or UART-only console output
 ```
 
+Implemented v1.5 trap encodings:
+
+```text
+BRK #0x150   yield from the running task
+BRK #0x151   task_exit(x0)
+BRK #0x152   panic(x0)
+BRK #0x153   console_write(x0=buffer, x1=length)
+BRK #0x154   start host-configured tasks from kernel boot code
+BRK #0x155   sleep current task until x0 toy-kernel timer ticks pass
+```
+
 If traps are encoded with `SVC` or `BRK`, tests must verify that existing v0.7
 `SVC #0` fake syscall behavior remains unchanged outside the v1.5 profile.
 
