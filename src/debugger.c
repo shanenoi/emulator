@@ -91,6 +91,7 @@ static void debugger_print_help(FILE *stream) {
     fprintf(stream, "  regs                         print registers\n");
     fprintf(stream, "  exception                    print the current exception context\n");
     fprintf(stream, "  kernel                       print toy-kernel task state\n");
+    fprintf(stream, "  tasks                        alias for kernel task table\n");
     fprintf(stream, "  mem | x <address> <length>   dump memory\n");
     fprintf(stream, "  maps                         list mapped memory ranges\n");
     fprintf(stream, "  map <address>                show mapping containing one address\n");
@@ -131,6 +132,12 @@ static void debugger_print_kernel_context(const Debugger *debugger, FILE *stream
     fprintf(stream, "task_count = %zu\n", kernel->task_count);
     fprintf(stream, "descriptor_table = 0x%016" PRIx64 "\n", kernel->descriptor_table_address);
     fprintf(stream, "service_trap = 0x%03x\n", EMU_TOY_KERNEL_TRAP_SERVICE);
+    fprintf(stream, "supported_services = 0x%016" PRIx64 "\n", (uint64_t)EMU_TOY_SERVICE_SUPPORTED_MASK);
+    fprintf(stream, "service_calls = 0x%016" PRIx64 "\n", kernel->service_calls);
+    fprintf(stream, "last_service = id=0x%016" PRIx64 " status=%" PRId64 "\n", kernel->last_service_id,
+            kernel->last_service_status);
+    fprintf(stream, "mailbox_ops = sends=0x%016" PRIx64 " recvs=0x%016" PRIx64 "\n", kernel->mailbox_sends,
+            kernel->mailbox_recvs);
     fprintf(stream, "next_task_id = 0x%016" PRIx64 "\n", kernel->next_task_id);
     fprintf(stream, "timer_ticks = 0x%016" PRIx64 "\n", kernel->timer_ticks);
     fprintf(stream, "timer_schedules = 0x%016" PRIx64 "\n", kernel->timer_schedules);
@@ -451,8 +458,8 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
             debugger_print_exception_context(debugger, output);
             continue;
         }
-        if (strcmp(command, "kernel") == 0) {
-            if (!require_no_extra_args(&cursor, "kernel", error_stream)) {
+        if (strcmp(command, "kernel") == 0 || strcmp(command, "tasks") == 0) {
+            if (!require_no_extra_args(&cursor, strcmp(command, "kernel") == 0 ? "kernel" : "tasks", error_stream)) {
                 continue;
             }
             debugger_print_kernel_context(debugger, output);

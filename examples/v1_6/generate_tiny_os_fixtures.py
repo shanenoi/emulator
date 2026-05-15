@@ -29,6 +29,14 @@ def movk_x(reg: int, imm: int, shift: int) -> int:
     return 0xF2800000 | (((shift // 16) & 0x3) << 21) | ((imm & 0xFFFF) << 5) | (reg & 0x1F)
 
 
+def sub_imm_x(rd: int, rn: int, imm: int) -> int:
+    return 0xD1000000 | ((imm & 0xFFF) << 10) | ((rn & 0x1F) << 5) | (rd & 0x1F)
+
+
+def add_imm_x(rd: int, rn: int, imm: int) -> int:
+    return 0x91000000 | ((imm & 0xFFF) << 10) | ((rn & 0x1F) << 5) | (rd & 0x1F)
+
+
 def load_imm_x(reg: int, value: int) -> list[int]:
     words = [movz_x(reg, value & 0xFFFF)]
     for shift in (16, 32, 48):
@@ -108,8 +116,7 @@ def main() -> int:
     # "OK" to receiver and exits. Receiver reads it, prints it, then exits.
     sender_entry = LOAD + 0x40
     receiver_entry = LOAD + 0x60
-    source_addr = LOAD + 0x94
-    recv_addr = 0x00081200
+    source_addr = LOAD + 0x90
     write_fixture(
         out,
         "mailbox_ping_pong.bin",
@@ -119,8 +126,9 @@ def main() -> int:
             TRAP_START, HLT,
             movz_x(8, SVC_SEND), movz_x(0, 1), movz_x(1, source_addr), movz_x(2, 2), TRAP_SERVICE,
             movz_x(8, SVC_EXIT), movz_x(0, 0), TRAP_SERVICE,
-            movz_x(8, SVC_RECV), *load_imm_x(0, recv_addr), movz_x(1, 2), TRAP_SERVICE,
-            movz_x(8, SVC_CONSOLE), *load_imm_x(0, recv_addr), movz_x(1, 2), TRAP_SERVICE,
+            add_imm_x(29, 31, 0),
+            movz_x(8, SVC_RECV), sub_imm_x(0, 29, 16), movz_x(1, 2), TRAP_SERVICE,
+            movz_x(8, SVC_CONSOLE), sub_imm_x(0, 29, 16), movz_x(1, 2), TRAP_SERVICE,
             movz_x(8, SVC_EXIT), movz_x(0, 0), TRAP_SERVICE,
         ],
         b"OK" + b"\x00" * 6,

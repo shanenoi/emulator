@@ -231,6 +231,12 @@ static void print_toy_kernel_info(const Emulator *emu, FILE *stream) {
     fprintf(stream, "toy_kernel_descriptor_table: 0x%016" PRIx64 "\n", kernel->descriptor_table_address);
     fprintf(stream, "toy_kernel_descriptor_size: %zu\n", sizeof(EmuToyTaskDescriptor));
     fprintf(stream, "toy_kernel_service_trap: 0x%03x\n", EMU_TOY_KERNEL_TRAP_SERVICE);
+    fprintf(stream, "toy_kernel_supported_services: 0x%016" PRIx64 "\n", (uint64_t)EMU_TOY_SERVICE_SUPPORTED_MASK);
+    fprintf(stream, "toy_kernel_service_calls: 0x%016" PRIx64 "\n", kernel->service_calls);
+    fprintf(stream, "toy_kernel_last_service: id=0x%016" PRIx64 " status=%" PRId64 "\n",
+            kernel->last_service_id, kernel->last_service_status);
+    fprintf(stream, "toy_kernel_mailbox_ops: sends=0x%016" PRIx64 " recvs=0x%016" PRIx64 "\n",
+            kernel->mailbox_sends, kernel->mailbox_recvs);
     fprintf(stream, "toy_kernel_next_task_id: 0x%016" PRIx64 "\n", kernel->next_task_id);
     fprintf(stream, "toy_kernel_entry: 0x%016" PRIx64 "\n", kernel->kernel_entry);
     fprintf(stream, "toy_kernel_stack_top: 0x%016" PRIx64 "\n", kernel->kernel_stack_top);

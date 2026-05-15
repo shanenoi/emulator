@@ -71,6 +71,12 @@
 #define EMU_TOY_SERVICE_RECV 8u
 #define EMU_TOY_SERVICE_CONSOLE_WRITE 9u
 #define EMU_TOY_SERVICE_KERNEL_PANIC 10u
+#define EMU_TOY_SERVICE_SUPPORTED_MASK \
+    ((1ull << EMU_TOY_SERVICE_TASK_CREATE) | (1ull << EMU_TOY_SERVICE_TASK_YIELD) | \
+     (1ull << EMU_TOY_SERVICE_TASK_EXIT) | (1ull << EMU_TOY_SERVICE_TASK_SLEEP) | \
+     (1ull << EMU_TOY_SERVICE_GET_ID) | (1ull << EMU_TOY_SERVICE_GET_INFO) | \
+     (1ull << EMU_TOY_SERVICE_SEND) | (1ull << EMU_TOY_SERVICE_RECV) | \
+     (1ull << EMU_TOY_SERVICE_CONSOLE_WRITE) | (1ull << EMU_TOY_SERVICE_KERNEL_PANIC))
 
 #define EMU_TOY_SERVICE_OK 0ll
 #define EMU_TOY_SERVICE_ERR_UNKNOWN (-1ll)
@@ -305,6 +311,7 @@ typedef struct {
     uint64_t service_trap;
     uint64_t mailbox_slots;
     uint64_t mailbox_message_size;
+    uint64_t supported_services;
 } EmuToyKernelBootInfo;
 
 typedef struct {
@@ -323,6 +330,8 @@ typedef struct {
     uint64_t fault_address;
     uint64_t wake_tick;
     uint64_t switch_count;
+    uint64_t mailbox_count;
+    uint64_t guest_created;
     char name[EMU_TOY_KERNEL_TASK_NAME_SIZE];
 } EmuToyTaskDescriptor;
 
@@ -371,6 +380,11 @@ typedef struct {
     uint64_t kernel_stack_top;
     uint64_t task_stack_next;
     uint64_t next_task_id;
+    uint64_t service_calls;
+    uint64_t last_service_id;
+    int64_t last_service_status;
+    uint64_t mailbox_sends;
+    uint64_t mailbox_recvs;
     size_t task_count;
     size_t current_task;
     EmuToyTask tasks[EMU_TOY_KERNEL_MAX_TASKS];

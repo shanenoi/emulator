@@ -54,7 +54,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**, the implemented/tested teaching profile for **v1.5 — Toy Kernel Mode**, and the first implementation pass for **v1.6 — Tiny OS Lab**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests. v1.5 adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, generated fixtures, and dedicated v1.5 unit/CLI/debugger/docs tests. v1.6 begins the guest-managed Tiny OS Lab with a `BRK #0x160` service dispatcher, guest task creation, guest-visible task descriptors, deterministic task IDs/names, task information lookup, current-task ID lookup, console/panic/yield/exit/sleep services, and a fixed-size mailbox for simple IPC. Dedicated v1.6 automated tests are the next planned development step.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**, the implemented/tested teaching profile for **v1.5 — Toy Kernel Mode**, and the hardened implementation pass for **v1.6 — Tiny OS Lab**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests. v1.5 adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, generated fixtures, and dedicated v1.5 unit/CLI/debugger/docs tests. v1.6 begins the guest-managed Tiny OS Lab with a `BRK #0x160` service dispatcher, guest task creation, guest-readable/read-only boot metadata and task descriptors, deterministic task IDs/names, task information lookup, current-task ID lookup, console/panic/yield/exit/sleep services, service-discovery metadata, hardened stack validation, and a fixed-size nonblocking mailbox for simple IPC. Dedicated v1.6 automated tests are the next planned development step.
 
 Implemented now:
 
@@ -1240,34 +1240,33 @@ Test coverage now includes:
 **Goal:** turn the v1.5 host-managed toy-kernel profile into a small
 guest-managed operating-systems playground.
 
-Current development status: first implementation pass exists; dedicated v1.6
+Current development status: implementation hardening pass exists; dedicated v1.6
 automated tests are the next planned development step. The comprehensive test plan is tracked in
 [`docs/test-plan-v1.6.md`](docs/test-plan-v1.6.md).
 
-Implemented first-pass OS-lab features:
+Implemented OS-lab features:
 
 - Guest-created tasks through `BRK #0x160` service `TASK_CREATE`.
 - Stable service dispatcher convention: `x8` contains the service ID and `x0`
   returns a task ID, byte count, descriptor pointer, or negative service error.
-- Boot-info version `2` extends the v1.5 fields with descriptor-table and
-  service-discovery metadata.
-- Guest-visible task descriptor table at `0x00081000` when boot-info is enabled.
+- Boot-info version `2` extends the v1.5 fields with descriptor-table, mailbox,
+  and service-discovery metadata, including a supported-service bitmask.
+- Guest-visible task descriptor table at `0x00081000` when boot-info is enabled; boot-info and descriptors are guest-readable/read-only and internally refreshed by the emulator.
 - Fixed task descriptors containing ID, state, entry PC, saved PC/SP, stack
-  range, exit code, fault cause/address, wake tick, switch count, and label.
+  range, exit code, fault cause/address, wake tick, switch count, mailbox count, origin, and label.
 - Deterministic task IDs that are assigned in creation order and are not reused
   in the first-pass model.
 - Guest services for create, yield, exit, sleep, get current ID, get task info,
-  mailbox send/receive, console write, and kernel panic.
-- Fixed per-task mailbox queues with 4 slots and 32-byte messages.
-- `info`, trace, and debugger `kernel` output expose the new service and task
-  metadata.
+  mailbox send/receive, console write, and kernel panic, with documented volatile-register and result-register behavior.
+- Fixed per-task mailbox queues with 4 slots and 32-byte messages; send/receive are nonblocking, zero-length messages are valid, undersized receive buffers fail without dequeuing, and self-send is allowed.
+- `info`, trace, debugger `kernel`, and debugger `tasks` output expose service counters, last-service status, mailbox counters, and task metadata.
 
 Still deferred to later v1.6 implementation/test passes:
 
 - Dedicated v1.6 unit, CLI, debugger, docs, fixture, sanitizer, and release
   tests.
 - ELF/Mach-O v1.6 fixture coverage.
-- Blocking IPC wakeups; the first pass is nonblocking.
+- Blocking IPC wakeups; v1.6 intentionally remains nonblocking.
 - Real per-process address spaces or privilege separation, which remain out of
   scope for this toy lab.
 

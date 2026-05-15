@@ -168,6 +168,8 @@ static EmuStatus toy_kernel_fault_current_task(Emulator *emu, EmuExceptionCause 
                                                size_t error_size);
 static bool toy_kernel_running_task(const EmuToyKernel *kernel);
 static void toy_kernel_refresh_descriptor(Emulator *emu, size_t index);
+static bool toy_kernel_internal_write_bytes(Emulator *emu, uint64_t address, const uint8_t *bytes, size_t length,
+                                            const char *label, char *error, size_t error_size);
 
 static bool toy_kernel_wake_sleepers(Emulator *emu) {
     EmuToyKernel *kernel = &emu->toy_kernel;
@@ -297,14 +299,15 @@ static void toy_kernel_refresh_descriptor(Emulator *emu, size_t index) {
     descriptor.fault_address = task->fault_address;
     descriptor.wake_tick = task->wake_tick;
     descriptor.switch_count = task->switch_count;
+    descriptor.mailbox_count = task->mailbox_count;
+    descriptor.guest_created = task->guest_created ? 1u : 0u;
     memcpy(descriptor.name, task->name, sizeof(descriptor.name));
 
     uint64_t address = kernel->descriptor_table_address + index * sizeof(descriptor);
     const uint8_t *bytes = (const uint8_t *)&descriptor;
     char ignored[256];
-    for (size_t i = 0; i < sizeof(descriptor); i++) {
-        (void)memory_write8(&emu->memory, address + i, bytes[i], ignored, sizeof(ignored));
-    }
+    (void)toy_kernel_internal_write_bytes(emu, address, bytes, sizeof(descriptor), "descriptor", ignored,
+                                          sizeof(ignored));
 }
 
 static void toy_kernel_refresh_all_descriptors(Emulator *emu) {
@@ -321,6 +324,41 @@ static bool toy_kernel_range_overlaps(uint64_t base, uint64_t size, uint64_t oth
         return false;
     }
     return base < other_end && other_base < end;
+}
+
+static bool toy_kernel_range_overlaps_any_device(const Memory *memory, uint64_t base, uint64_t size) {
+    for (size_t i = 0; i < memory->devices.range_count; i++) {
+        const EmuDeviceRange *device = &memory->devices.ranges[i];
+        if (toy_kernel_range_overlaps(base, size, device->start, device->size)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool toy_kernel_range_overlaps_executable_mapping(const Memory *memory, uint64_t base, uint64_t size) {
+    for (size_t i = 0; i < memory->mapping_count; i++) {
+        const EmuMemoryMapping *mapping = &memory->mappings[i];
+        if ((mapping->permissions & EMU_MAP_EXEC) != 0 &&
+            toy_kernel_range_overlaps(base, size, mapping->start, mapping->size)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool toy_kernel_internal_write_bytes(Emulator *emu, uint64_t address, const uint8_t *bytes, size_t length,
+                                            const char *label, char *error, size_t error_size) {
+    uint64_t end = 0;
+    if (bytes == NULL || !checked_add_u64_local(address, (uint64_t)length, &end) ||
+        end > (uint64_t)emu->memory.size || toy_kernel_range_overlaps_any_device(&emu->memory, address, length)) {
+        snprintf(error, error_size,
+                 "toy kernel %s internal write is out of RAM: address=0x%016" PRIx64 " length=0x%zx",
+                 label != NULL ? label : "metadata", address, length);
+        return false;
+    }
+    memcpy(&emu->memory.bytes[address], bytes, length);
+    return true;
 }
 
 static bool toy_kernel_stack_overlaps_live_task(const EmuToyKernel *kernel, uint64_t stack_base, uint64_t stack_size) {
@@ -371,21 +409,14 @@ static bool toy_kernel_validate_entry(const Emulator *emu, uint64_t entry, const
 static bool toy_kernel_write_boot_info(Emulator *emu, char *error, size_t error_size) {
     EmuToyKernel *kernel = &emu->toy_kernel;
     const uint8_t *bytes = (const uint8_t *)&kernel->boot_info;
-    for (size_t i = 0; i < sizeof(kernel->boot_info); i++) {
-        if (!memory_write8(&emu->memory, kernel->boot_info_address + i, bytes[i], error, error_size)) {
-            char detail[256];
-            snprintf(detail, sizeof(detail), "%s", error);
-            snprintf(error, error_size, "toy kernel boot-info write failed: %s", detail);
-            return false;
-        }
-    }
-    return true;
+    return toy_kernel_internal_write_bytes(emu, kernel->boot_info_address, bytes, sizeof(kernel->boot_info),
+                                           "boot-info", error, error_size);
 }
 
 static bool toy_kernel_map_descriptor_table(Emulator *emu, char *error, size_t error_size) {
     EmuToyKernel *kernel = &emu->toy_kernel;
     kernel->descriptor_table_address = EMU_TOY_KERNEL_DESCRIPTOR_TABLE_ADDRESS;
-    if (!memory_map_range(&emu->memory, kernel->descriptor_table_address, EMU_PAGE_SIZE, EMU_MAP_READ | EMU_MAP_WRITE,
+    if (!memory_map_range(&emu->memory, kernel->descriptor_table_address, EMU_PAGE_SIZE, EMU_MAP_READ,
                           "kernel:task-descriptors", error, error_size)) {
         char detail[256];
         snprintf(detail, sizeof(detail), "%s", error);
@@ -419,9 +450,10 @@ static bool toy_kernel_map_and_seed_boot_info(Emulator *emu, char *error, size_t
         EMU_TOY_KERNEL_TRAP_SERVICE,
         EMU_TOY_KERNEL_MAILBOX_SLOTS,
         EMU_TOY_KERNEL_MAILBOX_MESSAGE_SIZE,
+        EMU_TOY_SERVICE_SUPPORTED_MASK,
     };
 
-    if (!memory_map_range(&emu->memory, kernel->boot_info_address, EMU_PAGE_SIZE, EMU_MAP_READ | EMU_MAP_WRITE,
+    if (!memory_map_range(&emu->memory, kernel->boot_info_address, EMU_PAGE_SIZE, EMU_MAP_READ,
                           "kernel:boot-info", error, error_size)) {
         char detail[256];
         snprintf(detail, sizeof(detail), "%s", error);
@@ -537,8 +569,12 @@ static bool toy_kernel_stack_is_valid(const Emulator *emu, uint64_t stack_base, 
                  stack_size);
         return false;
     }
-    if (memory_find_device(&emu->memory, stack_base) != NULL || memory_find_device(&emu->memory, stack_end - 1u) != NULL) {
+    if (toy_kernel_range_overlaps_any_device(&emu->memory, stack_base, stack_size)) {
         snprintf(error, error_size, "bad stack: stack overlaps device range");
+        return false;
+    }
+    if (toy_kernel_range_overlaps_executable_mapping(&emu->memory, stack_base, stack_size)) {
+        snprintf(error, error_size, "bad stack: stack overlaps executable code");
         return false;
     }
     if (!memory_check_write(&emu->memory, stack_base, stack_size, error, error_size)) {
@@ -765,6 +801,9 @@ static EmuStatus toy_kernel_handle_service(Emulator *emu, uint64_t current_pc, c
     EmuToyKernel *kernel = &emu->toy_kernel;
     uint64_t service = cpu_read_register(&emu->cpu, 8);
     bool in_task = toy_kernel_running_task(kernel);
+    kernel->service_calls++;
+    kernel->last_service_id = service;
+    kernel->last_service_status = EMU_TOY_SERVICE_ERR_UNKNOWN;
 
     switch (service) {
     case EMU_TOY_SERVICE_TASK_CREATE: {
@@ -778,25 +817,36 @@ static EmuStatus toy_kernel_handle_service(Emulator *emu, uint64_t current_pc, c
         char name[EMU_TOY_KERNEL_TASK_NAME_SIZE];
 
         if (flags != 0) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_BAD_FLAGS;
             cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_BAD_FLAGS));
             emu->cpu.pc = current_pc + 4u;
             emu->cpu.instructions_executed++;
             return EMU_OK;
         }
         if (kernel->task_count >= EMU_TOY_KERNEL_MAX_TASKS) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_NO_SLOT;
             cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_NO_SLOT));
             emu->cpu.pc = current_pc + 4u;
             emu->cpu.instructions_executed++;
             return EMU_OK;
         }
         if (!toy_kernel_validate_entry(emu, entry, "toy task", error, error_size)) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_BAD_ENTRY;
             cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_BAD_ENTRY));
             emu->cpu.pc = current_pc + 4u;
             emu->cpu.instructions_executed++;
             return EMU_OK;
         }
         if (stack_base == 0 && stack_size == 0 && !toy_kernel_autostack(emu, &stack_base, &stack_size, error, error_size)) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_BAD_STACK;
             cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_BAD_STACK));
+            emu->cpu.pc = current_pc + 4u;
+            emu->cpu.instructions_executed++;
+            return EMU_OK;
+        }
+        if (name_ptr != 0 && name_len != 0 && !memory_check_read(&emu->memory, name_ptr, name_len, error, error_size)) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_BAD_ARGUMENT;
+            cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_BAD_ARGUMENT));
             emu->cpu.pc = current_pc + 4u;
             emu->cpu.instructions_executed++;
             return EMU_OK;
@@ -806,6 +856,7 @@ static EmuStatus toy_kernel_handle_service(Emulator *emu, uint64_t current_pc, c
                                   name[0] == '\0' ? "guest-task" : name, error, error_size)) {
             int64_t code = strstr(error, "entry") != NULL ? EMU_TOY_SERVICE_ERR_BAD_ENTRY
                                                            : EMU_TOY_SERVICE_ERR_BAD_STACK;
+            kernel->last_service_status = code;
             cpu_write_register(&emu->cpu, 0, true, toy_service_error(code));
             emu->cpu.pc = current_pc + 4u;
             emu->cpu.instructions_executed++;
@@ -817,6 +868,7 @@ static EmuStatus toy_kernel_handle_service(Emulator *emu, uint64_t current_pc, c
                     "trace kernel-service create-task id=%" PRIu64 " index=%zu entry=0x%016" PRIx64 "\n",
                     created->task_id, kernel->task_count - 1u, entry);
         }
+        kernel->last_service_status = EMU_TOY_SERVICE_OK;
         cpu_write_register(&emu->cpu, 0, true, created->task_id);
         emu->cpu.pc = current_pc + 4u;
         emu->cpu.instructions_executed++;
@@ -824,33 +876,40 @@ static EmuStatus toy_kernel_handle_service(Emulator *emu, uint64_t current_pc, c
     }
     case EMU_TOY_SERVICE_TASK_YIELD:
         if (!in_task) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_BAD_ARGUMENT;
             cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_BAD_ARGUMENT));
             emu->cpu.pc = current_pc + 4u;
             emu->cpu.instructions_executed++;
             return EMU_OK;
         }
+        kernel->last_service_status = EMU_TOY_SERVICE_OK;
         emu->cpu.instructions_executed++;
         return toy_kernel_schedule_after_current(emu, current_pc + 4u, false, 0, error, error_size);
     case EMU_TOY_SERVICE_TASK_EXIT:
         if (!in_task) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_BAD_ARGUMENT;
             cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_BAD_ARGUMENT));
             emu->cpu.pc = current_pc + 4u;
             emu->cpu.instructions_executed++;
             return EMU_OK;
         }
+        kernel->last_service_status = EMU_TOY_SERVICE_OK;
         emu->cpu.instructions_executed++;
         return toy_kernel_schedule_after_current(emu, current_pc + 4u, true, cpu_read_register(&emu->cpu, 0), error,
                                                  error_size);
     case EMU_TOY_SERVICE_TASK_SLEEP:
         if (!in_task) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_BAD_ARGUMENT;
             cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_BAD_ARGUMENT));
             emu->cpu.pc = current_pc + 4u;
             emu->cpu.instructions_executed++;
             return EMU_OK;
         }
+        kernel->last_service_status = EMU_TOY_SERVICE_OK;
         emu->cpu.instructions_executed++;
         return toy_kernel_sleep_current(emu, current_pc + 4u, cpu_read_register(&emu->cpu, 0), error, error_size);
     case EMU_TOY_SERVICE_GET_ID:
+        kernel->last_service_status = in_task ? EMU_TOY_SERVICE_OK : EMU_TOY_SERVICE_ERR_BAD_ARGUMENT;
         cpu_write_register(&emu->cpu, 0, true,
                            in_task ? kernel->tasks[kernel->current_task].task_id
                                    : toy_service_error(EMU_TOY_SERVICE_ERR_BAD_ARGUMENT));
@@ -861,9 +920,11 @@ static EmuStatus toy_kernel_handle_service(Emulator *emu, uint64_t current_pc, c
         uint64_t task_id = cpu_read_register(&emu->cpu, 0);
         size_t index = 0;
         if (!toy_kernel_find_task_by_id(kernel, task_id, &index)) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_NOT_FOUND;
             cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_NOT_FOUND));
         } else {
             toy_kernel_refresh_descriptor(emu, index);
+            kernel->last_service_status = EMU_TOY_SERVICE_OK;
             cpu_write_register(&emu->cpu, 0, true, kernel->descriptor_table_address + index * sizeof(EmuToyTaskDescriptor));
         }
         emu->cpu.pc = current_pc + 4u;
@@ -877,10 +938,13 @@ static EmuStatus toy_kernel_handle_service(Emulator *emu, uint64_t current_pc, c
         size_t dst = 0;
         if (len > EMU_TOY_KERNEL_MAILBOX_MESSAGE_SIZE || !toy_kernel_find_task_by_id(kernel, dst_id, &dst) ||
             kernel->tasks[dst].state == EMU_TOY_TASK_EXITED || kernel->tasks[dst].state == EMU_TOY_TASK_FAULTED) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_BAD_ARGUMENT;
             cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_BAD_ARGUMENT));
         } else if (kernel->tasks[dst].mailbox_count >= EMU_TOY_KERNEL_MAILBOX_SLOTS) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_WOULD_BLOCK;
             cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_WOULD_BLOCK));
         } else if (len > 0 && !memory_check_read(&emu->memory, src, len, error, error_size)) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_BAD_ARGUMENT;
             cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_BAD_ARGUMENT));
         } else {
             EmuToyTask *task = &kernel->tasks[dst];
@@ -894,6 +958,9 @@ static EmuStatus toy_kernel_handle_service(Emulator *emu, uint64_t current_pc, c
                 (void)memory_read8(&emu->memory, src + i, &message->bytes[i], error, error_size);
             }
             task->mailbox_count++;
+            kernel->mailbox_sends++;
+            kernel->last_service_status = EMU_TOY_SERVICE_OK;
+            toy_kernel_refresh_descriptor(emu, dst);
             cpu_write_register(&emu->cpu, 0, true, EMU_TOY_SERVICE_OK);
         }
         emu->cpu.pc = current_pc + 4u;
@@ -904,15 +971,24 @@ static EmuStatus toy_kernel_handle_service(Emulator *emu, uint64_t current_pc, c
         uint64_t dst = cpu_read_register(&emu->cpu, 0);
         uint64_t max_len = cpu_read_register(&emu->cpu, 1);
         if (!in_task) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_BAD_ARGUMENT;
+            cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_BAD_ARGUMENT));
+        } else if (max_len > EMU_TOY_KERNEL_MAILBOX_MESSAGE_SIZE) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_BAD_ARGUMENT;
             cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_BAD_ARGUMENT));
         } else {
             EmuToyTask *task = &kernel->tasks[kernel->current_task];
             if (task->mailbox_count == 0) {
+                kernel->last_service_status = EMU_TOY_SERVICE_ERR_WOULD_BLOCK;
                 cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_WOULD_BLOCK));
             } else {
                 EmuToyMailboxMessage *message = &task->mailbox[task->mailbox_head];
-                uint64_t copy_len = message->length < max_len ? message->length : max_len;
-                if (copy_len > 0 && !memory_check_write(&emu->memory, dst, copy_len, error, error_size)) {
+                uint64_t copy_len = message->length;
+                if (max_len < message->length) {
+                    kernel->last_service_status = EMU_TOY_SERVICE_ERR_BAD_ARGUMENT;
+                    cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_BAD_ARGUMENT));
+                } else if (copy_len > 0 && !memory_check_write(&emu->memory, dst, copy_len, error, error_size)) {
+                    kernel->last_service_status = EMU_TOY_SERVICE_ERR_BAD_ARGUMENT;
                     cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_BAD_ARGUMENT));
                 } else {
                     for (uint64_t i = 0; i < copy_len; i++) {
@@ -920,6 +996,9 @@ static EmuStatus toy_kernel_handle_service(Emulator *emu, uint64_t current_pc, c
                     }
                     task->mailbox_head = (task->mailbox_head + 1u) % EMU_TOY_KERNEL_MAILBOX_SLOTS;
                     task->mailbox_count--;
+                    kernel->mailbox_recvs++;
+                    kernel->last_service_status = EMU_TOY_SERVICE_OK;
+                    toy_kernel_refresh_descriptor(emu, kernel->current_task);
                     cpu_write_register(&emu->cpu, 0, true, copy_len);
                     cpu_write_register(&emu->cpu, 1, true, message->sender_task_id);
                 }
@@ -933,6 +1012,7 @@ static EmuStatus toy_kernel_handle_service(Emulator *emu, uint64_t current_pc, c
         uint64_t address = cpu_read_register(&emu->cpu, 0);
         uint64_t length = cpu_read_register(&emu->cpu, 1);
         if (!check_syscall_buffer(&emu->memory, address, length, error, error_size)) {
+            kernel->last_service_status = EMU_TOY_SERVICE_ERR_BAD_ARGUMENT;
             cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_BAD_ARGUMENT));
         } else {
             FILE *stream = emu->stdout_stream != NULL ? emu->stdout_stream : stdout;
@@ -941,6 +1021,7 @@ static EmuStatus toy_kernel_handle_service(Emulator *emu, uint64_t current_pc, c
                 snprintf(error, error_size, "toy kernel console write failed");
                 return EMU_ERROR;
             }
+            kernel->last_service_status = EMU_TOY_SERVICE_OK;
             cpu_write_register(&emu->cpu, 0, true, length);
         }
         emu->cpu.pc = current_pc + 4u;
@@ -951,9 +1032,11 @@ static EmuStatus toy_kernel_handle_service(Emulator *emu, uint64_t current_pc, c
         emu->cpu.instructions_executed++;
         emu->toy_kernel.panic = true;
         emu->toy_kernel.panic_code = cpu_read_register(&emu->cpu, 0);
+        kernel->last_service_status = EMU_TOY_SERVICE_OK;
         snprintf(error, error_size, "toy kernel panic: code=0x%016" PRIx64, emu->toy_kernel.panic_code);
         return EMU_ERROR;
     default:
+        kernel->last_service_status = EMU_TOY_SERVICE_ERR_UNKNOWN;
         cpu_write_register(&emu->cpu, 0, true, toy_service_error(EMU_TOY_SERVICE_ERR_UNKNOWN));
         emu->cpu.pc = current_pc + 4u;
         emu->cpu.instructions_executed++;

@@ -160,9 +160,7 @@ CONSOLE_WRITE
 KERNEL_PANIC
 ```
 
-Services may be implemented as new `BRK` immediates, as subcommands of one
-existing `BRK` immediate, or through a small MMIO service page. The chosen ABI
-must be documented and tested.
+The implemented v1.6 ABI is `BRK #0x160` with `x8` as the service ID. `x0` is the primary result register, `x1` is used only by documented secondary results, and all other argument registers are volatile across the service trap. Boot-info exposes a supported-service bitmask for discovery.
 
 ### Tiny mailbox
 
@@ -172,8 +170,8 @@ Recommended deterministic IPC shape:
 mailbox_count: fixed
 message_size: fixed, for example 32 bytes
 send: copies exactly N bytes or returns WOULD_BLOCK/FULL
-recv: copies exactly N bytes or returns WOULD_BLOCK/EMPTY
-blocking mode: optional; if supported, blocked tasks wake in FIFO order
+recv: copies a whole queued message when the destination buffer is large enough, otherwise returns BAD_ARGUMENT without dequeueing
+blocking mode: intentionally unsupported in v1.6; empty/full paths return WOULD_BLOCK
 ```
 
 ## Required Test Artifacts
@@ -240,7 +238,7 @@ examples/v1_6/invalid_task_create.s
 | --- | --- | --- | --- |
 | TC-V16-BOOT-001 | v1.6 boot-info version exposed | Run kernel with boot-info enabled. | Boot-info reports a documented version supporting v1.6 extensions. |
 | TC-V16-BOOT-002 | v1.5 boot-info compatibility | Run a v1.5 fixture under v1.6 implementation. | Fields used by v1.5 remain in the same location and semantics. |
-| TC-V16-BOOT-003 | Descriptor table pointer valid | Kernel reads descriptor table pointer/size. | Pointer is mapped readable and size matches documented max descriptors. |
+| TC-V16-BOOT-003 | Descriptor table pointer valid | Kernel reads descriptor table pointer/size. | Pointer is mapped readable/read-only and size matches documented max descriptors. |
 | TC-V16-BOOT-004 | Service table or service trap documented | Kernel probes the service ABI. | Supported service IDs are discoverable or documented; unknown service returns stable error. |
 | TC-V16-BOOT-005 | ABI absent when boot-info disabled | Run without boot-info if supported. | Kernel can still use documented fallback services or receives zero metadata as documented. |
 | TC-V16-BOOT-006 | Descriptor table alignment | Inspect descriptor pointer. | Pointer and descriptor size meet documented alignment. |
@@ -283,7 +281,7 @@ examples/v1_6/invalid_task_create.s
 | TC-V16-VAL-011 | Stack overlaps live task stack | Create two tasks with overlapping stacks. | Second create is rejected. |
 | TC-V16-VAL-012 | Stack boundary overflow | Use base+size that wraps address space. | Rejected without integer overflow or host crash. |
 | TC-V16-VAL-013 | Invalid flags rejected | Pass unsupported task flags. | Stable `BAD_FLAGS` error. |
-| TC-V16-VAL-014 | Descriptor table corruption protected | Guest writes invalid descriptor fields if writable. | Emulator validates or rejects unsafe state before scheduling. |
+| TC-V16-VAL-014 | Descriptor table corruption protected | Guest attempts to write descriptor fields. | Guest write is rejected by the read-only descriptor mapping; internal scheduler state is unchanged. |
 
 ### E. Scheduler Semantics
 
@@ -301,7 +299,7 @@ examples/v1_6/invalid_task_create.s
 | TC-V16-SCHED-010 | Completion status summary | Multiple tasks exit with statuses. | Kernel summary preserves each task status and CLI overall status follows docs. |
 | TC-V16-SCHED-011 | Switch count increments | Run tasks through known switches. | Descriptor/debugger switch counts match expected values. |
 | TC-V16-SCHED-012 | Context fully preserved | Use all `x0-x30`, `sp`, `pc`, flags across repeated switches. | Every documented register/flag survives. |
-| TC-V16-SCHED-013 | Caller-saved policy documented | If kernel service clobbers specific registers, test exactly that policy. | Observed register behavior matches docs. |
+| TC-V16-SCHED-013 | Service register policy documented | Set sentinel registers before service call. | `x0`/documented `x1` results update; other argument registers are treated as volatile per docs and never relied on. |
 
 ### F. Kernel Service Dispatch
 
@@ -310,7 +308,7 @@ examples/v1_6/invalid_task_create.s
 | TC-V16-SVC-001 | Known service dispatch succeeds | Call each documented service with valid args. | Returns documented success/error values. |
 | TC-V16-SVC-002 | Unknown service rejected | Call service ID outside range. | Stable unknown-service error; task can continue or fault per docs. |
 | TC-V16-SVC-003 | Wrong argument count/shape rejected | Pass invalid pointer/length/register combo. | Stable error; no host memory access. |
-| TC-V16-SVC-004 | Service preserves documented registers | Set sentinel registers before service call. | Preserved/clobbered registers match ABI. |
+| TC-V16-SVC-004 | Service register policy | Set sentinel registers before service call. | Result registers and volatile-register expectations match the documented ABI. |
 | TC-V16-SVC-005 | Service from kernel boot context | Kernel calls service before scheduler start. | Only services documented as boot-safe work; others reject cleanly. |
 | TC-V16-SVC-006 | Service from task context | Task calls services after scheduler start. | Allowed services work and update current task. |
 | TC-V16-SVC-007 | Service after task exit impossible | Task attempts service after exit path. | No post-exit execution occurs. |
@@ -325,8 +323,8 @@ examples/v1_6/invalid_task_create.s
 | ID | Test Case | Steps | Expected Result |
 | --- | --- | --- | --- |
 | TC-V16-IPC-001 | Send then receive one message | Task A sends to B; B receives. | Payload bytes match exactly. |
-| TC-V16-IPC-002 | Empty receive nonblocking | Receive from empty mailbox. | Stable `WOULD_BLOCK` or empty error. |
-| TC-V16-IPC-003 | Full mailbox send nonblocking | Fill mailbox then send one more. | Stable `WOULD_BLOCK` or full error. |
+| TC-V16-IPC-002 | Empty receive nonblocking | Receive from empty mailbox. | Stable `WOULD_BLOCK`. |
+| TC-V16-IPC-003 | Full mailbox send nonblocking | Fill mailbox then send one more. | Stable `WOULD_BLOCK`. |
 | TC-V16-IPC-004 | FIFO ordering | Send messages 1, 2, 3. | Receiver gets 1, 2, 3. |
 | TC-V16-IPC-005 | Message size boundary | Send 0 bytes, exactly max bytes, and max+1 bytes. | Boundary behavior matches docs; max+1 rejected. |
 | TC-V16-IPC-006 | Invalid source buffer | Send from unmapped pointer. | Sender receives error or faults per docs. |
@@ -370,7 +368,7 @@ examples/v1_6/invalid_task_create.s
 | ID | Test Case | Steps | Expected Result |
 | --- | --- | --- | --- |
 | TC-V16-MEM-001 | Descriptor table readable | Kernel reads all descriptors. | Reads succeed and values are stable. |
-| TC-V16-MEM-002 | Descriptor table write policy | Guest writes descriptor fields if permitted. | Writes are validated or blocked per docs. |
+| TC-V16-MEM-002 | Descriptor table write policy | Guest writes descriptor fields. | Write is blocked by read-only mapping; descriptors are refreshed from internal state. |
 | TC-V16-MEM-003 | Task stacks are separated | Create many tasks and inspect stack ranges. | No overlap; each stack has documented size/alignment. |
 | TC-V16-MEM-004 | Stack overflow boundary | Task writes below/above its stack. | Deterministic fault, no host crash. |
 | TC-V16-MEM-005 | Kernel memory protected from task stack setup | Attempt to create stack over kernel memory. | Rejected. |
@@ -409,7 +407,7 @@ examples/v1_6/invalid_task_create.s
 | TC-V16-DBG-007 | Breakpoints survive task switch | Set breakpoints in two tasks. | Each breakpoint hits with correct current task. |
 | TC-V16-DBG-008 | Step over service call | Single-step through create/yield/service. | Debugger shows predictable PC/state changes. |
 | TC-V16-DBG-009 | Debugger after task fault | Fault one task and stop. | Fault metadata visible; other tasks still inspectable. |
-| TC-V16-DBG-010 | Debugger after IPC block | Stop while task is blocked on IPC. | Blocking reason/mailbox state visible if documented. |
+| TC-V16-DBG-010 | Debugger after IPC activity | Stop after send/receive/full/empty mailbox paths. | Mailbox counts and service status are visible; IPC blocking is not supported in v1.6. |
 | TC-V16-DBG-011 | Malformed debugger command | Enter malformed v1.6 command. | Friendly error; debugger remains usable. |
 | TC-V16-DBG-012 | Overlong debugger input | Send long line. | Input is rejected/truncated safely with no crash. |
 
@@ -468,7 +466,7 @@ v1.6 is ready only when all of the following are true:
       guest-created tasks deterministically.
 - [ ] At least one kernel service path is documented and tested from both kernel
       boot context and task context.
-- [ ] If IPC/mailbox is included, send/receive success, empty/full, invalid
+- [ ] If IPC/mailbox is included, send/receive success, empty/full, undersized receive, zero-length message, self-send, invalid
       pointer, invalid task, and ordering cases are tested.
 - [ ] `info`, trace, and debugger output expose guest-created tasks clearly.
 - [ ] Docs and lessons state the exact v1.6 contract and do not imply real OS
