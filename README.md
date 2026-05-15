@@ -50,10 +50,11 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v1.3 Lesson — Memory-Mapped Devices](lessons/v1.3-memory-mapped-devices.md)
 - [v1.4 Lesson — Exceptions, Traps, and Interrupt Skeleton](lessons/v1.4-exceptions-and-interrupts.md)
 - [v1.5 Lesson — Toy Kernel Boot and Cooperative Tasks](lessons/v1.5-toy-kernel-and-cooperative-tasks.md)
+- [v1.6 Lesson — Tiny OS Lab and Guest-Managed Tasks](lessons/v1.6-tiny-os-lab.md)
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**, and the implemented/tested teaching profile for **v1.5 — Toy Kernel Mode**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests. v1.5 adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, generated fixtures, and dedicated v1.5 unit/CLI/debugger/docs tests.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**, the implemented/tested teaching profile for **v1.5 — Toy Kernel Mode**, and the first implementation pass for **v1.6 — Tiny OS Lab**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests. v1.5 adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, generated fixtures, and dedicated v1.5 unit/CLI/debugger/docs tests. v1.6 begins the guest-managed Tiny OS Lab with a `BRK #0x160` service dispatcher, guest task creation, guest-visible task descriptors, deterministic task IDs/names, task information lookup, current-task ID lookup, console/panic/yield/exit/sleep services, and a fixed-size mailbox for simple IPC. Dedicated v1.6 automated tests are the next planned development step.
 
 Implemented now:
 
@@ -229,6 +230,16 @@ Implemented now:
   - trace mode prints scheduler start, switch, timer scheduling, task fault, and completion events
   - debugger `kernel` prints live toy-kernel state
   - dedicated v1.5 unit, CLI, debugger, docs, optional-example, fixture-generation, clean, and fresh-archive release tests
+- v1.6 Tiny OS Lab first-pass profile:
+  - keeps all v1.5 `BRK #0x150` through `BRK #0x155` traps stable
+  - adds `BRK #0x160` as a toy-kernel service dispatcher using `x8` as the service ID
+  - supports guest-created tasks through service `TASK_CREATE` with executable-entry validation, stack validation, deterministic task IDs, initial `x0` argument delivery, and optional 16-byte task labels
+  - extends boot-info version `2` with descriptor-table address, descriptor count, descriptor size, service-trap immediate, mailbox slot count, and mailbox message size
+  - exposes one fixed-size descriptor per task with task ID, state, entry/saved PC/SP, stack range, exit/fault/wake metadata, switch count, and label
+  - supports service IDs for task create, yield, exit, sleep, current task ID, task info lookup, message send, message receive, console write, and kernel panic
+  - adds a deterministic per-task mailbox: 4 queued messages per task, up to 32 bytes per message, FIFO receive order, and nonblocking `WOULD_BLOCK` errors when empty/full
+  - extends `info`, trace output, and debugger `kernel` output with guest-created task metadata, service trap, descriptor table, task IDs, switch counts, labels, and mailbox counts
+  - dedicated v1.6 automated tests are the next planned development step from `docs/test-plan-v1.6.md`
 - Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
@@ -1226,20 +1237,39 @@ Test coverage now includes:
 
 ### v1.6 — Tiny OS Lab
 
-**Goal:** turn the emulator into a small operating-systems playground.
+**Goal:** turn the v1.5 host-managed toy-kernel profile into a small
+guest-managed operating-systems playground.
 
-Planning status: the comprehensive v1.6 test plan is now tracked in
-[`docs/test-plan-v1.6.md`](docs/test-plan-v1.6.md). Implementation has not
-started yet.
+Current development status: first implementation pass exists; dedicated v1.6
+automated tests are the next planned development step. The comprehensive test plan is tracked in
+[`docs/test-plan-v1.6.md`](docs/test-plan-v1.6.md).
 
-Add OS-lab features:
+Implemented first-pass OS-lab features:
 
-- Load multiple user programs.
-- Maintain per-task CPU state.
-- Extend the v1.5 cooperative scheduler into a guest-managed task API.
-- Add richer task switching examples and failure handling.
-- Per-task memory regions or simplified address spaces.
-- Syscall table managed by the toy kernel.
+- Guest-created tasks through `BRK #0x160` service `TASK_CREATE`.
+- Stable service dispatcher convention: `x8` contains the service ID and `x0`
+  returns a task ID, byte count, descriptor pointer, or negative service error.
+- Boot-info version `2` extends the v1.5 fields with descriptor-table and
+  service-discovery metadata.
+- Guest-visible task descriptor table at `0x00081000` when boot-info is enabled.
+- Fixed task descriptors containing ID, state, entry PC, saved PC/SP, stack
+  range, exit code, fault cause/address, wake tick, switch count, and label.
+- Deterministic task IDs that are assigned in creation order and are not reused
+  in the first-pass model.
+- Guest services for create, yield, exit, sleep, get current ID, get task info,
+  mailbox send/receive, console write, and kernel panic.
+- Fixed per-task mailbox queues with 4 slots and 32-byte messages.
+- `info`, trace, and debugger `kernel` output expose the new service and task
+  metadata.
+
+Still deferred to later v1.6 implementation/test passes:
+
+- Dedicated v1.6 unit, CLI, debugger, docs, fixture, sanitizer, and release
+  tests.
+- ELF/Mach-O v1.6 fixture coverage.
+- Blocking IPC wakeups; the first pass is nonblocking.
+- Real per-process address spaces or privilege separation, which remain out of
+  scope for this toy lab.
 
 Demo idea:
 
@@ -1255,9 +1285,11 @@ task 2: done
 
 Definition of done:
 
-- The toy kernel can switch between at least two tasks.
-- Each task has its own saved registers and stack.
-- The docs explain how the scheduler, task state, and syscall path work.
+- The strict implemented v1.6 contract is covered by dedicated automated tests.
+- Guest-created and host-created tasks both remain deterministic.
+- Descriptor-table, service-dispatch, and mailbox behavior are documented and
+  tested.
+- Earlier v0.1 through v1.5 behavior remains unchanged.
 
 ## Suggested Directory Layout
 

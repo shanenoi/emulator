@@ -22,6 +22,7 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "v1.3 registers fixed MMIO teaching devices: UART 0x09000000, timer 0x09010000, random 0x09020000.\n");
     fprintf(stream, "v1.4 adds an exception-controller MMIO device at 0x09030000.\n");
     fprintf(stream, "v1.5 adds an opt-in toy-kernel profile with cooperative BRK traps.\n");
+    fprintf(stream, "v1.6 adds guest-managed task services through BRK #0x160 with x8 service IDs.\n");
     fprintf(stream, "options: --exception-vector <address>  enable v1.4 vector before running\n");
     fprintf(stream, "         --timer-interrupt <interval> deterministic instruction-count timer interrupt\n");
     fprintf(stream, "         --queue-timer              queue one timer interrupt before running\n");
@@ -29,6 +30,7 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "         --kernel                   enable v1.5 toy-kernel boot profile\n");
     fprintf(stream, "         --kernel-boot-info         pass a guest-readable boot-info block in x0/x1\n");
     fprintf(stream, "         --kernel-task <address>    add a cooperative task entry point; may repeat\n");
+    fprintf(stream, "toy-kernel service IDs: 1=create, 2=yield, 3=exit, 4=sleep, 5=get-id, 6=get-info, 7=send, 8=recv, 9=console, 10=panic.\n");
     fprintf(stream, "info and debugger maps show RAM mappings and MMIO device ranges.\n");
     fprintf(stream, "dump inspects ordinary readable RAM; CPU loads/stores are what trigger device behavior.\n");
     fprintf(stream, "dump <address> and <length> accept decimal or 0x-prefixed hexadecimal values.\n");
@@ -226,6 +228,10 @@ static void print_toy_kernel_info(const Emulator *emu, FILE *stream) {
     }
     fprintf(stream, "toy_kernel_boot_info: %s\n", kernel->boot_info_enabled ? "yes" : "no");
     fprintf(stream, "toy_kernel_boot_info_address: 0x%016" PRIx64 "\n", kernel->boot_info_address);
+    fprintf(stream, "toy_kernel_descriptor_table: 0x%016" PRIx64 "\n", kernel->descriptor_table_address);
+    fprintf(stream, "toy_kernel_descriptor_size: %zu\n", sizeof(EmuToyTaskDescriptor));
+    fprintf(stream, "toy_kernel_service_trap: 0x%03x\n", EMU_TOY_KERNEL_TRAP_SERVICE);
+    fprintf(stream, "toy_kernel_next_task_id: 0x%016" PRIx64 "\n", kernel->next_task_id);
     fprintf(stream, "toy_kernel_entry: 0x%016" PRIx64 "\n", kernel->kernel_entry);
     fprintf(stream, "toy_kernel_stack_top: 0x%016" PRIx64 "\n", kernel->kernel_stack_top);
     fprintf(stream, "toy_kernel_task_count: %zu\n", kernel->task_count);
@@ -239,13 +245,16 @@ static void print_toy_kernel_info(const Emulator *emu, FILE *stream) {
     for (size_t i = 0; i < kernel->task_count; i++) {
         const EmuToyTask *task = &kernel->tasks[i];
         fprintf(stream,
-                "  task[%zu]: state=%s entry=0x%016" PRIx64 " pc=0x%016" PRIx64
+                "  task[%zu]: state=%s id=0x%016" PRIx64 " name=%s origin=%s entry=0x%016" PRIx64 " pc=0x%016" PRIx64
                 " sp=0x%016" PRIx64 " stack=0x%016" PRIx64 "+0x%016" PRIx64
                 " exit=0x%016" PRIx64 " yields=0x%016" PRIx64
-                " wake=0x%016" PRIx64 " fault=0x%02x/0x%016" PRIx64 "\n",
-                i, toy_task_state_name_for_cli(task->state), task->entry, task->pc, task->sp, task->stack_base,
-                task->stack_size, task->exit_code, task->yields, task->wake_tick, (unsigned)task->fault_cause,
-                task->fault_address);
+                " wake=0x%016" PRIx64 " switches=0x%016" PRIx64
+                " mailbox=%zu/%u fault=0x%02x/0x%016" PRIx64 "\n",
+                i, toy_task_state_name_for_cli(task->state), task->task_id, task->name[0] == '\0' ? "-" : task->name,
+                task->guest_created ? "guest" : "host", task->entry,
+                task->pc, task->sp, task->stack_base, task->stack_size, task->exit_code, task->yields,
+                task->wake_tick, task->switch_count, task->mailbox_count, EMU_TOY_KERNEL_MAILBOX_SLOTS,
+                (unsigned)task->fault_cause, task->fault_address);
     }
 }
 

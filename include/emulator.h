@@ -46,13 +46,41 @@
 #define EMU_TOY_KERNEL_MAX_TASKS 8u
 #define EMU_TOY_KERNEL_STACK_SIZE (16u * 1024u)
 #define EMU_TOY_KERNEL_BOOT_INFO_MAGIC 0x454d554b45524e31ull /* "EMUKERN1" */
-#define EMU_TOY_KERNEL_BOOT_INFO_VERSION 1u
+#define EMU_TOY_KERNEL_BOOT_INFO_VERSION 2u
+#define EMU_TOY_KERNEL_DESCRIPTOR_TABLE_ADDRESS 0x00081000ull
+#define EMU_TOY_KERNEL_DESCRIPTOR_MAGIC 0x454d554b5441534bull /* "EMUKTASK" */
+#define EMU_TOY_KERNEL_DESCRIPTOR_VERSION 1u
+#define EMU_TOY_KERNEL_TASK_NAME_SIZE 16u
+#define EMU_TOY_KERNEL_MAILBOX_SLOTS 4u
+#define EMU_TOY_KERNEL_MAILBOX_MESSAGE_SIZE 32u
 #define EMU_TOY_KERNEL_TRAP_YIELD 0x150u
 #define EMU_TOY_KERNEL_TRAP_TASK_EXIT 0x151u
 #define EMU_TOY_KERNEL_TRAP_PANIC 0x152u
 #define EMU_TOY_KERNEL_TRAP_CONSOLE_WRITE 0x153u
 #define EMU_TOY_KERNEL_TRAP_START_TASKS 0x154u
 #define EMU_TOY_KERNEL_TRAP_SLEEP 0x155u
+#define EMU_TOY_KERNEL_TRAP_SERVICE 0x160u
+
+#define EMU_TOY_SERVICE_TASK_CREATE 1u
+#define EMU_TOY_SERVICE_TASK_YIELD 2u
+#define EMU_TOY_SERVICE_TASK_EXIT 3u
+#define EMU_TOY_SERVICE_TASK_SLEEP 4u
+#define EMU_TOY_SERVICE_GET_ID 5u
+#define EMU_TOY_SERVICE_GET_INFO 6u
+#define EMU_TOY_SERVICE_SEND 7u
+#define EMU_TOY_SERVICE_RECV 8u
+#define EMU_TOY_SERVICE_CONSOLE_WRITE 9u
+#define EMU_TOY_SERVICE_KERNEL_PANIC 10u
+
+#define EMU_TOY_SERVICE_OK 0ll
+#define EMU_TOY_SERVICE_ERR_UNKNOWN (-1ll)
+#define EMU_TOY_SERVICE_ERR_BAD_ARGUMENT (-2ll)
+#define EMU_TOY_SERVICE_ERR_NO_SLOT (-3ll)
+#define EMU_TOY_SERVICE_ERR_BAD_ENTRY (-4ll)
+#define EMU_TOY_SERVICE_ERR_BAD_STACK (-5ll)
+#define EMU_TOY_SERVICE_ERR_BAD_FLAGS (-6ll)
+#define EMU_TOY_SERVICE_ERR_NOT_FOUND (-7ll)
+#define EMU_TOY_SERVICE_ERR_WOULD_BLOCK (-8ll)
 
 #define EMU_MAP_READ 0x1u
 #define EMU_MAP_WRITE 0x2u
@@ -271,7 +299,39 @@ typedef struct {
     uint64_t timer_base;
     uint64_t random_base;
     uint64_t exception_controller_base;
+    uint64_t descriptor_table_address;
+    uint64_t descriptor_count;
+    uint64_t descriptor_size;
+    uint64_t service_trap;
+    uint64_t mailbox_slots;
+    uint64_t mailbox_message_size;
 } EmuToyKernelBootInfo;
+
+typedef struct {
+    uint64_t magic;
+    uint32_t version;
+    uint32_t descriptor_size;
+    uint64_t task_id;
+    uint64_t state;
+    uint64_t entry_pc;
+    uint64_t saved_pc;
+    uint64_t saved_sp;
+    uint64_t stack_base;
+    uint64_t stack_size;
+    uint64_t exit_code;
+    uint64_t fault_cause;
+    uint64_t fault_address;
+    uint64_t wake_tick;
+    uint64_t switch_count;
+    char name[EMU_TOY_KERNEL_TASK_NAME_SIZE];
+} EmuToyTaskDescriptor;
+
+typedef struct {
+    bool used;
+    uint64_t sender_task_id;
+    uint64_t length;
+    uint8_t bytes[EMU_TOY_KERNEL_MAILBOX_MESSAGE_SIZE];
+} EmuToyMailboxMessage;
 
 typedef struct {
     EmuToyTaskState state;
@@ -285,6 +345,13 @@ typedef struct {
     uint64_t exit_code;
     uint64_t yields;
     uint64_t wake_tick;
+    uint64_t task_id;
+    uint64_t switch_count;
+    bool guest_created;
+    char name[EMU_TOY_KERNEL_TASK_NAME_SIZE];
+    EmuToyMailboxMessage mailbox[EMU_TOY_KERNEL_MAILBOX_SLOTS];
+    size_t mailbox_head;
+    size_t mailbox_count;
     EmuExceptionCause fault_cause;
     uint64_t fault_address;
 } EmuToyTask;
@@ -299,9 +366,11 @@ typedef struct {
     uint64_t timer_ticks;
     uint64_t timer_schedules;
     uint64_t boot_info_address;
+    uint64_t descriptor_table_address;
     uint64_t kernel_entry;
     uint64_t kernel_stack_top;
     uint64_t task_stack_next;
+    uint64_t next_task_id;
     size_t task_count;
     size_t current_task;
     EmuToyTask tasks[EMU_TOY_KERNEL_MAX_TASKS];

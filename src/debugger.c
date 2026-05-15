@@ -129,17 +129,23 @@ static void debugger_print_kernel_context(const Debugger *debugger, FILE *stream
     fprintf(stream, "completed = %s\n", kernel->completed ? "yes" : "no");
     fprintf(stream, "current_task = %zu\n", kernel->current_task);
     fprintf(stream, "task_count = %zu\n", kernel->task_count);
+    fprintf(stream, "descriptor_table = 0x%016" PRIx64 "\n", kernel->descriptor_table_address);
+    fprintf(stream, "service_trap = 0x%03x\n", EMU_TOY_KERNEL_TRAP_SERVICE);
+    fprintf(stream, "next_task_id = 0x%016" PRIx64 "\n", kernel->next_task_id);
     fprintf(stream, "timer_ticks = 0x%016" PRIx64 "\n", kernel->timer_ticks);
     fprintf(stream, "timer_schedules = 0x%016" PRIx64 "\n", kernel->timer_schedules);
     fprintf(stream, "panic = %s code=0x%016" PRIx64 "\n", kernel->panic ? "yes" : "no", kernel->panic_code);
     for (size_t i = 0; i < kernel->task_count; i++) {
         const EmuToyTask *task = &kernel->tasks[i];
         fprintf(stream,
-                "task[%zu] state=%s entry=0x%016" PRIx64 " pc=0x%016" PRIx64
+                "task[%zu] state=%s id=0x%016" PRIx64 " name=%s origin=%s entry=0x%016" PRIx64 " pc=0x%016" PRIx64
                 " sp=0x%016" PRIx64 " wake=0x%016" PRIx64
-                " exit=0x%016" PRIx64 " fault=0x%02x/0x%016" PRIx64 "\n",
-                i, debugger_toy_task_state_name(task->state), task->entry, task->pc, task->sp, task->wake_tick,
-                task->exit_code, (unsigned)task->fault_cause, task->fault_address);
+                " exit=0x%016" PRIx64 " switches=0x%016" PRIx64
+                " mailbox=%zu/%u fault=0x%02x/0x%016" PRIx64 "\n",
+                i, debugger_toy_task_state_name(task->state), task->task_id, task->name[0] == '\0' ? "-" : task->name,
+                task->guest_created ? "guest" : "host", task->entry,
+                task->pc, task->sp, task->wake_tick, task->exit_code, task->switch_count, task->mailbox_count,
+                EMU_TOY_KERNEL_MAILBOX_SLOTS, (unsigned)task->fault_cause, task->fault_address);
     }
 }
 

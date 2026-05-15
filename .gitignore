@@ -40,3 +40,4 @@ examples/v1_4/*.bin
 tests/v1_5/tmp/
 tests/v1_5/test_v1_5
 examples/v1_5/*.bin
+examples/v1_6/*.bin

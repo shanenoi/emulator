@@ -112,8 +112,13 @@ V1_5_EXAMPLES := \
 	examples/v1_5/console_write.bin \
 	examples/v1_5/sleep_deadlock.bin \
 	examples/v1_5/infinite_task.bin
+V1_6_EXAMPLES := \
+	examples/v1_6/guest_create_task_exit.bin \
+	examples/v1_6/guest_get_id.bin \
+	examples/v1_6/mailbox_ping_pong.bin \
+	examples/v1_6/invalid_task_create_flags.bin
 
-examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES) $(V0_9_EXAMPLES) $(V1_1_EXAMPLES) $(V1_2_EXAMPLES) $(V1_3_EXAMPLES) $(V1_4_EXAMPLES) $(V1_5_EXAMPLES)
+examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES) $(V0_9_EXAMPLES) $(V1_1_EXAMPLES) $(V1_2_EXAMPLES) $(V1_3_EXAMPLES) $(V1_4_EXAMPLES) $(V1_5_EXAMPLES) $(V1_6_EXAMPLES)
 
 TEST_EXAMPLES := $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES)
 
@@ -192,6 +197,9 @@ $(V1_4_EXAMPLES): examples/v1_4/generate_exception_fixtures.py
 $(V1_5_EXAMPLES): examples/v1_5/generate_kernel_fixtures.py
 	python3 examples/v1_5/generate_kernel_fixtures.py --output-dir examples/v1_5
 
+$(V1_6_EXAMPLES): examples/v1_6/generate_tiny_os_fixtures.py
+	python3 examples/v1_6/generate_tiny_os_fixtures.py --output-dir examples/v1_6
+
 run-demo: all examples/v0_1/add.bin
 	./$(TARGET) run examples/v0_1/add.bin
 
@@ -218,7 +226,7 @@ clean:
 		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
 		examples/v0_3/*.o examples/v0_3/*.bin examples/v0_4/*.o examples/v0_4/*.bin \
 		examples/v0_7/*.o examples/v0_7/*.bin examples/v0_8/*.o examples/v0_8/*.elf \
-		examples/v0_9/*.o examples/v0_9/*.elf examples/v1_1/*.macho examples/v1_2/*.bin examples/v1_3/*.bin examples/v1_4/*.bin examples/v1_5/*.bin \
+		examples/v0_9/*.o examples/v0_9/*.elf examples/v1_1/*.macho examples/v1_2/*.bin examples/v1_3/*.bin examples/v1_4/*.bin examples/v1_5/*.bin examples/v1_6/*.bin \
 		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/* tests/v0_4/tmp/* tests/v0_5/tmp/* \
 		tests/v0_6/tmp/* tests/v0_7/tmp/* tests/v0_8/tmp/* tests/v0_9/tmp/* tests/v1_0/tmp/*
 	rm -f examples/v1_2/mapping_inspection.txt
@@ -350,7 +358,7 @@ release-docs-check:
 	@set -eu; \
 		fail() { echo "release docs check failed: $$*" >&2; exit 1; }; \
 		need_file() { [ -f "$$1" ] || fail "missing required file: $$1"; }; \
-		for version in v0.1 v0.2 v0.3 v0.4 v0.5 v0.6 v0.7 v0.8 v0.9 v1.0 v1.1 v1.2 v1.3 v1.4 v1.5; do \
+		for version in v0.1 v0.2 v0.3 v0.4 v0.5 v0.6 v0.7 v0.8 v0.9 v1.0 v1.1 v1.2 v1.3 v1.4 v1.5 v1.6; do \
 			need_file "docs/test-plan-$$version.md"; \
 		done; \
 		need_file docs/test-plan-v1.3-traceability.md; \
@@ -369,7 +377,8 @@ release-docs-check:
 			lessons/v1.2-virtual-memory.md \
 			lessons/v1.3-memory-mapped-devices.md \
 			lessons/v1.4-exceptions-and-interrupts.md \
-			lessons/v1.5-toy-kernel-and-cooperative-tasks.md; do \
+			lessons/v1.5-toy-kernel-and-cooperative-tasks.md \
+			lessons/v1.6-tiny-os-lab.md; do \
 			need_file "$$lesson"; \
 		done; \
 		need_file examples/README.md; \
@@ -385,6 +394,8 @@ release-docs-check:
 		need_file examples/v1_4/generate_exception_fixtures.py; \
 		need_file examples/v1_5/README.md; \
 		need_file examples/v1_5/generate_kernel_fixtures.py; \
+		need_file examples/v1_6/README.md; \
+		need_file examples/v1_6/generate_tiny_os_fixtures.py; \
 		need_file tests/v1_0/test_cli_release.sh; \
 		need_file tests/v1_0/test_docs_release.sh; \
 		need_file tests/v1_0/test_optional_release_examples.sh; \
@@ -420,12 +431,14 @@ release-docs-check:
 		grep -q "v1.3 Test Plan" README.md || fail "README does not link the v1.3 test plan"; \
 		grep -q "v1.4 Test Plan" README.md || fail "README does not link the v1.4 test plan"; \
 		grep -q "v1.5 Test Plan" README.md || fail "README does not link the v1.5 test plan"; \
+		grep -q "v1.6 Test Plan" README.md || fail "README does not link the v1.6 test plan"; \
 		grep -q "v1.3 Test Traceability" README.md || fail "README does not link the v1.3 traceability checklist"; \
 		grep -q "v1.1 Lesson" README.md || fail "README does not link the v1.1 lesson"; \
 		grep -q "v1.2 Lesson" README.md || fail "README does not link the v1.2 lesson"; \
 		grep -q "v1.3 Lesson" README.md || fail "README does not link the v1.3 lesson"; \
 		grep -q "v1.4 Lesson" README.md || fail "README does not link the v1.4 lesson"; \
 		grep -q "v1.5 Lesson" README.md || fail "README does not link the v1.5 lesson"; \
+		grep -q "v1.6 Lesson" README.md || fail "README does not link the v1.6 lesson"; \
 		grep -q "v0.1 through v1.5" README.md || fail "README does not describe current deterministic tests"; \
 		grep -q "make release-check" README.md || fail "README does not document make release-check"; \
 		grep -q "make test-asan" README.md || fail "README does not document optional sanitizer checks"; \
