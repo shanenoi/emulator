@@ -106,6 +106,8 @@ V1_5_EXAMPLES := \
 	examples/v1_5/two_task_yield.bin \
 	examples/v1_5/sleep_then_exit.bin \
 	examples/v1_5/task_fault_then_exit.bin \
+	examples/v1_5/eret_task_fault_then_exit.bin \
+	examples/v1_5/three_task_round_robin.bin \
 	examples/v1_5/kernel_panic.bin \
 	examples/v1_5/console_write.bin \
 	examples/v1_5/sleep_deadlock.bin \

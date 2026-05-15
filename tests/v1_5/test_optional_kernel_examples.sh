@@ -10,7 +10,7 @@ fail() { echo "test_optional_kernel_examples.sh failed: $*" >&2; exit 1; }
 contains() { grep -Fq -- "$2" "$1" || fail "expected $1 to contain: $2"; }
 
 python3 examples/v1_5/generate_kernel_fixtures.py --output-dir "$TMP" >"$TMP/generate.out"
-for name in single_task_exit two_task_yield sleep_then_exit task_fault_then_exit kernel_panic console_write sleep_deadlock infinite_task; do
+for name in single_task_exit two_task_yield sleep_then_exit task_fault_then_exit eret_task_fault_then_exit three_task_round_robin kernel_panic console_write sleep_deadlock infinite_task; do
     [ -s "$TMP/$name.bin" ] || fail "missing generated fixture $name.bin"
 done
 

@@ -1218,8 +1218,8 @@ Current tested behavior:
 
 Test coverage now includes:
 
-- Unit tests for boot-info setup, task creation, explicit scheduler handoff, context save/restore, flags preservation, task exit, fault isolation, timer wakeups, panic, deadlock, validation errors, and non-kernel `BRK` compatibility.
-- CLI tests for successful runs, trace scheduler events, `info` output, console writes, stable panic/fault exit codes, bad task entries, too many tasks, instruction limits, and help text.
+- Unit tests for boot-info setup, task creation, explicit scheduler handoff, full `x0-x30`/`sp`/`pc`/flags context save/restore, task exit, fault isolation, `ERET`-as-task-fault isolation, zero/three/max-task scheduler edges, timer wakeups, panic, deadlock, validation errors, stack-overlap rejection, and non-kernel `BRK` compatibility.
+- CLI tests for successful zero/one/two/three-task runs, trace scheduler events, `info` output, console writes, stable panic/fault exit codes, `ERET` task-fault behavior, bad task entries, too many tasks, instruction limits, and help text.
 - Debugger tests for the `kernel` command before and after scheduler start, trace-on scheduler events, malformed `kernel` usage, and overlong input handling.
 - Docs and optional-example tests for source-controlled fixture generation and documentation consistency.
 

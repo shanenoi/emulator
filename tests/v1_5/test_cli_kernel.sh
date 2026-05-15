@@ -15,6 +15,10 @@ not_contains() { if grep -Fq -- "$2" "$1"; then fail "did not expect $1 to conta
 [ ! -s "$TMP/single.err" ] || fail "single stderr was not empty"
 [ ! -s "$TMP/single.out" ] || fail "single stdout was not empty for guest-exit completion"
 
+./emulator run "$TMP/single_task_exit.bin" --kernel >"$TMP/zero_tasks.out" 2>"$TMP/zero_tasks.err"
+[ ! -s "$TMP/zero_tasks.err" ] || fail "zero-task kernel stderr was not empty"
+[ ! -s "$TMP/zero_tasks.out" ] || fail "zero-task kernel stdout was not empty"
+
 ./emulator trace "$TMP/two_task_yield.bin" --kernel --kernel-task 0x1008 --kernel-task 0x1014 >"$TMP/two.out" 2>"$TMP/two.err"
 [ ! -s "$TMP/two.err" ] || fail "two-task stderr was not empty"
 contains "$TMP/two.out" "trace kernel-start-tasks count=2"
@@ -53,6 +57,19 @@ status=$?
 set -e
 [ "$status" -eq 71 ] || fail "task fault status was $status, expected 71"
 [ ! -s "$TMP/fault.err" ] || fail "task fault stderr was not empty"
+
+set +e
+./emulator run "$TMP/eret_task_fault_then_exit.bin" --kernel --kernel-task 0x1008 --kernel-task 0x100c >"$TMP/eret_fault.out" 2>"$TMP/eret_fault.err"
+status=$?
+set -e
+[ "$status" -eq 71 ] || fail "ERET task fault status was $status, expected 71"
+[ ! -s "$TMP/eret_fault.err" ] || fail "ERET task fault stderr was not empty"
+
+./emulator trace "$TMP/three_task_round_robin.bin" --kernel --kernel-task 0x1008 --kernel-task 0x1018 --kernel-task 0x1028 >"$TMP/three.out" 2>"$TMP/three.err"
+[ ! -s "$TMP/three.err" ] || fail "three-task stderr was not empty"
+contains "$TMP/three.out" "trace kernel-task-switch index=0"
+contains "$TMP/three.out" "trace kernel-task-switch index=1"
+contains "$TMP/three.out" "trace kernel-task-switch index=2"
 
 if ./emulator run "$TMP/sleep_deadlock.bin" --kernel --kernel-task 0x1008 >"$TMP/deadlock.out" 2>"$TMP/deadlock.err"; then
     fail "sleep deadlock unexpectedly succeeded"

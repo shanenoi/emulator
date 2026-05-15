@@ -970,7 +970,8 @@ EmuStatus emulator_step(Emulator *emu, char *error, size_t error_size) {
             snprintf(detail, sizeof(detail), "%s", error);
             snprintf(error, error_size, "execution error at pc=0x%016" PRIx64 " opcode=0x%08x: %s", current_pc,
                      opcode, detail);
-            return EMU_ERROR;
+            return maybe_raise_exception(emu, EMU_EXCEPTION_INVALID_INSTRUCTION, 0, current_pc, current_pc, error,
+                                         error_size);
         }
         emu->cpu.instructions_executed++;
         return sample_pending_interrupt(emu, error, error_size);

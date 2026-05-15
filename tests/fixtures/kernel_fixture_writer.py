@@ -18,6 +18,7 @@ def brk(imm: int) -> int:
 
 HLT = 0xD4400000
 NOP = 0xD503201F
+ERET = 0xD69F03E0
 B_SELF = 0x14000000
 MOVZ_X0_0 = 0xD2800000
 MOVZ_X0_1 = 0xD2800020
@@ -67,6 +68,16 @@ def main() -> int:
 
     # task 0 faults; task 1 exits; the kernel completes with fault status 71.
     write_fixture(args.output_dir, "task_fault_then_exit.bin", [TRAP_START, HLT, BAD_INSN, MOVZ_X0_3, TRAP_EXIT])
+
+    # task 0 executes ERET outside an active exception; task 1 still exits.
+    write_fixture(args.output_dir, "eret_task_fault_then_exit.bin", [TRAP_START, HLT, ERET, MOVZ_X0_3, TRAP_EXIT])
+
+    # task 0 and task 1 yield before exiting; task 2 exits immediately.
+    write_fixture(
+        args.output_dir,
+        "three_task_round_robin.bin",
+        [TRAP_START, HLT, TRAP_YIELD, MOVZ_X0_1, TRAP_EXIT, NOP, TRAP_YIELD, MOVZ_X0_2, TRAP_EXIT, NOP, MOVZ_X0_3, TRAP_EXIT],
+    )
 
     # kernel panics before starting tasks; the CLI maps this to status 70.
     write_fixture(args.output_dir, "kernel_panic.bin", [MOVZ_X0_7, TRAP_PANIC])

@@ -47,6 +47,8 @@ contains examples/v1_5/README.md "single_task_exit.bin"
 contains examples/v1_5/README.md "two_task_yield.bin"
 contains examples/v1_5/README.md "sleep_then_exit.bin"
 contains examples/v1_5/README.md "task_fault_then_exit.bin"
+contains examples/v1_5/README.md "eret_task_fault_then_exit.bin"
+contains examples/v1_5/README.md "three_task_round_robin.bin"
 contains examples/v1_5/README.md "kernel_panic.bin"
 contains examples/v1_5/README.md "console_write.bin"
 contains examples/v1_5/README.md "sleep_deadlock.bin"
@@ -71,6 +73,10 @@ if missing:
 readme = Path('README.md').read_text()
 if readme.find('v1.5 — Toy Kernel Mode') > readme.find('v1.6 — Tiny OS Lab'):
     raise SystemExit('README roadmap order puts v1.5 after v1.6')
+plan = Path('docs/test-plan-v1.5.md').read_text()
+for needle in ['Implemented v1.5 Contract', '`ERET` outside an active exception inside a task', 'guest-visible task descriptors']:
+    if needle not in plan:
+        raise SystemExit(f'test plan missing current-scope clarification: {needle}')
 PY
 
 printf '%s\n' "v1.5 docs kernel tests passed"

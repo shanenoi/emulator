@@ -69,6 +69,8 @@ Generated fixtures:
 - `two_task_yield.bin` — task 0 yields, task 1 exits, then task 0 resumes and exits.
 - `sleep_then_exit.bin` — task 0 sleeps until a deterministic toy timer tick wakes it.
 - `task_fault_then_exit.bin` — task 0 faults while task 1 still exits; CLI status is `71`.
+- `eret_task_fault_then_exit.bin` — task 0 executes `ERET` outside an active exception and is isolated as `FAULTED`.
+- `three_task_round_robin.bin` — three tasks demonstrate deterministic round-robin ordering and exited-task skipping.
 - `kernel_panic.bin` — kernel panics before tasks start; CLI status is `70`.
 - `console_write.bin` — kernel writes `KERN` through `BRK #0x153` then starts a task.
 - `sleep_deadlock.bin` — one task sleeps with no runnable task left, producing a stable deadlock error.

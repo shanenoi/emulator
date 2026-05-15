@@ -38,6 +38,7 @@ static void fail_at(const char *file, int line, const char *expr) {
 static uint32_t op_hlt(void) { return 0xd4400000u; }
 static uint32_t op_nop(void) { return 0xd503201fu; }
 static uint32_t op_brk(unsigned imm) { return 0xd4200000u | ((imm & 0xffffu) << 5u); }
+static uint32_t op_eret(void) { return 0xd69f03e0u; }
 static uint32_t op_movz_x(unsigned rd, unsigned imm, unsigned shift) {
     return 0xd2800000u | (((shift / 16u) & 3u) << 21u) | ((imm & 0xffffu) << 5u) | (rd & 31u);
 }
@@ -151,6 +152,70 @@ static void test_context_round_robin_and_flags(void) {
     emulator_free(&emu);
 }
 
+static void test_full_context_switch_round_trip(void) {
+    Emulator emu;
+    char error[512] = {0};
+    init_emu(&emu);
+    write_word(&emu.memory, 0x1000u, op_brk(EMU_TOY_KERNEL_TRAP_START_TASKS));
+    write_word(&emu.memory, 0x1004u, op_hlt());
+    write_word(&emu.memory, 0x1010u, op_brk(EMU_TOY_KERNEL_TRAP_YIELD));
+    write_word(&emu.memory, 0x1014u, op_brk(EMU_TOY_KERNEL_TRAP_TASK_EXIT));
+    write_word(&emu.memory, 0x1040u, op_brk(EMU_TOY_KERNEL_TRAP_YIELD));
+    write_word(&emu.memory, 0x1044u, op_brk(EMU_TOY_KERNEL_TRAP_TASK_EXIT));
+    EXPECT_TRUE(emulator_enable_toy_kernel(&emu, false, error, sizeof(error)));
+    EXPECT_TRUE(emulator_toy_kernel_add_task(&emu, 0x1010u, error, sizeof(error)));
+    EXPECT_TRUE(emulator_toy_kernel_add_task(&emu, 0x1040u, error, sizeof(error)));
+
+    EXPECT_STATUS_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    const EmuToyKernel *kernel = emulator_get_toy_kernel(&emu);
+    EXPECT_U64_EQ(kernel->current_task, 0u);
+    uint64_t task0_sp = kernel->tasks[0].stack_base + 0x100u;
+    uint64_t task1_sp = kernel->tasks[1].stack_base + 0x200u;
+    for (uint8_t reg = 0; reg < 31u; reg++) {
+        cpu_write_register(&emu.cpu, reg, true, 0xabc000u + reg);
+    }
+    emu.cpu.sp = task0_sp;
+    emu.cpu.flags = (EmuFlags){true, false, true, false};
+    EXPECT_STATUS_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    kernel = emulator_get_toy_kernel(&emu);
+    EXPECT_U64_EQ(kernel->tasks[0].state, EMU_TOY_TASK_READY);
+    EXPECT_U64_EQ(kernel->tasks[0].pc, 0x1014u);
+    EXPECT_U64_EQ(kernel->tasks[0].sp, task0_sp);
+    EXPECT_TRUE(kernel->tasks[0].flags.n);
+    EXPECT_FALSE(kernel->tasks[0].flags.z);
+    EXPECT_TRUE(kernel->tasks[0].flags.c);
+    EXPECT_FALSE(kernel->tasks[0].flags.v);
+    for (uint8_t reg = 0; reg < 31u; reg++) {
+        EXPECT_U64_EQ(kernel->tasks[0].x[reg], 0xabc000u + reg);
+        cpu_write_register(&emu.cpu, reg, true, 0xdef000u + reg);
+    }
+    emu.cpu.sp = task1_sp;
+    emu.cpu.flags = (EmuFlags){false, true, false, true};
+
+    EXPECT_STATUS_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    kernel = emulator_get_toy_kernel(&emu);
+    EXPECT_U64_EQ(kernel->current_task, 0u);
+    EXPECT_U64_EQ(emu.cpu.pc, 0x1014u);
+    EXPECT_U64_EQ(emu.cpu.sp, task0_sp);
+    EXPECT_TRUE(emu.cpu.flags.n);
+    EXPECT_FALSE(emu.cpu.flags.z);
+    EXPECT_TRUE(emu.cpu.flags.c);
+    EXPECT_FALSE(emu.cpu.flags.v);
+    for (uint8_t reg = 0; reg < 31u; reg++) {
+        EXPECT_U64_EQ(cpu_read_register(&emu.cpu, reg), 0xabc000u + reg);
+    }
+    EXPECT_U64_EQ(kernel->tasks[1].pc, 0x1044u);
+    EXPECT_U64_EQ(kernel->tasks[1].sp, task1_sp);
+    EXPECT_FALSE(kernel->tasks[1].flags.n);
+    EXPECT_TRUE(kernel->tasks[1].flags.z);
+    EXPECT_FALSE(kernel->tasks[1].flags.c);
+    EXPECT_TRUE(kernel->tasks[1].flags.v);
+    for (uint8_t reg = 0; reg < 31u; reg++) {
+        EXPECT_U64_EQ(kernel->tasks[1].x[reg], 0xdef000u + reg);
+    }
+    emulator_free(&emu);
+}
+
 static void test_task_fault_isolated_and_status_71(void) {
     Emulator emu;
     char error[512] = {0};
@@ -173,6 +238,85 @@ static void test_task_fault_isolated_and_status_71(void) {
     EXPECT_U64_EQ(kernel->tasks[0].fault_address, 0u);
     EXPECT_U64_EQ(kernel->tasks[1].state, EMU_TOY_TASK_EXITED);
     EXPECT_U64_EQ(kernel->tasks[1].exit_code, 3u);
+    emulator_free(&emu);
+}
+
+static void test_eret_fault_isolated_inside_task(void) {
+    Emulator emu;
+    char error[512] = {0};
+    init_emu(&emu);
+    write_word(&emu.memory, 0x1000u, op_brk(EMU_TOY_KERNEL_TRAP_START_TASKS));
+    write_word(&emu.memory, 0x1004u, op_hlt());
+    write_word(&emu.memory, 0x1010u, op_eret());
+    write_word(&emu.memory, 0x1040u, op_movz_x(0, 6u, 0));
+    write_word(&emu.memory, 0x1044u, op_brk(EMU_TOY_KERNEL_TRAP_TASK_EXIT));
+    EXPECT_TRUE(emulator_enable_toy_kernel(&emu, false, error, sizeof(error)));
+    EXPECT_TRUE(emulator_toy_kernel_add_task(&emu, 0x1010u, error, sizeof(error)));
+    EXPECT_TRUE(emulator_toy_kernel_add_task(&emu, 0x1040u, error, sizeof(error)));
+
+    EXPECT_STATUS_EQ(emulator_run(&emu, error, sizeof(error)), EMU_HALTED);
+    const EmuToyKernel *kernel = emulator_get_toy_kernel(&emu);
+    EXPECT_U64_EQ(emu.guest_exit_code, 71u);
+    EXPECT_U64_EQ(kernel->tasks[0].state, EMU_TOY_TASK_FAULTED);
+    EXPECT_U64_EQ(kernel->tasks[0].fault_cause, EMU_EXCEPTION_INVALID_INSTRUCTION);
+    EXPECT_U64_EQ(kernel->tasks[1].state, EMU_TOY_TASK_EXITED);
+    EXPECT_U64_EQ(kernel->tasks[1].exit_code, 6u);
+    emulator_free(&emu);
+}
+
+static void test_scheduler_edges_zero_three_and_max_tasks(void) {
+    Emulator emu;
+    char error[512] = {0};
+    init_emu(&emu);
+    write_word(&emu.memory, 0x1000u, op_brk(EMU_TOY_KERNEL_TRAP_START_TASKS));
+    write_word(&emu.memory, 0x1004u, op_hlt());
+    EXPECT_TRUE(emulator_enable_toy_kernel(&emu, false, error, sizeof(error)));
+    EXPECT_STATUS_EQ(emulator_run(&emu, error, sizeof(error)), EMU_HALTED);
+    EXPECT_TRUE(emulator_get_toy_kernel(&emu)->completed);
+    EXPECT_U64_EQ(emu.guest_exit_code, 0u);
+    emulator_free(&emu);
+
+    init_emu(&emu);
+    write_word(&emu.memory, 0x1000u, op_brk(EMU_TOY_KERNEL_TRAP_START_TASKS));
+    write_word(&emu.memory, 0x1004u, op_hlt());
+    write_word(&emu.memory, 0x1010u, op_brk(EMU_TOY_KERNEL_TRAP_YIELD));
+    write_word(&emu.memory, 0x1014u, op_movz_x(0, 1u, 0));
+    write_word(&emu.memory, 0x1018u, op_brk(EMU_TOY_KERNEL_TRAP_TASK_EXIT));
+    write_word(&emu.memory, 0x1040u, op_brk(EMU_TOY_KERNEL_TRAP_YIELD));
+    write_word(&emu.memory, 0x1044u, op_movz_x(0, 2u, 0));
+    write_word(&emu.memory, 0x1048u, op_brk(EMU_TOY_KERNEL_TRAP_TASK_EXIT));
+    write_word(&emu.memory, 0x1080u, op_movz_x(0, 3u, 0));
+    write_word(&emu.memory, 0x1084u, op_brk(EMU_TOY_KERNEL_TRAP_TASK_EXIT));
+    EXPECT_TRUE(emulator_enable_toy_kernel(&emu, false, error, sizeof(error)));
+    EXPECT_TRUE(emulator_toy_kernel_add_task(&emu, 0x1010u, error, sizeof(error)));
+    EXPECT_TRUE(emulator_toy_kernel_add_task(&emu, 0x1040u, error, sizeof(error)));
+    EXPECT_TRUE(emulator_toy_kernel_add_task(&emu, 0x1080u, error, sizeof(error)));
+    EXPECT_STATUS_EQ(emulator_run(&emu, error, sizeof(error)), EMU_HALTED);
+    const EmuToyKernel *kernel = emulator_get_toy_kernel(&emu);
+    for (size_t i = 0; i < 3u; i++) {
+        EXPECT_U64_EQ(kernel->tasks[i].state, EMU_TOY_TASK_EXITED);
+        EXPECT_U64_EQ(kernel->tasks[i].exit_code, i + 1u);
+    }
+    EXPECT_U64_EQ(kernel->tasks[0].yields, 1u);
+    EXPECT_U64_EQ(kernel->tasks[1].yields, 1u);
+    emulator_free(&emu);
+
+    init_emu(&emu);
+    write_word(&emu.memory, 0x1000u, op_brk(EMU_TOY_KERNEL_TRAP_START_TASKS));
+    write_word(&emu.memory, 0x1004u, op_hlt());
+    EXPECT_TRUE(emulator_enable_toy_kernel(&emu, false, error, sizeof(error)));
+    for (size_t i = 0; i < EMU_TOY_KERNEL_MAX_TASKS; i++) {
+        uint64_t pc = 0x1100u + (uint64_t)i * 0x10u;
+        write_word(&emu.memory, pc, op_movz_x(0, (unsigned)i, 0));
+        write_word(&emu.memory, pc + 4u, op_brk(EMU_TOY_KERNEL_TRAP_TASK_EXIT));
+        EXPECT_TRUE(emulator_toy_kernel_add_task(&emu, pc, error, sizeof(error)));
+    }
+    EXPECT_STATUS_EQ(emulator_run(&emu, error, sizeof(error)), EMU_HALTED);
+    kernel = emulator_get_toy_kernel(&emu);
+    for (size_t i = 0; i < EMU_TOY_KERNEL_MAX_TASKS; i++) {
+        EXPECT_U64_EQ(kernel->tasks[i].state, EMU_TOY_TASK_EXITED);
+        EXPECT_U64_EQ(kernel->tasks[i].exit_code, i);
+    }
     emulator_free(&emu);
 }
 
@@ -242,6 +386,17 @@ static void test_deadlock_panic_and_validation_errors(void) {
     EXPECT_FALSE(emulator_toy_kernel_add_task(&emu, 0x1200u, error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "too many toy kernel tasks");
     emulator_free(&emu);
+
+    init_emu(&emu);
+    write_word(&emu.memory, 0x1000u, op_hlt());
+    write_word(&emu.memory, 0x1040u, op_hlt());
+    EXPECT_TRUE(emulator_enable_toy_kernel(&emu, false, error, sizeof(error)));
+    uint64_t first_task_stack_base = EMU_MEMORY_SIZE - EMU_STACK_SIZE - EMU_PAGE_SIZE - EMU_TOY_KERNEL_STACK_SIZE;
+    EXPECT_TRUE(memory_map_range(&emu.memory, first_task_stack_base, EMU_PAGE_SIZE, EMU_MAP_READ | EMU_MAP_WRITE,
+                                 "test:stack-overlap", error, sizeof(error)));
+    EXPECT_FALSE(emulator_toy_kernel_add_task(&emu, 0x1040u, error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "overlapping");
+    emulator_free(&emu);
 }
 
 static void test_kernel_traps_do_not_change_non_kernel_brk_behavior(void) {
@@ -265,7 +420,10 @@ int main(void) {
     test_boot_info_and_task_setup();
     test_explicit_start_and_exit_status();
     test_context_round_robin_and_flags();
+    test_full_context_switch_round_trip();
     test_task_fault_isolated_and_status_71();
+    test_eret_fault_isolated_inside_task();
+    test_scheduler_edges_zero_three_and_max_tasks();
     test_timer_wakes_sleeping_task_and_schedules();
     test_deadlock_panic_and_validation_errors();
     test_kernel_traps_do_not_change_non_kernel_brk_behavior();

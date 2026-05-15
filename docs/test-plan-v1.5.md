@@ -72,8 +72,10 @@ learning bridge from emulator features toward toy OS experiments.
 
 ## Implementation Assumptions
 
-These assumptions must either become implementation decisions or be replaced by
-explicit alternatives before tests are finalized.
+These assumptions started as planning inputs. The **Implemented v1.5 Contract**
+below is the release gate for the current version; the larger matrix later in
+this file remains useful as an extended/future checklist when the toy-kernel
+profile grows beyond the current teaching milestone.
 
 1. The emulator remains single-threaded and deterministic.
 2. The toy-kernel profile is opt-in and does not change normal raw, ELF, Mach-O,
@@ -83,18 +85,21 @@ explicit alternatives before tests are finalized.
 4. The initial kernel entry point is 4-byte aligned and executable.
 5. The initial kernel stack is mapped, writable, aligned, and has a guard region
    if the v1.2 mapping model can represent it.
-6. The kernel vector address is either configured by the host before entry or by
-   guest code during early boot; both paths are tested if both are supported.
+6. The kernel vector address can still be configured by the v1.4 host/CLI or
+   guest-MMIO paths. Toy-kernel scheduler traps do not require an exception
+   vector; they are recognized directly as documented v1.5 `BRK` services.
 7. Task stacks are ordinary guest RAM and never overlap code, device ranges, or
    each other.
-8. Task descriptors use a stable teaching layout if they are guest-visible.
+8. Task descriptors are host-managed in v1.5. Guest-visible descriptors are
+   deferred to a later Tiny OS Lab version.
 9. Cooperative context switches occur only at documented yield/trap boundaries.
 10. Timer interrupts remain deterministic and instruction-count based.
 11. A timer tick may request scheduling, but v1.5 does not require full
     asynchronous preemption unless explicitly implemented.
 12. Interrupts are masked or deferred while the scheduler saves/restores state.
-13. A task fault is reported deterministically and either panics the kernel or is
-    routed to a documented task-fault handler.
+13. A task fault is reported deterministically by marking the current task
+    `FAULTED`; remaining ready tasks continue, and final CLI status is `71` if
+    any task faulted.
 14. A fault in the scheduler or exception handler is a deterministic fatal
     double-fault-style error.
 15. `HLT` remains a guest halt and must not silently mean task exit unless the
@@ -105,10 +110,48 @@ explicit alternatives before tests are finalized.
     task state.
 18. Trace output includes kernel/task context only when requested or when an
     event changes control flow.
-19. CLI exit codes for successful kernel completion, kernel panic, unhandled
-    guest fault, invalid kernel image, and host usage errors are stable.
+19. CLI exit codes for successful kernel completion, kernel panic, task fault,
+    instruction-limit failures, loader/setup errors, and host usage errors are
+    stable.
 20. Generated fixtures are deterministic and source-controlled generators are
     preferred over checked-in binaries.
+
+## Implemented v1.5 Contract
+
+The current version is intentionally smaller than a real kernel. The strict
+v1.5 scope is:
+
+- `--kernel` opt-in mode does not change normal raw, ELF64, Mach-O, syscall, or
+  v1.4 exception-vector behavior.
+- The loaded kernel entry runs first. It starts host-configured tasks with
+  `BRK #0x154`; starting with zero tasks completes successfully with status `0`.
+- `--kernel-boot-info` maps a read/write boot-info page and passes its pointer
+  and size in `x0`/`x1`.
+- Host-created tasks use repeatable `--kernel-task <address>` or
+  `emulator_toy_kernel_add_task()`. The fixed task limit is `8`, and each task
+  receives a fixed `16 KiB` stack.
+- Context switching saves/restores all `x0-x30`, `sp`, `pc`, and condition
+  flags. Tests cover the complete saved set, not only callee-saved registers.
+- `BRK #0x150` yields, `BRK #0x151` exits the current task, `BRK #0x152` panics
+  the kernel, `BRK #0x153` writes to the toy console, and `BRK #0x155` sleeps
+  until a deterministic toy-kernel timer tick.
+- Toy-kernel trap immediates are handled directly by the v1.5 scheduler policy
+  while `--kernel` is active. Other `BRK` behavior remains the v1.4 exception
+  behavior.
+- With no v1.4 exception vector configured, task faults are isolated to the
+  current task. This includes bad instructions, memory/device faults, and
+  `ERET` outside an active exception inside a task.
+- With `--timer-interrupt <interval>` and no exception vector, deterministic
+  timer ticks can wake sleeping tasks and request scheduler switches.
+- `info`, `trace`, and debugger command `kernel` expose the toy-kernel state.
+- CLI status `70` means toy-kernel panic. CLI status `71` means one or more
+  tasks faulted. Generic setup/deadlock/instruction-limit errors remain status
+  `1`; host usage errors remain status `2`.
+
+The broad case matrix below deliberately includes some future-oriented rows
+such as guest-visible task descriptors, richer ELF/Mach-O kernel metadata, and
+deep debugger memory inspection. Those rows are not required for v1.5 unless
+they are also listed in this implemented contract or the readiness checklist.
 
 ## Proposed v1.5 Teaching Model
 
@@ -529,8 +572,8 @@ v1.5 is ready to ship when all of the following are true:
 6. At least one two-task fixture demonstrates deterministic cooperative yield.
 7. Context save/restore tests prove that documented preserved registers, `pc`,
    `sp`, and flags are handled correctly.
-8. Task exit, kernel panic, invalid image, task fault, and instruction-limit
-   failures have stable diagnostics and exit codes.
+8. Task exit, kernel panic, task fault, setup/loader errors, deadlock, and
+   instruction-limit failures have stable diagnostics and exit codes.
 9. Debugger tests cover stepping into a yield/trap and continuing after a task
    switch.
 10. Timer/interrupt interaction is either implemented and tested or explicitly
