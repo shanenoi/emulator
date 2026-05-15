@@ -116,7 +116,9 @@ V1_6_EXAMPLES := \
 	examples/v1_6/guest_create_task_exit.bin \
 	examples/v1_6/guest_get_id.bin \
 	examples/v1_6/mailbox_ping_pong.bin \
-	examples/v1_6/invalid_task_create_flags.bin
+	examples/v1_6/invalid_task_create_flags.bin \
+	examples/v1_6/host_guest_mixed.bin \
+	examples/v1_6/sleep_with_timer.bin
 
 examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES) $(V0_9_EXAMPLES) $(V1_1_EXAMPLES) $(V1_2_EXAMPLES) $(V1_3_EXAMPLES) $(V1_4_EXAMPLES) $(V1_5_EXAMPLES) $(V1_6_EXAMPLES)
 

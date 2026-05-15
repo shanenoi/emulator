@@ -1251,6 +1251,8 @@ Implemented OS-lab features:
 - Boot-info version `2` extends the v1.5 fields with descriptor-table, mailbox,
   and service-discovery metadata, including the `supported_services` bitmask.
 - Guest-visible task descriptor table at `0x00081000` when boot-info is enabled; boot-info and descriptors are guest-readable/read-only and internally refreshed by the emulator.
+- When `--kernel-boot-info` is omitted, boot-info and descriptors are not mapped;
+  descriptor-dependent services such as `TASK_GET_INFO` return `BAD_ARGUMENT`.
 - Fixed task descriptors containing ID, state, entry PC, saved PC/SP, stack
   range, exit code, fault cause/address, wake tick, switch count, mailbox count, origin, and label.
 - Deterministic task IDs that are assigned in creation order and are not reused
@@ -1260,8 +1262,14 @@ Implemented OS-lab features:
 - Documented service names: `TASK_CREATE`, `TASK_YIELD`, `TASK_EXIT`,
   `TASK_SLEEP`, `TASK_GET_ID`, `TASK_GET_INFO`, `TASK_SEND`, `TASK_RECV`,
   `CONSOLE_WRITE`, and `KERNEL_PANIC`.
-- Fixed per-task mailbox queues with 4 slots and 32-byte messages; send/receive are nonblocking, zero-length messages are valid, undersized receive buffers fail without dequeuing, and self-send is allowed.
-- `info`, trace, debugger `kernel`, and debugger `tasks` output expose service counters, last-service status, mailbox counters, and task metadata.
+- Fixed per-task mailbox queues with 4 slots and 32-byte messages; send/receive are nonblocking, zero-length messages are valid, undersized receive buffers fail without dequeuing, self-send is allowed, and FIFO order is preserved.
+- Timer interrupts before scheduler handoff are counted by the toy kernel rather
+  than raised as unhandled exceptions. If every task is sleeping and
+  `--timer-interrupt` is enabled, the toy kernel idles to the next wake tick;
+  without a timer, the same state reports a deterministic deadlock.
+- `info` is a static inspection command and does not execute guest code, so it
+  shows kernel metadata and host-configured tasks before execution. Trace and
+  debugger `kernel`/`tasks` output show guest-created tasks while executing.
 
 Still out of scope for v1.6:
 

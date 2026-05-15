@@ -27,6 +27,13 @@ Expected mailbox output:
 OK
 ```
 
+Run the mixed host/guest demo from the test fixture generator:
+
+```sh
+python3 tests/fixtures/tiny_os_fixture_writer.py --output-dir tests/v1_6/tmp
+./emulator trace tests/v1_6/tmp/host_guest_mixed.bin --kernel --kernel-boot-info --kernel-task 0x1024
+```
+
 The key v1.6 convention is `BRK #0x160` with `x8` as the service ID. The current
 implementation supports guest task creation, task information lookup,
 current-task ID lookup, task exit/yield/sleep, console write, kernel panic, and
@@ -40,11 +47,17 @@ Important ABI and memory rules:
   `BRK #0x160`.
 - Boot-info and task descriptors are guest-readable and guest-read-only; the
   emulator refreshes them internally after state changes.
+- If `--kernel-boot-info` is omitted, boot-info and descriptors are absent;
+  `TASK_GET_INFO` returns `BAD_ARGUMENT` rather than an unmapped descriptor
+  pointer.
 - `supported_services` in boot-info is a bitmask of available service IDs.
 - Explicit task stacks must be writable guest RAM and must not overlap devices,
   executable mappings, boot-info, descriptors, or another live task stack.
 - Mailboxes are FIFO, fixed-size, and nonblocking. Empty receive/full send return
   `WOULD_BLOCK`; undersized receive buffers return `BAD_ARGUMENT` without
   dequeuing the message.
+- Timer interrupts before scheduler handoff are counted by the toy kernel. If
+  all tasks sleep with `--timer-interrupt` enabled, the scheduler idles to the
+  next wake tick; without a timer, sleeping all tasks is a deadlock.
 
 Generated `.bin` files are build artifacts and are removed by `make clean`.

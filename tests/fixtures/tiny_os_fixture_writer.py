@@ -107,6 +107,15 @@ def main() -> int:
     write_fixture(out, "panic_service.bin", [movz_x(8, SVC_PANIC), movz_x(0, 0x44), TRAP_SERVICE])
     write_fixture(out, "infinite_task.bin", [*create(LOAD + 0x24), TRAP_START, HLT, B_SELF])
     write_fixture(out, "sleep_deadlock.bin", [*create(LOAD + 0x24), TRAP_START, HLT, movz_x(8, SVC_SLEEP), movz_x(0, 1), TRAP_SERVICE])
+
+    host = LOAD + 0x24
+    guest = LOAD + 0x2C
+    write_fixture(out, "host_guest_mixed.bin", [*create(guest), TRAP_START, HLT, *exit_with(0), *exit_with(0)])
+
+    sleeper = LOAD + 0x24
+    write_fixture(out, "sleep_with_timer.bin", [*create(sleeper), TRAP_START, HLT,
+                                                 movz_x(8, SVC_SLEEP), movz_x(0, 2), TRAP_SERVICE,
+                                                 *exit_with(0)])
     return 0
 
 

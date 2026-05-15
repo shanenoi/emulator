@@ -47,6 +47,7 @@ static void fail_at(const char *file, int line, const char *expr) {
 
 static uint32_t op_hlt(void) { return 0xd4400000u; }
 static uint32_t op_brk(unsigned imm) { return 0xd4200000u | ((imm & 0xffffu) << 5u); }
+static uint32_t op_nop(void) { return 0xd503201fu; }
 
 static void write_word(Memory *memory, uint64_t address, uint32_t word) {
     memory->bytes[address + 0u] = (uint8_t)(word & 0xffu);
@@ -201,6 +202,14 @@ static void test_services_context_and_scheduler_runtime_create(void) {
     char error[512] = {0};
     init_emu(&emu, false);
     EXPECT_I64_EQ((int64_t)service_create(&emu, 0x1100u, 0, 0, 0, 0, NULL), 0);
+    EXPECT_U64_EQ(emulator_get_toy_kernel(&emu)->boot_info_enabled, 0u);
+    EXPECT_U64_EQ(emulator_get_toy_kernel(&emu)->descriptor_table_address, 0u);
+
+    cpu_write_register(&emu.cpu, 8, true, EMU_TOY_SERVICE_GET_INFO);
+    cpu_write_register(&emu.cpu, 0, true, 0u);
+    EXPECT_STATUS_EQ(step_service(&emu, 0x1000u, error, sizeof(error)), EMU_OK);
+    EXPECT_I64_EQ(signed_x0(&emu), EMU_TOY_SERVICE_ERR_BAD_ARGUMENT);
+
     set_running_task(&emu, 0);
     cpu_write_register(&emu.cpu, 8, true, EMU_TOY_SERVICE_GET_ID);
     EXPECT_STATUS_EQ(step_service(&emu, 0x1000u, error, sizeof(error)), EMU_OK);
@@ -227,6 +236,31 @@ static void test_services_context_and_scheduler_runtime_create(void) {
     EXPECT_U64_EQ(kernel->tasks[0].exit_code, 9u);
     EXPECT_U64_EQ(kernel->current_task, 1u);
     EXPECT_U64_EQ(emu.cpu.pc, 0x1200u);
+    emulator_free(&emu);
+}
+
+static void test_timer_sleep_and_pre_scheduler_interrupt_policy(void) {
+    Emulator emu;
+    char error[512] = {0};
+    init_emu(&emu, true);
+    write_word(&emu.memory, 0x1008u, op_nop());
+    emulator_configure_timer_interrupt(&emu, 1u);
+    emulator_queue_timer_interrupt(&emu);
+    emu.cpu.pc = 0x1008u;
+    EXPECT_STATUS_EQ(emulator_step(&emu, error, sizeof(error)), EMU_OK);
+    EXPECT_U64_EQ(emulator_get_toy_kernel(&emu)->timer_ticks, 1u);
+    EXPECT_FALSE(emulator_get_toy_kernel(&emu)->tasks_started);
+
+    EXPECT_U64_EQ(service_create(&emu, 0x1100u, 0, 0, 0, 0, "sleepy"), 0u);
+    set_running_task(&emu, 0);
+    cpu_write_register(&emu.cpu, 8, true, EMU_TOY_SERVICE_TASK_SLEEP);
+    cpu_write_register(&emu.cpu, 0, true, 3u);
+    EXPECT_STATUS_EQ(step_service(&emu, 0x1000u, error, sizeof(error)), EMU_OK);
+    const EmuToyKernel *kernel = emulator_get_toy_kernel(&emu);
+    EXPECT_U64_EQ(kernel->timer_ticks, 4u);
+    EXPECT_U64_EQ(kernel->timer_schedules, 1u);
+    EXPECT_U64_EQ(kernel->tasks[0].state, EMU_TOY_TASK_RUNNING);
+    EXPECT_U64_EQ(emu.cpu.pc, 0x1004u);
     emulator_free(&emu);
 }
 
@@ -299,6 +333,79 @@ static void test_mailbox_success_boundaries_and_errors(void) {
     cpu_write_register(&emu.cpu, 2, true, 1u);
     EXPECT_STATUS_EQ(step_service(&emu, 0x1000u, error, sizeof(error)), EMU_OK);
     EXPECT_I64_EQ(signed_x0(&emu), EMU_TOY_SERVICE_ERR_BAD_ARGUMENT);
+
+    emu.toy_kernel.tasks[1].mailbox_head = 0;
+    emu.toy_kernel.tasks[1].mailbox_count = 0;
+
+    set_running_task(&emu, 0);
+    cpu_write_register(&emu.cpu, 8, true, EMU_TOY_SERVICE_SEND);
+    cpu_write_register(&emu.cpu, 0, true, 1u);
+    cpu_write_register(&emu.cpu, 1, true, 0x6000u);
+    cpu_write_register(&emu.cpu, 2, true, EMU_TOY_KERNEL_MAILBOX_MESSAGE_SIZE + 1u);
+    EXPECT_STATUS_EQ(step_service(&emu, 0x1000u, error, sizeof(error)), EMU_OK);
+    EXPECT_I64_EQ(signed_x0(&emu), EMU_TOY_SERVICE_ERR_BAD_ARGUMENT);
+
+    cpu_write_register(&emu.cpu, 8, true, EMU_TOY_SERVICE_SEND);
+    cpu_write_register(&emu.cpu, 0, true, 1u);
+    cpu_write_register(&emu.cpu, 1, true, 0x5000u);
+    cpu_write_register(&emu.cpu, 2, true, 1u);
+    EXPECT_STATUS_EQ(step_service(&emu, 0x1000u, error, sizeof(error)), EMU_OK);
+    EXPECT_I64_EQ(signed_x0(&emu), EMU_TOY_SERVICE_ERR_BAD_ARGUMENT);
+
+    emu.toy_kernel.tasks[1].state = EMU_TOY_TASK_FAULTED;
+    cpu_write_register(&emu.cpu, 8, true, EMU_TOY_SERVICE_SEND);
+    cpu_write_register(&emu.cpu, 0, true, 1u);
+    cpu_write_register(&emu.cpu, 1, true, 0x6000u);
+    cpu_write_register(&emu.cpu, 2, true, 1u);
+    EXPECT_STATUS_EQ(step_service(&emu, 0x1000u, error, sizeof(error)), EMU_OK);
+    EXPECT_I64_EQ(signed_x0(&emu), EMU_TOY_SERVICE_ERR_BAD_ARGUMENT);
+    emu.toy_kernel.tasks[1].state = EMU_TOY_TASK_READY;
+
+    memset(&emu.memory.bytes[0x6000u], 'M', EMU_TOY_KERNEL_MAILBOX_MESSAGE_SIZE);
+    cpu_write_register(&emu.cpu, 8, true, EMU_TOY_SERVICE_SEND);
+    cpu_write_register(&emu.cpu, 0, true, 1u);
+    cpu_write_register(&emu.cpu, 1, true, 0x6000u);
+    cpu_write_register(&emu.cpu, 2, true, EMU_TOY_KERNEL_MAILBOX_MESSAGE_SIZE);
+    EXPECT_STATUS_EQ(step_service(&emu, 0x1000u, error, sizeof(error)), EMU_OK);
+    EXPECT_I64_EQ(signed_x0(&emu), EMU_TOY_SERVICE_OK);
+
+    set_running_task(&emu, 1);
+    cpu_write_register(&emu.cpu, 8, true, EMU_TOY_SERVICE_RECV);
+    cpu_write_register(&emu.cpu, 0, true, 0x5000u);
+    cpu_write_register(&emu.cpu, 1, true, EMU_TOY_KERNEL_MAILBOX_MESSAGE_SIZE);
+    EXPECT_STATUS_EQ(step_service(&emu, 0x1000u, error, sizeof(error)), EMU_OK);
+    EXPECT_I64_EQ(signed_x0(&emu), EMU_TOY_SERVICE_ERR_BAD_ARGUMENT);
+    EXPECT_U64_EQ(emulator_get_toy_kernel(&emu)->tasks[1].mailbox_count, 1u);
+
+    cpu_write_register(&emu.cpu, 8, true, EMU_TOY_SERVICE_RECV);
+    cpu_write_register(&emu.cpu, 0, true, 0x7000u);
+    cpu_write_register(&emu.cpu, 1, true, EMU_TOY_KERNEL_MAILBOX_MESSAGE_SIZE);
+    EXPECT_STATUS_EQ(step_service(&emu, 0x1000u, error, sizeof(error)), EMU_OK);
+    EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 0), EMU_TOY_KERNEL_MAILBOX_MESSAGE_SIZE);
+    EXPECT_TRUE(memcmp(&emu.memory.bytes[0x7000u], &emu.memory.bytes[0x6000u], EMU_TOY_KERNEL_MAILBOX_MESSAGE_SIZE) == 0);
+
+    set_running_task(&emu, 0);
+    emu.memory.bytes[0x6000u] = 'A';
+    emu.memory.bytes[0x6001u] = 'B';
+    for (size_t n = 0; n < 2; n++) {
+        cpu_write_register(&emu.cpu, 8, true, EMU_TOY_SERVICE_SEND);
+        cpu_write_register(&emu.cpu, 0, true, 1u);
+        cpu_write_register(&emu.cpu, 1, true, 0x6000u + n);
+        cpu_write_register(&emu.cpu, 2, true, 1u);
+        EXPECT_STATUS_EQ(step_service(&emu, 0x1000u, error, sizeof(error)), EMU_OK);
+        EXPECT_I64_EQ(signed_x0(&emu), EMU_TOY_SERVICE_OK);
+    }
+    emu.toy_kernel.tasks[0].state = EMU_TOY_TASK_EXITED;
+    set_running_task(&emu, 1);
+    for (char expected = 'A'; expected <= 'B'; expected++) {
+        cpu_write_register(&emu.cpu, 8, true, EMU_TOY_SERVICE_RECV);
+        cpu_write_register(&emu.cpu, 0, true, 0x7000u);
+        cpu_write_register(&emu.cpu, 1, true, 1u);
+        EXPECT_STATUS_EQ(step_service(&emu, 0x1000u, error, sizeof(error)), EMU_OK);
+        EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 0), 1u);
+        EXPECT_U64_EQ(cpu_read_register(&emu.cpu, 1), 0u);
+        EXPECT_U64_EQ(emu.memory.bytes[0x7000u], (uint8_t)expected);
+    }
     emulator_free(&emu);
 }
 
@@ -345,6 +452,7 @@ int main(void) {
     test_guest_create_ids_labels_descriptors_and_capacity();
     test_task_create_validation_matrix();
     test_services_context_and_scheduler_runtime_create();
+    test_timer_sleep_and_pre_scheduler_interrupt_policy();
     test_mailbox_success_boundaries_and_errors();
     test_get_info_console_and_panic();
     if (tests_failed != 0) {

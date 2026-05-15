@@ -51,6 +51,7 @@ TRAP_SERVICE = brk(0x160)
 
 SVC_CREATE = 1
 SVC_EXIT = 3
+SVC_SLEEP = 4
 SVC_GET_ID = 5
 SVC_SEND = 7
 SVC_RECV = 8
@@ -148,6 +149,36 @@ def main() -> int:
             movz_x(4, 1),
             TRAP_SERVICE,
             HLT,
+        ],
+    )
+
+    # Host-created and guest-created tasks can coexist. Run with
+    # `--kernel-task 0x1024`; the kernel creates the guest task at 0x102c.
+    host_entry = LOAD + 0x24
+    guest_entry = LOAD + 0x2C
+    write_fixture(
+        out,
+        "host_guest_mixed.bin",
+        [
+            movz_x(8, SVC_CREATE), movz_x(0, guest_entry), movz_x(1, 0), movz_x(2, 0), movz_x(3, 0), movz_x(4, 0), TRAP_SERVICE,
+            TRAP_START, HLT,
+            movz_x(8, SVC_EXIT), movz_x(0, 0), TRAP_SERVICE,
+            movz_x(8, SVC_EXIT), movz_x(0, 0), TRAP_SERVICE,
+        ],
+    )
+    assert host_entry == LOAD + 0x24
+
+    # With --timer-interrupt, an all-sleeping scheduler idles to the next wake
+    # tick and then resumes the sleeping task.
+    sleeper_entry = LOAD + 0x24
+    write_fixture(
+        out,
+        "sleep_with_timer.bin",
+        [
+            movz_x(8, SVC_CREATE), movz_x(0, sleeper_entry), movz_x(1, 0), movz_x(2, 0), movz_x(3, 0), movz_x(4, 0), TRAP_SERVICE,
+            TRAP_START, HLT,
+            movz_x(8, SVC_SLEEP), movz_x(0, 2), TRAP_SERVICE,
+            movz_x(8, SVC_EXIT), movz_x(0, 0), TRAP_SERVICE,
         ],
     )
     return 0

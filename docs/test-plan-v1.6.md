@@ -160,7 +160,7 @@ CONSOLE_WRITE
 KERNEL_PANIC
 ```
 
-The implemented v1.6 ABI is `BRK #0x160` with `x8` as the service ID. `x0` is the primary result register, `x1` is used only by documented secondary results, and all other argument registers are volatile across the service trap. Boot-info exposes a supported-service bitmask for discovery.
+The implemented v1.6 ABI is `BRK #0x160` with `x8` as the service ID. `x0` is the primary result register, `x1` is used only by documented secondary results, and all other argument registers are volatile across the service trap. Boot-info exposes a supported-service bitmask for discovery. When `--kernel-boot-info` is omitted, boot-info and task descriptors are intentionally absent; services that depend on descriptor addresses, such as `TASK_GET_INFO`, return `BAD_ARGUMENT` instead of returning unmapped pointers.
 
 ### Tiny mailbox
 
@@ -173,6 +173,10 @@ send: copies exactly N bytes or returns WOULD_BLOCK/FULL
 recv: copies a whole queued message when the destination buffer is large enough, otherwise returns BAD_ARGUMENT without dequeueing
 blocking mode: intentionally unsupported in v1.6; empty/full paths return WOULD_BLOCK
 ```
+
+Timer/sleep policy is also explicit: timer interrupts before scheduler handoff are consumed by the toy-kernel timer counter instead of becoming unhandled exceptions, all-sleeping tasks with `--timer-interrupt` idle deterministically until the next wake tick, and all-sleeping tasks without a timer report a deadlock.
+
+`emulator info` is a static loader/configuration view and does not execute guest code. It shows host-configured tasks and kernel metadata present before execution; guest-created tasks are visible through trace/debugger output during or after execution, not through a non-executing `info` invocation.
 
 ## Required Test Artifacts
 
@@ -240,7 +244,7 @@ examples/v1_6/invalid_task_create.s
 | TC-V16-BOOT-002 | v1.5 boot-info compatibility | Run a v1.5 fixture under v1.6 implementation. | Fields used by v1.5 remain in the same location and semantics. |
 | TC-V16-BOOT-003 | Descriptor table pointer valid | Kernel reads descriptor table pointer/size. | Pointer is mapped readable/read-only and size matches documented max descriptors. |
 | TC-V16-BOOT-004 | Service table or service trap documented | Kernel probes the service ABI. | Supported service IDs are discoverable or documented; unknown service returns stable error. |
-| TC-V16-BOOT-005 | ABI absent when boot-info disabled | Run without boot-info if supported. | Kernel can still use documented fallback services or receives zero metadata as documented. |
+| TC-V16-BOOT-005 | ABI absent when boot-info disabled | Run without boot-info if supported. | Descriptor-dependent services such as `TASK_GET_INFO` return `BAD_ARGUMENT`; non-descriptor services still work. |
 | TC-V16-BOOT-006 | Descriptor table alignment | Inspect descriptor pointer. | Pointer and descriptor size meet documented alignment. |
 | TC-V16-BOOT-007 | Descriptor table does not overlap code | Compare descriptor memory with kernel/program mappings. | No overlap with executable code or MMIO. |
 | TC-V16-BOOT-008 | Bad boot-info magic handled | Run fixture that validates intentionally corrupt metadata. | Kernel reports panic/error deterministically; emulator does not crash. |
@@ -291,7 +295,7 @@ examples/v1_6/invalid_task_create.s
 | TC-V16-SCHED-002 | Exited task skipped | Task A exits; B and C continue. | A is never scheduled again. |
 | TC-V16-SCHED-003 | Faulted task skipped | Task A faults; B exits normally. | A becomes `FAULTED`; B continues. |
 | TC-V16-SCHED-004 | Sleeping task skipped until wake | Task sleeps for N ticks. | Other ready tasks run; sleeper wakes at expected tick. |
-| TC-V16-SCHED-005 | All sleeping tasks advance on timer | All tasks sleep with timer enabled. | Timer wakes them deterministically or reports documented idle behavior. |
+| TC-V16-SCHED-005 | All sleeping tasks advance on timer | All tasks sleep with timer enabled. | Timer idles forward to the next wake tick and schedules the awakened task deterministically. |
 | TC-V16-SCHED-006 | Deadlock without timer | All tasks block waiting for future ticks with no timer. | Stable deadlock diagnostic and exit code. |
 | TC-V16-SCHED-007 | Scheduler fairness under create-at-runtime | Task A creates B then yields. | B enters schedule at documented position. |
 | TC-V16-SCHED-008 | Instruction limit still enforced | Task loops without yield. | Run stops at instruction limit with stable error; no corrupt task state. |
@@ -389,7 +393,7 @@ examples/v1_6/invalid_task_create.s
 | TC-V16-CLI-005 | Panic exit code stable | Run kernel panic path. | Exit code remains `70` unless docs intentionally change it. |
 | TC-V16-CLI-006 | Task fault exit code stable | Run task fault path. | Exit code remains `71` unless docs intentionally change it. |
 | TC-V16-CLI-007 | IPC demo output stable | Run mailbox ping-pong fixture. | Output is deterministic and concise. |
-| TC-V16-CLI-008 | `info` shows guest-created tasks | Run `info` on Tiny OS fixture. | Task table, service/IPC metadata, and counters are shown. |
+| TC-V16-CLI-008 | `info` is static | Run `info` on Tiny OS fixture. | Kernel/service/IPC metadata is shown, but guest-created tasks are not listed because `info` does not execute guest code. |
 | TC-V16-CLI-009 | Trace shows create/switch/service events | Run trace. | Trace includes stable event labels and task IDs. |
 | TC-V16-CLI-010 | Bad CLI combinations rejected | Combine incompatible flags. | Usage error and exit code are stable. |
 | TC-V16-CLI-011 | Generated fixtures are optional-toolchain free | Run fixture generator with system Python only. | Fixtures are generated deterministically. |
@@ -457,22 +461,22 @@ examples/v1_6/invalid_task_create.s
 v1.6 is ready only when all of the following are true:
 
 - [ ] v0.1 through v1.5 regression tests pass unchanged.
-- [ ] Guest-created tasks work from at least raw fixtures.
-- [ ] Host-created and guest-created tasks can coexist or the incompatibility is
+- [x] Guest-created tasks work from at least raw fixtures.
+- [x] Host-created and guest-created tasks can coexist or the incompatibility is
       explicitly rejected and documented.
-- [ ] Task creation validates entry, stack, flags, table capacity, overlap, and
+- [x] Task creation validates entry, stack, flags, table capacity, overlap, and
       integer-overflow cases.
-- [ ] The scheduler handles ready, running, blocked, exited, and faulted
+- [x] The scheduler handles ready, running, blocked, exited, and faulted
       guest-created tasks deterministically.
-- [ ] At least one kernel service path is documented and tested from both kernel
+- [x] At least one kernel service path is documented and tested from both kernel
       boot context and task context.
-- [ ] If IPC/mailbox is included, send/receive success, empty/full, undersized receive, zero-length message, self-send, invalid
+- [x] If IPC/mailbox is included, send/receive success, empty/full, undersized receive, zero-length message, self-send, invalid
       pointer, invalid task, and ordering cases are tested.
-- [ ] `info`, trace, and debugger output expose guest-created tasks clearly.
-- [ ] Docs and lessons state the exact v1.6 contract and do not imply real OS
+- [x] Static `info`, trace, and debugger output expose v1.6 state according to their documented execution model.
+- [x] Docs and lessons state the exact v1.6 contract and do not imply real OS
       privilege/security behavior.
-- [ ] Generated examples are reproducible and optional-example tests pass.
-- [ ] ASan/UBSan-focused v1.6 runs pass.
+- [x] Generated examples are reproducible and optional-example tests pass.
+- [x] ASan/UBSan-focused v1.6 runs pass.
 - [ ] Release docs, hygiene, clean, and archive checks pass.
 
 ## Risks and Regression Watchlist

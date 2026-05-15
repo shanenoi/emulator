@@ -23,10 +23,19 @@ grep -q "trace kernel-service create-task id=2" "$TMP/trace.out" || fail "trace 
 grep -q "trace kernel-task-switch" "$TMP/trace.out" || fail "trace lacks task switches"
 grep -q "trace kernel-complete tasks=3 status=0" "$TMP/trace.out" || fail "trace lacks completion summary"
 
+./emulator trace "$TMP/host_guest_mixed.bin" --kernel --kernel-boot-info --kernel-task 0x1024 >"$TMP/mixed.out" 2>"$TMP/mixed.err"
+grep -q "trace kernel-service create-task id=1" "$TMP/mixed.out" || fail "mixed host/guest trace lacks guest-created task"
+grep -q "trace kernel-complete tasks=2 status=0" "$TMP/mixed.out" || fail "mixed host/guest run did not complete both tasks"
+
+./emulator trace "$TMP/sleep_with_timer.bin" --kernel --kernel-boot-info --timer-interrupt 1 >"$TMP/sleep_timer.out" 2>"$TMP/sleep_timer.err"
+grep -q "trace kernel-idle-until-wake" "$TMP/sleep_timer.out" || fail "timer-enabled sleep did not idle until wake"
+grep -q "trace kernel-complete tasks=1 status=0" "$TMP/sleep_timer.out" || fail "timer-enabled sleep did not complete"
+
 ./emulator info "$TMP/mailbox_ping_pong.bin" --kernel --kernel-boot-info >"$TMP/info.out"
 grep -q "toy_kernel_service_trap: 0x160" "$TMP/info.out" || fail "info lacks service trap"
 grep -q "toy_kernel_supported_services:" "$TMP/info.out" || fail "info lacks service mask"
 grep -q "toy_kernel_mailbox:" "$TMP/info.out" || fail "info lacks mailbox shape"
+grep -q "toy_kernel_task_count: 0" "$TMP/info.out" || fail "info should report static metadata without executing guest-created tasks"
 
 ./emulator run "$TMP/invalid_task_create_flags.bin" --kernel --kernel-boot-info >"$TMP/badflags.out" 2>"$TMP/badflags.err" || fail "bad flags fixture should observe service error and halt"
 
