@@ -30,6 +30,7 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "v1.4 adds an exception-controller MMIO device at 0x09030000.\n");
     fprintf(stream, "Keyboard input MMIO is available at 0x09040000; --input and --input-file queue bytes deterministically.\n");
     fprintf(stream, "Terminal/screen MMIO is available at 0x09050000; --screen-dump renders the final buffer.\n");
+    fprintf(stream, "Frame tick MMIO is available at 0x09060000; --frames runs deterministic frame slices.\n");
     fprintf(stream, "v1.5 adds an opt-in toy-kernel profile with cooperative BRK traps.\n");
     fprintf(stream, "v1.6 adds guest-managed task services through BRK #0x160 with x8 service IDs.\n");
     fprintf(stream, "options: --exception-vector <address>  enable v1.4 vector before running\n");
@@ -47,8 +48,9 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "         --interactive             run with host keyboard polling and live screen redraw\n");
     fprintf(stream, "         --fps <N>                 interactive frames per second, default %u\n",
             EMU_INTERACTIVE_DEFAULT_FPS);
-    fprintf(stream, "         --instructions-per-frame <N> interactive guest instructions per frame, default %llu\n",
+    fprintf(stream, "         --instructions-per-frame <N> guest instructions per interactive/deterministic frame, default %llu\n",
             (unsigned long long)EMU_INTERACTIVE_DEFAULT_INSTRUCTIONS_PER_FRAME);
+    fprintf(stream, "         --frames <N>              run deterministic non-interactive frame slices\n");
     fprintf(stream, "         --quit-key <ctrl-c|esc>   host-only interactive quit key, default ctrl-c\n");
     fprintf(stream, "toy-kernel service IDs: 1=TASK_CREATE, 2=TASK_YIELD, 3=TASK_EXIT, 4=TASK_SLEEP, 5=TASK_GET_ID, 6=TASK_GET_INFO, 7=TASK_SEND, 8=TASK_RECV, 9=CONSOLE_WRITE, 10=KERNEL_PANIC.\n");
     fprintf(stream, "info and debugger maps show RAM mappings and MMIO device ranges.\n");
@@ -84,6 +86,9 @@ typedef struct {
     bool screen_dump;
     const char *screen_border;
     bool interactive;
+    bool has_frames;
+    uint64_t frames;
+    bool has_fps;
     uint32_t fps;
     uint64_t instructions_per_frame;
     const char *quit_key;
@@ -311,11 +316,19 @@ static bool parse_cli_options(int argc, char **argv, int start, CliOptions *opti
             options->screen_border = argv[++i];
         } else if (strcmp(argv[i], "--interactive") == 0) {
             options->interactive = true;
+        } else if (strcmp(argv[i], "--frames") == 0) {
+            if (i + 1 >= argc || !parse_u64(argv[i + 1], &options->frames) || options->frames == 0) {
+                snprintf(error, error_size, "invalid --frames value: expected positive integer");
+                return false;
+            }
+            options->has_frames = true;
+            i++;
         } else if (strcmp(argv[i], "--fps") == 0) {
             if (i + 1 >= argc || !parse_u32_strict(argv[i + 1], &options->fps) || options->fps == 0) {
                 snprintf(error, error_size, "invalid --fps value: expected positive integer");
                 return false;
             }
+            options->has_fps = true;
             i++;
         } else if (strcmp(argv[i], "--instructions-per-frame") == 0) {
             if (i + 1 >= argc || !parse_u64(argv[i + 1], &options->instructions_per_frame) ||
@@ -763,6 +776,7 @@ static EmuStatus emulator_run_interactive(Emulator *emu, const CliOptions *optio
                 goto done;
             }
         }
+        memory_advance_frame(&emu->memory);
 
         if (memory_terminal_dirty(&emu->memory)) {
             interactive_render_screen(&emu->memory, options);
@@ -781,6 +795,25 @@ done:
         snprintf(error, error_size, "interactive quit requested");
     }
     return status;
+}
+
+static EmuStatus emulator_run_frames(Emulator *emu, const CliOptions *options, char *error, size_t error_size) {
+    EmuStatus status = EMU_OK;
+    for (uint64_t frame = 0; frame < options->frames; frame++) {
+        for (uint64_t i = 0; i < options->instructions_per_frame; i++) {
+            if (emu->cpu.instructions_executed >= emu->instruction_limit) {
+                snprintf(error, error_size, "instruction limit reached: 0x%016llx",
+                         (unsigned long long)emu->instruction_limit);
+                return EMU_ERROR;
+            }
+            status = emulator_step(emu, error, error_size);
+            if (status != EMU_OK) {
+                return status;
+            }
+        }
+        memory_advance_frame(&emu->memory);
+    }
+    return EMU_HALTED;
 }
 
 int main(int argc, char **argv) {
@@ -824,6 +857,21 @@ int main(int argc, char **argv) {
     }
     if (options.interactive && strcmp(argv[1], "run") != 0) {
         fprintf(stderr, "error: --interactive is only supported with the run command\n");
+        print_usage(stderr);
+        return 2;
+    }
+    if (options.has_frames && strcmp(argv[1], "run") != 0) {
+        fprintf(stderr, "error: --frames is only supported with the run command\n");
+        print_usage(stderr);
+        return 2;
+    }
+    if (options.has_frames && options.interactive) {
+        fprintf(stderr, "error: --frames cannot be combined with --interactive\n");
+        print_usage(stderr);
+        return 2;
+    }
+    if (options.has_fps && !options.interactive) {
+        fprintf(stderr, "error: --fps is only supported with --interactive\n");
         print_usage(stderr);
         return 2;
     }
@@ -929,8 +977,14 @@ int main(int argc, char **argv) {
     }
 
     error[0] = '\0';
-    EmuStatus status = options.interactive ? emulator_run_interactive(&emu, &options, error, sizeof(error))
-                                           : emulator_run(&emu, error, sizeof(error));
+    EmuStatus status = EMU_OK;
+    if (options.interactive) {
+        status = emulator_run_interactive(&emu, &options, error, sizeof(error));
+    } else if (options.has_frames) {
+        status = emulator_run_frames(&emu, &options, error, sizeof(error));
+    } else {
+        status = emulator_run(&emu, error, sizeof(error));
+    }
     if (status == EMU_HALTED) {
         if (!regs_only && !emu.guest_exited && !options.interactive) {
             printf("halted\n");

@@ -99,7 +99,7 @@ static void test_device_map_and_routing(void) {
     EmuMemoryFaultKind fault = EMU_MEMORY_FAULT_NONE;
 
     init_memory(&memory);
-    EXPECT_SIZE_EQ(memory.devices.range_count, 5u);
+    EXPECT_SIZE_EQ(memory.devices.range_count, 6u);
     EXPECT_TRUE(memory_find_device(&memory, EMU_DEVICE_UART_BASE) != NULL);
     EXPECT_TRUE(memory_find_device(&memory, EMU_DEVICE_UART_BASE + EMU_DEVICE_SIZE - 1u) != NULL);
     EXPECT_TRUE(memory_find_device(&memory, EMU_DEVICE_UART_BASE + EMU_DEVICE_SIZE) == NULL);
@@ -107,6 +107,7 @@ static void test_device_map_and_routing(void) {
     EXPECT_TRUE(memory_find_device(&memory, EMU_DEVICE_RANDOM_BASE) != NULL);
     EXPECT_TRUE(memory_find_device(&memory, EMU_DEVICE_KEYBOARD_BASE) != NULL);
     EXPECT_TRUE(memory_find_device(&memory, EMU_DEVICE_TERMINAL_BASE) != NULL);
+    EXPECT_TRUE(memory_find_device(&memory, EMU_DEVICE_FRAME_BASE) != NULL);
     EXPECT_TRUE(memory_find_device(&memory, 0x2000u) == NULL);
 
     EXPECT_TRUE(memory_map_range(&memory, 0x2000u, EMU_PAGE_SIZE, EMU_MAP_READ | EMU_MAP_WRITE, "data", error, sizeof(error)));

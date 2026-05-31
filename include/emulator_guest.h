@@ -6,6 +6,7 @@
 #define EMU_GUEST_UART_BASE 0x09000000ull
 #define EMU_GUEST_KBD_BASE 0x09040000ull
 #define EMU_GUEST_TERM_BASE 0x09050000ull
+#define EMU_GUEST_FRAME_BASE 0x09060000ull
 
 #define EMU_GUEST_UART_DATA 0x00ull
 #define EMU_GUEST_UART_STATUS 0x04ull
@@ -35,6 +36,13 @@
 #define EMU_GUEST_TERM_CONTROL_CLEAR 0x1u
 #define EMU_GUEST_TERM_CONTROL_HOME 0x2u
 #define EMU_GUEST_TERM_CONTROL_CLEAR_DIRTY 0x4u
+
+#define EMU_GUEST_FRAME_STATUS 0x00ull
+#define EMU_GUEST_FRAME_COUNTER_LO 0x04ull
+#define EMU_GUEST_FRAME_COUNTER_HI 0x08ull
+#define EMU_GUEST_FRAME_CONTROL 0x0cull
+#define EMU_GUEST_FRAME_STATUS_READY 0x1u
+#define EMU_GUEST_FRAME_CONTROL_CLEAR_READY 0x1u
 
 static inline uint32_t emu_guest_mmio_read32(uint64_t address) {
     return *(volatile const uint32_t *)(uintptr_t)address;
@@ -104,6 +112,39 @@ static inline uint8_t emu_guest_term_read_cell(uint32_t x, uint32_t y) {
     uint32_t width = emu_guest_term_width();
     emu_guest_mmio_write32(EMU_GUEST_TERM_BASE + EMU_GUEST_TERM_INDEX, y * width + x);
     return (uint8_t)emu_guest_mmio_read32(EMU_GUEST_TERM_BASE + EMU_GUEST_TERM_CELL);
+}
+
+static inline uint32_t emu_guest_frame_status(void) {
+    return emu_guest_mmio_read32(EMU_GUEST_FRAME_BASE + EMU_GUEST_FRAME_STATUS);
+}
+
+static inline int emu_guest_frame_ready(void) {
+    return (emu_guest_frame_status() & EMU_GUEST_FRAME_STATUS_READY) != 0u;
+}
+
+static inline uint64_t emu_guest_frame_counter(void) {
+    uint32_t hi1;
+    uint32_t lo;
+    uint32_t hi2;
+    do {
+        hi1 = emu_guest_mmio_read32(EMU_GUEST_FRAME_BASE + EMU_GUEST_FRAME_COUNTER_HI);
+        lo = emu_guest_mmio_read32(EMU_GUEST_FRAME_BASE + EMU_GUEST_FRAME_COUNTER_LO);
+        hi2 = emu_guest_mmio_read32(EMU_GUEST_FRAME_BASE + EMU_GUEST_FRAME_COUNTER_HI);
+    } while (hi1 != hi2);
+    return ((uint64_t)hi2 << 32u) | lo;
+}
+
+static inline void emu_guest_frame_ack(void) {
+    emu_guest_mmio_write32(EMU_GUEST_FRAME_BASE + EMU_GUEST_FRAME_CONTROL,
+                           EMU_GUEST_FRAME_CONTROL_CLEAR_READY);
+}
+
+static inline uint64_t emu_guest_wait_frame(void) {
+    while (!emu_guest_frame_ready()) {
+    }
+    uint64_t counter = emu_guest_frame_counter();
+    emu_guest_frame_ack();
+    return counter;
 }
 
 #endif

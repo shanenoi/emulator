@@ -50,10 +50,12 @@ static void memory_install_default_devices(Memory *memory) {
     bool terminal_dirty = memory->devices.terminal_dirty;
     uint8_t terminal_cells[EMU_TERM_MAX_CELLS];
     bool keep_terminal = terminal_dimensions_valid(terminal_width, terminal_height);
+    uint64_t frame_counter = memory->devices.frame_counter;
+    bool frame_ready = memory->devices.frame_ready;
     memcpy(keyboard_queue, memory->devices.keyboard_queue, sizeof(keyboard_queue));
     memcpy(terminal_cells, memory->devices.terminal_cells, sizeof(terminal_cells));
 
-    memory->devices.range_count = 5;
+    memory->devices.range_count = 6;
     memory->devices.ranges[0] = (EmuDeviceRange){EMU_DEVICE_UART_BASE, EMU_DEVICE_SIZE,
                                                   EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_UART, "uart"};
     memory->devices.ranges[1] = (EmuDeviceRange){EMU_DEVICE_TIMER_BASE, EMU_DEVICE_SIZE,
@@ -64,6 +66,8 @@ static void memory_install_default_devices(Memory *memory) {
                                                   EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_KEYBOARD, "keyboard"};
     memory->devices.ranges[4] = (EmuDeviceRange){EMU_DEVICE_TERMINAL_BASE, EMU_DEVICE_SIZE,
                                                   EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_TERMINAL, "terminal"};
+    memory->devices.ranges[5] = (EmuDeviceRange){EMU_DEVICE_FRAME_BASE, EMU_DEVICE_SIZE,
+                                                 EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_FRAME, "frame"};
     if (exceptions != NULL) {
         memory->devices.ranges[memory->devices.range_count++] =
             (EmuDeviceRange){EMU_DEVICE_EXCEPTION_BASE, EMU_DEVICE_SIZE, EMU_MAP_READ | EMU_MAP_WRITE,
@@ -88,6 +92,8 @@ static void memory_install_default_devices(Memory *memory) {
     } else {
         terminal_reset_state(&memory->devices, EMU_TERM_DEFAULT_WIDTH, EMU_TERM_DEFAULT_HEIGHT);
     }
+    memory->devices.frame_counter = frame_counter;
+    memory->devices.frame_ready = frame_ready;
 }
 
 static uint32_t keyboard_status_bits(const EmuDeviceBus *devices) {
@@ -273,6 +279,22 @@ bool memory_terminal_dirty(const Memory *memory) {
 
 const uint8_t *memory_terminal_cells(const Memory *memory) {
     return memory != NULL ? memory->devices.terminal_cells : NULL;
+}
+
+void memory_advance_frame(Memory *memory) {
+    if (memory == NULL) {
+        return;
+    }
+    memory->devices.frame_counter++;
+    memory->devices.frame_ready = true;
+}
+
+uint64_t memory_frame_counter(const Memory *memory) {
+    return memory != NULL ? memory->devices.frame_counter : 0;
+}
+
+bool memory_frame_ready(const Memory *memory) {
+    return memory != NULL && memory->devices.frame_ready;
 }
 
 static bool device_contains_range(const EmuDeviceRange *device, uint64_t address, uint64_t width) {
@@ -522,6 +544,30 @@ static bool device_read(Memory *memory, const EmuDeviceRange *device, uint64_t a
         }
         return device_reject_invalid_register(device, offset, width, "read", error, error_size);
 
+    case EMU_DEVICE_FRAME:
+        if (!device_reject_if_unaligned(device, offset, width, "read", error, error_size)) {
+            return false;
+        }
+        if (width != 4) {
+            return device_reject_width(device, offset, width, "read", error, error_size);
+        }
+        if (offset == EMU_FRAME_STATUS_OFFSET) {
+            *out = memory->devices.frame_ready ? EMU_FRAME_STATUS_READY : 0u;
+            return true;
+        }
+        if (offset == EMU_FRAME_COUNTER_LO_OFFSET) {
+            *out = (uint32_t)(memory->devices.frame_counter & 0xffffffffu);
+            return true;
+        }
+        if (offset == EMU_FRAME_COUNTER_HI_OFFSET) {
+            *out = (uint32_t)((memory->devices.frame_counter >> 32u) & 0xffffffffu);
+            return true;
+        }
+        if (offset == EMU_FRAME_CONTROL_OFFSET) {
+            return device_reject_writeonly(device, offset, error, error_size);
+        }
+        return device_reject_invalid_register(device, offset, width, "read", error, error_size);
+
     case EMU_DEVICE_EXCEPTION: {
         EmuExceptionController *exceptions = memory->devices.exceptions;
         if (exceptions == NULL) {
@@ -705,6 +751,25 @@ static bool device_write(Memory *memory, const EmuDeviceRange *device, uint64_t 
         if (offset == EMU_TERM_DATA_OFFSET || offset == EMU_TERM_CURSOR_X_OFFSET || offset == EMU_TERM_CURSOR_Y_OFFSET ||
             offset == EMU_TERM_CONTROL_OFFSET || offset == EMU_TERM_INDEX_OFFSET || offset == EMU_TERM_CELL_OFFSET) {
             return device_reject_width(device, offset, width, "write", error, error_size);
+        }
+        return device_reject_invalid_register(device, offset, width, "write", error, error_size);
+
+    case EMU_DEVICE_FRAME:
+        if (!device_reject_if_unaligned(device, offset, width, "write", error, error_size)) {
+            return false;
+        }
+        if (width != 4) {
+            return device_reject_width(device, offset, width, "write", error, error_size);
+        }
+        if (offset == EMU_FRAME_CONTROL_OFFSET) {
+            if (((uint32_t)value & EMU_FRAME_CONTROL_CLEAR_READY) != 0u) {
+                memory->devices.frame_ready = false;
+            }
+            return true;
+        }
+        if (offset == EMU_FRAME_STATUS_OFFSET || offset == EMU_FRAME_COUNTER_LO_OFFSET ||
+            offset == EMU_FRAME_COUNTER_HI_OFFSET) {
+            return device_reject_readonly(device, offset, error, error_size);
         }
         return device_reject_invalid_register(device, offset, width, "write", error, error_size);
 
@@ -1286,8 +1351,8 @@ void memory_print_devices(const Memory *memory, FILE *stream) {
         fprintf(stream, "devices: 0\n");
         return;
     }
-    if (memory->devices.range_count == 6 && memory->devices.ranges[5].kind == EMU_DEVICE_EXCEPTION) {
-        fprintf(stream, "devices: 5 legacy + 1 exception\n");
+    if (memory->devices.range_count == 7 && memory->devices.ranges[6].kind == EMU_DEVICE_EXCEPTION) {
+        fprintf(stream, "devices: 6 legacy + 1 exception\n");
     } else {
         fprintf(stream, "devices: %zu\n", memory->devices.range_count);
     }

@@ -21,6 +21,7 @@
 #define EMU_DEVICE_EXCEPTION_BASE 0x09030000ull
 #define EMU_DEVICE_KEYBOARD_BASE 0x09040000ull
 #define EMU_DEVICE_TERMINAL_BASE 0x09050000ull
+#define EMU_DEVICE_FRAME_BASE 0x09060000ull
 #define EMU_DEVICE_SIZE 0x00001000ull
 
 #define EMU_UART_DATA_OFFSET 0x00ull
@@ -57,6 +58,12 @@
 #define EMU_TERM_MAX_WIDTH 160u
 #define EMU_TERM_MAX_HEIGHT 100u
 #define EMU_TERM_MAX_CELLS (EMU_TERM_MAX_WIDTH * EMU_TERM_MAX_HEIGHT)
+#define EMU_FRAME_STATUS_OFFSET 0x00ull
+#define EMU_FRAME_COUNTER_LO_OFFSET 0x04ull
+#define EMU_FRAME_COUNTER_HI_OFFSET 0x08ull
+#define EMU_FRAME_CONTROL_OFFSET 0x0cull
+#define EMU_FRAME_STATUS_READY 0x1u
+#define EMU_FRAME_CONTROL_CLEAR_READY 0x1u
 #define EMU_INTERACTIVE_DEFAULT_FPS 30u
 #define EMU_INTERACTIVE_DEFAULT_INSTRUCTIONS_PER_FRAME 1000ull
 #define EMU_KEY_ESC 0x1bu
@@ -441,6 +448,7 @@ typedef enum {
     EMU_DEVICE_EXCEPTION,
     EMU_DEVICE_KEYBOARD,
     EMU_DEVICE_TERMINAL,
+    EMU_DEVICE_FRAME,
 } EmuDeviceKind;
 
 typedef struct {
@@ -452,7 +460,7 @@ typedef struct {
 } EmuDeviceRange;
 
 typedef struct {
-    EmuDeviceRange ranges[6];
+    EmuDeviceRange ranges[7];
     size_t range_count;
     uint64_t timer_ticks;
     uint32_t random_state;
@@ -469,6 +477,8 @@ typedef struct {
     uint32_t terminal_index;
     bool terminal_dirty;
     uint8_t terminal_cells[EMU_TERM_MAX_CELLS];
+    uint64_t frame_counter;
+    bool frame_ready;
 } EmuDeviceBus;
 
 typedef struct {
@@ -581,6 +591,9 @@ uint32_t memory_terminal_cursor_x(const Memory *memory);
 uint32_t memory_terminal_cursor_y(const Memory *memory);
 bool memory_terminal_dirty(const Memory *memory);
 const uint8_t *memory_terminal_cells(const Memory *memory);
+void memory_advance_frame(Memory *memory);
+uint64_t memory_frame_counter(const Memory *memory);
+bool memory_frame_ready(const Memory *memory);
 bool memory_read8(const Memory *memory, uint64_t address, uint8_t *out, char *error, size_t error_size);
 bool memory_write8(Memory *memory, uint64_t address, uint8_t value, char *error, size_t error_size);
 bool memory_read16(const Memory *memory, uint64_t address, uint16_t *out, char *error, size_t error_size);

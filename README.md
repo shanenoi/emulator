@@ -35,6 +35,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v1.7 Test Plan — Deterministic Keyboard Input Device](docs/test-plan-v1.7.md)
 - [v1.8 Test Plan — Deterministic Terminal Screen Device](docs/test-plan-v1.8.md)
 - [v1.9 Test Plan — Optional Interactive Host Runner](docs/test-plan-v1.9.md)
+- [v1.10 Test Plan — Deterministic Frame Pacing](docs/test-plan-v1.10.md)
 
 ## Lessons
 
@@ -57,7 +58,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**, the implemented/tested teaching profile for **v1.5 — Toy Kernel Mode**, the implemented/tested teaching profile for **v1.6 — Tiny OS Lab**, the implemented/tested teaching profile for **v1.7 — Deterministic Keyboard Input Device**, the implemented/tested teaching profile for **v1.8 — Deterministic Terminal Screen Device**, and the implemented/tested teaching profile for **v1.9 — Optional Interactive Host Runner**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests. v1.5 adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, generated fixtures, and dedicated v1.5 unit/CLI/debugger/docs tests. v1.6 adds the guest-managed Tiny OS Lab with a `BRK #0x160` service dispatcher, guest task creation, guest-readable/read-only boot metadata and task descriptors, deterministic task IDs/names, task information lookup, current-task ID lookup, console/panic/yield/exit/sleep services, service-discovery metadata, hardened stack validation, fixed-size nonblocking mailbox IPC, generated fixtures, and dedicated v1.6 unit/CLI/debugger/docs/optional-example tests. v1.7 adds deterministic keyboard/input MMIO with a fixed FIFO and scripted CLI input. v1.8 adds deterministic terminal/screen MMIO with configurable dimensions, cursor/cell access, scrolling, dirty status, guest helpers, and final CLI screen dumps. v1.9 adds an optional TTY-only host-interactive runner that polls keyboard input into the existing keyboard FIFO and redraws the existing terminal screen buffer; scripted input remains the deterministic test path. It is not a real OS and does not provide production isolation.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**, the implemented/tested teaching profile for **v1.5 — Toy Kernel Mode**, the implemented/tested teaching profile for **v1.6 — Tiny OS Lab**, the implemented/tested teaching profile for **v1.7 — Deterministic Keyboard Input Device**, the implemented/tested teaching profile for **v1.8 — Deterministic Terminal Screen Device**, the implemented/tested teaching profile for **v1.9 — Optional Interactive Host Runner**, and the implemented/tested teaching profile for **v1.10 — Deterministic Frame Pacing**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests. v1.5 adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, generated fixtures, and dedicated v1.5 unit/CLI/debugger/docs tests. v1.6 adds the guest-managed Tiny OS Lab with a `BRK #0x160` service dispatcher, guest task creation, guest-readable/read-only boot metadata and task descriptors, deterministic task IDs/names, task information lookup, current-task ID lookup, console/panic/yield/exit/sleep services, service-discovery metadata, hardened stack validation, fixed-size nonblocking mailbox IPC, generated fixtures, and dedicated v1.6 unit/CLI/debugger/docs/optional-example tests. v1.7 adds deterministic keyboard/input MMIO with a fixed FIFO and scripted CLI input. v1.8 adds deterministic terminal/screen MMIO with configurable dimensions, cursor/cell access, scrolling, dirty status, guest helpers, and final CLI screen dumps. v1.9 adds an optional TTY-only host-interactive runner that polls keyboard input into the existing keyboard FIFO and redraws the existing terminal screen buffer; scripted input remains the deterministic test path. v1.10 adds a runner-paced frame MMIO device and deterministic `--frames` mode so guest programs can use the same frame counter in scripted and host-paced runs. It is not a real OS and does not provide production isolation.
 
 Implemented now:
 
@@ -206,7 +207,7 @@ Implemented now:
   - documents the current v1.2 behavior in `examples/v1_2/README.md` and `lessons/v1.2-virtual-memory.md`
   - includes v1.2 unit, CLI, debugger, docs, clean, and fresh-archive release tests
 - v1.3+ memory-mapped-device teaching profile:
-  - adds fixed device ranges for UART 0x09000000, timer 0x09010000, random 0x09020000, exception-controller 0x09030000 when connected, keyboard input 0x09040000, and terminal screen 0x09050000 devices
+  - adds fixed device ranges for UART 0x09000000, timer 0x09010000, random 0x09020000, exception-controller 0x09030000 when connected, keyboard input 0x09040000, terminal screen 0x09050000, and frame tick 0x09060000 devices
   - routes CPU data loads/stores through RAM or device-register handlers
   - keeps instruction fetch restricted to executable RAM mappings
   - supports byte writes to UART DATA at `0x09000000` for stdout output
@@ -218,6 +219,7 @@ Implemented now:
   - supports a deterministic terminal/screen buffer through `TERM_*` MMIO registers and final CLI rendering with `--screen-dump`
   - supports `--screen-size <WIDTH>x<HEIGHT>` and `--screen-border <unicode|ascii|none>` for deterministic screen dumps
   - supports optional `emulator run <program> --interactive` host-interactive mode with `--fps <N>`, `--instructions-per-frame <N>`, and `--quit-key <ctrl-c|esc>`
+  - supports deterministic non-interactive `emulator run <program> --frames <N> --instructions-per-frame <N>` frame slices through a guest-visible frame counter/status MMIO device
   - normal printable input passes through the keyboard FIFO, Enter normalizes to `\n`, and host arrow keys normalize to `EMU_GUEST_KEY_UP`/`DOWN`/`LEFT`/`RIGHT` bytes `0x80`..`0x83`
   - interactive mode requires stdin/stdout TTYs, uses the terminal/screen buffer for live redraw, and is intentionally separate from deterministic scripted tests
   - reports invalid device offsets, unsupported widths, and boundary crossings as deterministic device faults
@@ -1141,6 +1143,7 @@ Initial devices:
 - Deterministic random-number device at `0x09020000`.
 - Deterministic keyboard/input FIFO at `0x09040000`.
 - Deterministic terminal/screen buffer at `0x09050000`.
+- Deterministic runner-paced frame tick device at `0x09060000`.
 
 Suggested memory map:
 
@@ -1153,6 +1156,7 @@ Suggested memory map:
 0x0902_0000 - random device
 0x0904_0000 - keyboard/input device
 0x0905_0000 - terminal/screen device
+0x0906_0000 - frame tick device
 ```
 
 UART behavior:
@@ -1203,12 +1207,24 @@ read/write byte/word at 0x09050024 -> cell byte at TERM_INDEX; out-of-range read
 
 Terminal cells initialize to spaces. Newline moves to column 0 of the next row, carriage return moves to column 0, writing past the right edge wraps, and moving past the bottom scrolls up by one row. Cursor writes outside the configured dimensions clamp to the nearest valid cell. The default screen size is 80x25, and the CLI accepts `--screen-size <WIDTH>x<HEIGHT>` with width 1..160 and height 1..100.
 
+Frame tick behavior:
+
+```text
+read word from 0x09060000 -> status bits; bit 0 means frame tick ready
+read word from 0x09060004 -> low 32 bits of the runner-paced frame counter
+read word from 0x09060008 -> high 32 bits of the runner-paced frame counter
+write word bit 0 to 0x0906000c -> clear frame-ready status without changing the counter
+```
+
+The frame counter starts at 0 and increments exactly once when the runner advances a frame. Normal `emulator run` remains unchanged. `emulator run --frames N --instructions-per-frame M` is deterministic and test-friendly; `emulator run --interactive --fps N --instructions-per-frame M` is host-paced for humans. Wall-clock timing is host-side only and is not exposed through the guest-visible frame counter.
+
 Render the final terminal buffer after guest execution with:
 
 ```sh
 ./emulator run program.bin --screen-dump
 ./emulator run program.bin --screen-size 10x3 --screen-dump --screen-border ascii
 ./emulator run program.bin --screen-size 10x3 --screen-dump --screen-border none
+./emulator run program.bin --frames 60 --instructions-per-frame 1000 --screen-dump
 ```
 
 Generate and run the v1.3 UART example with:
