@@ -20,6 +20,7 @@
 #define EMU_DEVICE_RANDOM_BASE 0x09020000ull
 #define EMU_DEVICE_EXCEPTION_BASE 0x09030000ull
 #define EMU_DEVICE_KEYBOARD_BASE 0x09040000ull
+#define EMU_DEVICE_TERMINAL_BASE 0x09050000ull
 #define EMU_DEVICE_SIZE 0x00001000ull
 
 #define EMU_UART_DATA_OFFSET 0x00ull
@@ -36,6 +37,26 @@
 #define EMU_KBD_STATUS_OVERFLOW 0x2u
 #define EMU_KBD_CONTROL_CLEAR_OVERFLOW 0x1u
 #define EMU_KBD_QUEUE_CAPACITY 16u
+#define EMU_TERM_STATUS_OFFSET 0x00ull
+#define EMU_TERM_WIDTH_OFFSET 0x04ull
+#define EMU_TERM_HEIGHT_OFFSET 0x08ull
+#define EMU_TERM_CURSOR_X_OFFSET 0x0cull
+#define EMU_TERM_CURSOR_Y_OFFSET 0x10ull
+#define EMU_TERM_DATA_OFFSET 0x14ull
+#define EMU_TERM_CONTROL_OFFSET 0x18ull
+#define EMU_TERM_INDEX_OFFSET 0x20ull
+#define EMU_TERM_CELL_OFFSET 0x24ull
+#define EMU_TERM_STATUS_DIRTY 0x1u
+#define EMU_TERM_CONTROL_CLEAR 0x1u
+#define EMU_TERM_CONTROL_HOME 0x2u
+#define EMU_TERM_CONTROL_CLEAR_DIRTY 0x4u
+#define EMU_TERM_DEFAULT_WIDTH 80u
+#define EMU_TERM_DEFAULT_HEIGHT 25u
+#define EMU_TERM_MIN_WIDTH 1u
+#define EMU_TERM_MIN_HEIGHT 1u
+#define EMU_TERM_MAX_WIDTH 160u
+#define EMU_TERM_MAX_HEIGHT 100u
+#define EMU_TERM_MAX_CELLS (EMU_TERM_MAX_WIDTH * EMU_TERM_MAX_HEIGHT)
 #define EMU_EXCEPTION_VECTOR_OFFSET 0x00ull
 #define EMU_EXCEPTION_CONTROL_OFFSET 0x08ull
 #define EMU_EXCEPTION_TIMER_INTERVAL_OFFSET 0x10ull
@@ -412,6 +433,7 @@ typedef enum {
     EMU_DEVICE_RANDOM,
     EMU_DEVICE_EXCEPTION,
     EMU_DEVICE_KEYBOARD,
+    EMU_DEVICE_TERMINAL,
 } EmuDeviceKind;
 
 typedef struct {
@@ -423,7 +445,7 @@ typedef struct {
 } EmuDeviceRange;
 
 typedef struct {
-    EmuDeviceRange ranges[5];
+    EmuDeviceRange ranges[6];
     size_t range_count;
     uint64_t timer_ticks;
     uint32_t random_state;
@@ -433,6 +455,13 @@ typedef struct {
     size_t keyboard_head;
     size_t keyboard_count;
     bool keyboard_overflow;
+    uint32_t terminal_width;
+    uint32_t terminal_height;
+    uint32_t terminal_cursor_x;
+    uint32_t terminal_cursor_y;
+    uint32_t terminal_index;
+    bool terminal_dirty;
+    uint8_t terminal_cells[EMU_TERM_MAX_CELLS];
 } EmuDeviceBus;
 
 typedef struct {
@@ -538,6 +567,13 @@ void memory_reset_devices(Memory *memory);
 void memory_set_uart_output(Memory *memory, FILE *stream);
 bool memory_keyboard_enqueue(Memory *memory, uint8_t value);
 size_t memory_keyboard_enqueue_bytes(Memory *memory, const uint8_t *bytes, size_t length);
+bool memory_terminal_configure(Memory *memory, uint32_t width, uint32_t height, char *error, size_t error_size);
+uint32_t memory_terminal_width(const Memory *memory);
+uint32_t memory_terminal_height(const Memory *memory);
+uint32_t memory_terminal_cursor_x(const Memory *memory);
+uint32_t memory_terminal_cursor_y(const Memory *memory);
+bool memory_terminal_dirty(const Memory *memory);
+const uint8_t *memory_terminal_cells(const Memory *memory);
 bool memory_read8(const Memory *memory, uint64_t address, uint8_t *out, char *error, size_t error_size);
 bool memory_write8(Memory *memory, uint64_t address, uint8_t value, char *error, size_t error_size);
 bool memory_read16(const Memory *memory, uint64_t address, uint16_t *out, char *error, size_t error_size);

@@ -22,6 +22,7 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "v1.3 registers fixed MMIO teaching devices: UART 0x09000000, timer 0x09010000, random 0x09020000.\n");
     fprintf(stream, "v1.4 adds an exception-controller MMIO device at 0x09030000.\n");
     fprintf(stream, "Keyboard input MMIO is available at 0x09040000; --input and --input-file queue bytes deterministically.\n");
+    fprintf(stream, "Terminal/screen MMIO is available at 0x09050000; --screen-dump renders the final buffer.\n");
     fprintf(stream, "v1.5 adds an opt-in toy-kernel profile with cooperative BRK traps.\n");
     fprintf(stream, "v1.6 adds guest-managed task services through BRK #0x160 with x8 service IDs.\n");
     fprintf(stream, "options: --exception-vector <address>  enable v1.4 vector before running\n");
@@ -33,6 +34,9 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "         --kernel-task <address>    add a cooperative task entry point; may repeat\n");
     fprintf(stream, "         --input <text>             queue scripted keyboard bytes before running\n");
     fprintf(stream, "         --input-file <path>        queue scripted keyboard bytes from a file\n");
+    fprintf(stream, "         --screen-size <WxH>        configure terminal screen size, default 80x25\n");
+    fprintf(stream, "         --screen-dump             print final terminal screen after execution\n");
+    fprintf(stream, "         --screen-border <unicode|ascii|none> choose screen dump border\n");
     fprintf(stream, "toy-kernel service IDs: 1=TASK_CREATE, 2=TASK_YIELD, 3=TASK_EXIT, 4=TASK_SLEEP, 5=TASK_GET_ID, 6=TASK_GET_INFO, 7=TASK_SEND, 8=TASK_RECV, 9=CONSOLE_WRITE, 10=KERNEL_PANIC.\n");
     fprintf(stream, "info and debugger maps show RAM mappings and MMIO device ranges.\n");
     fprintf(stream, "dump inspects ordinary readable RAM; CPU loads/stores are what trigger device behavior.\n");
@@ -61,6 +65,11 @@ typedef struct {
     size_t kernel_task_count;
     const char *input_text;
     const char *input_file;
+    bool has_screen_size;
+    uint32_t screen_width;
+    uint32_t screen_height;
+    bool screen_dump;
+    const char *screen_border;
 } CliOptions;
 
 static bool queue_input_file(Memory *memory, const char *path, char *error, size_t error_size) {
@@ -153,6 +162,40 @@ static bool parse_u64(const char *text, uint64_t *out) {
     return true;
 }
 
+static bool parse_screen_size(const char *text, uint32_t *width, uint32_t *height) {
+    if (text == NULL || text[0] == '\0') {
+        return false;
+    }
+    const char *separator = strchr(text, 'x');
+    if (separator == NULL) {
+        separator = strchr(text, 'X');
+    }
+    if (separator == NULL || separator == text || separator[1] == '\0') {
+        return false;
+    }
+
+    char width_text[16];
+    size_t width_len = (size_t)(separator - text);
+    if (width_len == 0 || width_len >= sizeof(width_text)) {
+        return false;
+    }
+    memcpy(width_text, text, width_len);
+    width_text[width_len] = '\0';
+
+    uint64_t parsed_width = 0;
+    uint64_t parsed_height = 0;
+    if (!parse_u64(width_text, &parsed_width) || !parse_u64(separator + 1, &parsed_height)) {
+        return false;
+    }
+    if (parsed_width < EMU_TERM_MIN_WIDTH || parsed_width > EMU_TERM_MAX_WIDTH ||
+        parsed_height < EMU_TERM_MIN_HEIGHT || parsed_height > EMU_TERM_MAX_HEIGHT) {
+        return false;
+    }
+    *width = (uint32_t)parsed_width;
+    *height = (uint32_t)parsed_height;
+    return true;
+}
+
 static bool parse_cli_options(int argc, char **argv, int start, CliOptions *options, char *error, size_t error_size) {
     memset(options, 0, sizeof(*options));
     for (int i = start; i < argc; i++) {
@@ -216,6 +259,27 @@ static bool parse_cli_options(int argc, char **argv, int start, CliOptions *opti
                 return false;
             }
             options->input_file = argv[++i];
+        } else if (strcmp(argv[i], "--screen-size") == 0) {
+            if (i + 1 >= argc || !parse_screen_size(argv[i + 1], &options->screen_width, &options->screen_height)) {
+                snprintf(error, error_size, "invalid --screen-size value: expected WIDTHxHEIGHT with width %u..%u and height %u..%u",
+                         EMU_TERM_MIN_WIDTH, EMU_TERM_MAX_WIDTH, EMU_TERM_MIN_HEIGHT, EMU_TERM_MAX_HEIGHT);
+                return false;
+            }
+            options->has_screen_size = true;
+            i++;
+        } else if (strcmp(argv[i], "--screen-dump") == 0) {
+            options->screen_dump = true;
+        } else if (strcmp(argv[i], "--screen-border") == 0) {
+            if (i + 1 >= argc) {
+                snprintf(error, error_size, "missing --screen-border value; expected unicode, ascii, or none");
+                return false;
+            }
+            if (strcmp(argv[i + 1], "unicode") != 0 && strcmp(argv[i + 1], "ascii") != 0 &&
+                strcmp(argv[i + 1], "none") != 0) {
+                snprintf(error, error_size, "invalid --screen-border value: %s", argv[i + 1]);
+                return false;
+            }
+            options->screen_border = argv[++i];
         } else {
             snprintf(error, error_size, "unknown option: %s", argv[i]);
             return false;
@@ -225,6 +289,10 @@ static bool parse_cli_options(int argc, char **argv, int start, CliOptions *opti
 }
 
 static bool apply_cli_options(Emulator *emu, const CliOptions *options, char *error, size_t error_size) {
+    if (options->has_screen_size &&
+        !memory_terminal_configure(&emu->memory, options->screen_width, options->screen_height, error, error_size)) {
+        return false;
+    }
     if (options->has_exception_vector &&
         !emulator_configure_exception_vector(emu, options->exception_vector, error, error_size)) {
         return false;
@@ -382,6 +450,56 @@ static bool dump_memory(const Memory *memory, uint64_t address, uint64_t length,
     return true;
 }
 
+static void print_repeated(FILE *stream, const char *text, uint32_t count) {
+    for (uint32_t i = 0; i < count; i++) {
+        fputs(text, stream);
+    }
+}
+
+static void render_screen_dump(const Memory *memory, const char *border, FILE *stream) {
+    uint32_t width = memory_terminal_width(memory);
+    uint32_t height = memory_terminal_height(memory);
+    const uint8_t *cells = memory_terminal_cells(memory);
+    const char *style = border != NULL ? border : "unicode";
+
+    if (strcmp(style, "none") != 0) {
+        if (strcmp(style, "ascii") == 0) {
+            fputc('+', stream);
+            print_repeated(stream, "-", width);
+            fputs("+\n", stream);
+        } else {
+            fputs("┌", stream);
+            print_repeated(stream, "─", width);
+            fputs("┐\n", stream);
+        }
+    }
+
+    for (uint32_t y = 0; y < height; y++) {
+        if (strcmp(style, "none") != 0) {
+            fputs(strcmp(style, "ascii") == 0 ? "|" : "│", stream);
+        }
+        for (uint32_t x = 0; x < width; x++) {
+            fputc((int)cells[(size_t)y * width + x], stream);
+        }
+        if (strcmp(style, "none") != 0) {
+            fputs(strcmp(style, "ascii") == 0 ? "|" : "│", stream);
+        }
+        fputc('\n', stream);
+    }
+
+    if (strcmp(style, "none") != 0) {
+        if (strcmp(style, "ascii") == 0) {
+            fputc('+', stream);
+            print_repeated(stream, "-", width);
+            fputs("+\n", stream);
+        } else {
+            fputs("└", stream);
+            print_repeated(stream, "─", width);
+            fputs("┘\n", stream);
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     char error[512];
     Emulator emu;
@@ -533,6 +651,9 @@ int main(int argc, char **argv) {
             fprintf(stderr, "error: %s\n", error);
             emulator_free(&emu);
             return 1;
+        }
+        if (options.screen_dump) {
+            render_screen_dump(&emu.memory, options.screen_border, stdout);
         }
         int cli_status = guest_or_success_status(&emu);
         emulator_free(&emu);

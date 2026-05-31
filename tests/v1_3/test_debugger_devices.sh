@@ -20,10 +20,11 @@ break 0x09000000
 quit
 EOF
 ./emulator debug "$TMP/uart_hi.bin" <"$TMP/debug_maps.in" >"$TMP/debug_maps.out" 2>"$TMP/debug_maps.err"
-contains "$TMP/debug_maps.out" "devices: 4"
+contains "$TMP/debug_maps.out" "devices: 5"
 contains "$TMP/debug_maps.out" "name=uart"
 contains "$TMP/debug_maps.out" "0x0000000009000000-0x0000000009001000"
 contains "$TMP/debug_maps.out" "name=keyboard"
+contains "$TMP/debug_maps.out" "name=terminal"
 contains "$TMP/debug_maps.out" "address 0x0000000009000000 is in rw- device"
 contains "$TMP/debug_maps.err" "dump range out of bounds"
 contains "$TMP/debug_maps.err" "breakpoint address outside memory"

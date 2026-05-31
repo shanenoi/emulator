@@ -71,13 +71,15 @@ contains "$TMP/random_regs.out" "x2  = 0x0000000080c2a550"
 
 ./emulator info "$TMP/uart_hi.bin" >"$TMP/info.out" 2>"$TMP/info.err"
 [ ! -s "$TMP/info.err" ] || fail "info stderr was not empty"
-contains "$TMP/info.out" "devices: 4"
+contains "$TMP/info.out" "devices: 5"
 contains "$TMP/info.out" "name=uart"
 contains "$TMP/info.out" "0x0000000009000000-0x0000000009001000"
 contains "$TMP/info.out" "name=timer"
 contains "$TMP/info.out" "name=random"
 contains "$TMP/info.out" "name=keyboard"
 contains "$TMP/info.out" "0x0000000009040000-0x0000000009041000"
+contains "$TMP/info.out" "name=terminal"
+contains "$TMP/info.out" "0x0000000009050000-0x0000000009051000"
 
 if ./emulator dump "$TMP/uart_hi.bin" 0x09000000 4 >"$TMP/dump_device.out" 2>"$TMP/dump_device.err"; then
     fail "dumping a device address unexpectedly succeeded"

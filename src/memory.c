@@ -13,15 +13,47 @@ static bool checked_add_u64(uint64_t left, uint64_t right, uint64_t *out) {
     return true;
 }
 
+static void terminal_clear_cells(EmuDeviceBus *devices) {
+    memset(devices->terminal_cells, ' ', EMU_TERM_MAX_CELLS);
+}
+
+static bool terminal_dimensions_valid(uint32_t width, uint32_t height) {
+    return width >= EMU_TERM_MIN_WIDTH && width <= EMU_TERM_MAX_WIDTH &&
+           height >= EMU_TERM_MIN_HEIGHT && height <= EMU_TERM_MAX_HEIGHT;
+}
+
+static uint32_t terminal_cell_count(const EmuDeviceBus *devices) {
+    return devices->terminal_width * devices->terminal_height;
+}
+
+static void terminal_reset_state(EmuDeviceBus *devices, uint32_t width, uint32_t height) {
+    devices->terminal_width = width;
+    devices->terminal_height = height;
+    devices->terminal_cursor_x = 0;
+    devices->terminal_cursor_y = 0;
+    devices->terminal_index = 0;
+    devices->terminal_dirty = false;
+    terminal_clear_cells(devices);
+}
+
 static void memory_install_default_devices(Memory *memory) {
     EmuExceptionController *exceptions = memory->devices.exceptions;
     uint8_t keyboard_queue[EMU_KBD_QUEUE_CAPACITY];
     size_t keyboard_head = memory->devices.keyboard_head;
     size_t keyboard_count = memory->devices.keyboard_count;
     bool keyboard_overflow = memory->devices.keyboard_overflow;
+    uint32_t terminal_width = memory->devices.terminal_width;
+    uint32_t terminal_height = memory->devices.terminal_height;
+    uint32_t terminal_cursor_x = memory->devices.terminal_cursor_x;
+    uint32_t terminal_cursor_y = memory->devices.terminal_cursor_y;
+    uint32_t terminal_index = memory->devices.terminal_index;
+    bool terminal_dirty = memory->devices.terminal_dirty;
+    uint8_t terminal_cells[EMU_TERM_MAX_CELLS];
+    bool keep_terminal = terminal_dimensions_valid(terminal_width, terminal_height);
     memcpy(keyboard_queue, memory->devices.keyboard_queue, sizeof(keyboard_queue));
+    memcpy(terminal_cells, memory->devices.terminal_cells, sizeof(terminal_cells));
 
-    memory->devices.range_count = 4;
+    memory->devices.range_count = 5;
     memory->devices.ranges[0] = (EmuDeviceRange){EMU_DEVICE_UART_BASE, EMU_DEVICE_SIZE,
                                                   EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_UART, "uart"};
     memory->devices.ranges[1] = (EmuDeviceRange){EMU_DEVICE_TIMER_BASE, EMU_DEVICE_SIZE,
@@ -30,6 +62,8 @@ static void memory_install_default_devices(Memory *memory) {
                                                    EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_RANDOM, "random"};
     memory->devices.ranges[3] = (EmuDeviceRange){EMU_DEVICE_KEYBOARD_BASE, EMU_DEVICE_SIZE,
                                                   EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_KEYBOARD, "keyboard"};
+    memory->devices.ranges[4] = (EmuDeviceRange){EMU_DEVICE_TERMINAL_BASE, EMU_DEVICE_SIZE,
+                                                  EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_TERMINAL, "terminal"};
     if (exceptions != NULL) {
         memory->devices.ranges[memory->devices.range_count++] =
             (EmuDeviceRange){EMU_DEVICE_EXCEPTION_BASE, EMU_DEVICE_SIZE, EMU_MAP_READ | EMU_MAP_WRITE,
@@ -43,6 +77,17 @@ static void memory_install_default_devices(Memory *memory) {
     memory->devices.keyboard_head = keyboard_head;
     memory->devices.keyboard_count = keyboard_count;
     memory->devices.keyboard_overflow = keyboard_overflow;
+    if (keep_terminal) {
+        memory->devices.terminal_width = terminal_width;
+        memory->devices.terminal_height = terminal_height;
+        memory->devices.terminal_cursor_x = terminal_cursor_x < terminal_width ? terminal_cursor_x : terminal_width - 1u;
+        memory->devices.terminal_cursor_y = terminal_cursor_y < terminal_height ? terminal_cursor_y : terminal_height - 1u;
+        memory->devices.terminal_index = terminal_index;
+        memory->devices.terminal_dirty = terminal_dirty;
+        memcpy(memory->devices.terminal_cells, terminal_cells, sizeof(memory->devices.terminal_cells));
+    } else {
+        terminal_reset_state(&memory->devices, EMU_TERM_DEFAULT_WIDTH, EMU_TERM_DEFAULT_HEIGHT);
+    }
 }
 
 static uint32_t keyboard_status_bits(const EmuDeviceBus *devices) {
@@ -91,6 +136,143 @@ static uint8_t keyboard_pop(EmuDeviceBus *devices) {
     devices->keyboard_head = (devices->keyboard_head + 1u) % EMU_KBD_QUEUE_CAPACITY;
     devices->keyboard_count--;
     return value;
+}
+
+static void terminal_mark_dirty(EmuDeviceBus *devices) {
+    devices->terminal_dirty = true;
+}
+
+static void terminal_scroll_one_row(EmuDeviceBus *devices) {
+    uint32_t width = devices->terminal_width;
+    uint32_t height = devices->terminal_height;
+    if (height > 1u) {
+        memmove(devices->terminal_cells, devices->terminal_cells + width, (size_t)width * (height - 1u));
+    }
+    memset(devices->terminal_cells + ((size_t)width * (height - 1u)), ' ', width);
+    devices->terminal_cursor_y = height - 1u;
+    terminal_mark_dirty(devices);
+}
+
+static void terminal_wrap_or_scroll(EmuDeviceBus *devices) {
+    if (devices->terminal_cursor_y >= devices->terminal_height) {
+        terminal_scroll_one_row(devices);
+    }
+}
+
+static void terminal_set_cursor(EmuDeviceBus *devices, uint32_t x, uint32_t y) {
+    if (x >= devices->terminal_width) {
+        x = devices->terminal_width - 1u;
+    }
+    if (y >= devices->terminal_height) {
+        y = devices->terminal_height - 1u;
+    }
+    if (devices->terminal_cursor_x != x || devices->terminal_cursor_y != y) {
+        devices->terminal_cursor_x = x;
+        devices->terminal_cursor_y = y;
+        terminal_mark_dirty(devices);
+    }
+}
+
+static void terminal_home(EmuDeviceBus *devices) {
+    terminal_set_cursor(devices, 0, 0);
+}
+
+static void terminal_clear_screen(EmuDeviceBus *devices) {
+    uint32_t cells = terminal_cell_count(devices);
+    bool changed = devices->terminal_cursor_x != 0 || devices->terminal_cursor_y != 0;
+    for (uint32_t i = 0; i < cells; i++) {
+        if (devices->terminal_cells[i] != ' ') {
+            changed = true;
+        }
+        devices->terminal_cells[i] = ' ';
+    }
+    devices->terminal_cursor_x = 0;
+    devices->terminal_cursor_y = 0;
+    if (changed) {
+        terminal_mark_dirty(devices);
+    }
+}
+
+static void terminal_newline(EmuDeviceBus *devices) {
+    if (devices->terminal_cursor_x != 0) {
+        devices->terminal_cursor_x = 0;
+        terminal_mark_dirty(devices);
+    }
+    devices->terminal_cursor_y++;
+    terminal_mark_dirty(devices);
+    terminal_wrap_or_scroll(devices);
+}
+
+static void terminal_carriage_return(EmuDeviceBus *devices) {
+    if (devices->terminal_cursor_x != 0) {
+        devices->terminal_cursor_x = 0;
+        terminal_mark_dirty(devices);
+    }
+}
+
+static void terminal_advance_cursor(EmuDeviceBus *devices) {
+    devices->terminal_cursor_x++;
+    if (devices->terminal_cursor_x >= devices->terminal_width) {
+        devices->terminal_cursor_x = 0;
+        devices->terminal_cursor_y++;
+        terminal_wrap_or_scroll(devices);
+    }
+    terminal_mark_dirty(devices);
+}
+
+static void terminal_put_byte(EmuDeviceBus *devices, uint8_t value) {
+    if (value == '\n') {
+        terminal_newline(devices);
+        return;
+    }
+    if (value == '\r') {
+        terminal_carriage_return(devices);
+        return;
+    }
+    uint32_t index = devices->terminal_cursor_y * devices->terminal_width + devices->terminal_cursor_x;
+    if (devices->terminal_cells[index] != value) {
+        devices->terminal_cells[index] = value;
+        terminal_mark_dirty(devices);
+    }
+    terminal_advance_cursor(devices);
+}
+
+bool memory_terminal_configure(Memory *memory, uint32_t width, uint32_t height, char *error, size_t error_size) {
+    if (memory == NULL) {
+        snprintf(error, error_size, "memory pointer is null");
+        return false;
+    }
+    if (!terminal_dimensions_valid(width, height)) {
+        snprintf(error, error_size, "invalid screen size: width must be %u..%u and height must be %u..%u",
+                 EMU_TERM_MIN_WIDTH, EMU_TERM_MAX_WIDTH, EMU_TERM_MIN_HEIGHT, EMU_TERM_MAX_HEIGHT);
+        return false;
+    }
+    terminal_reset_state(&memory->devices, width, height);
+    return true;
+}
+
+uint32_t memory_terminal_width(const Memory *memory) {
+    return memory != NULL ? memory->devices.terminal_width : 0;
+}
+
+uint32_t memory_terminal_height(const Memory *memory) {
+    return memory != NULL ? memory->devices.terminal_height : 0;
+}
+
+uint32_t memory_terminal_cursor_x(const Memory *memory) {
+    return memory != NULL ? memory->devices.terminal_cursor_x : 0;
+}
+
+uint32_t memory_terminal_cursor_y(const Memory *memory) {
+    return memory != NULL ? memory->devices.terminal_cursor_y : 0;
+}
+
+bool memory_terminal_dirty(const Memory *memory) {
+    return memory != NULL && memory->devices.terminal_dirty;
+}
+
+const uint8_t *memory_terminal_cells(const Memory *memory) {
+    return memory != NULL ? memory->devices.terminal_cells : NULL;
 }
 
 static bool device_contains_range(const EmuDeviceRange *device, uint64_t address, uint64_t width) {
@@ -297,6 +479,49 @@ static bool device_read(Memory *memory, const EmuDeviceRange *device, uint64_t a
         }
         return device_reject_invalid_register(device, offset, width, "read", error, error_size);
 
+    case EMU_DEVICE_TERMINAL:
+        if (!device_reject_if_unaligned(device, offset, width, "read", error, error_size)) {
+            return false;
+        }
+        if (offset == EMU_TERM_STATUS_OFFSET && width == 4) {
+            *out = memory->devices.terminal_dirty ? EMU_TERM_STATUS_DIRTY : 0u;
+            return true;
+        }
+        if (offset == EMU_TERM_WIDTH_OFFSET && width == 4) {
+            *out = memory->devices.terminal_width;
+            return true;
+        }
+        if (offset == EMU_TERM_HEIGHT_OFFSET && width == 4) {
+            *out = memory->devices.terminal_height;
+            return true;
+        }
+        if (offset == EMU_TERM_CURSOR_X_OFFSET && width == 4) {
+            *out = memory->devices.terminal_cursor_x;
+            return true;
+        }
+        if (offset == EMU_TERM_CURSOR_Y_OFFSET && width == 4) {
+            *out = memory->devices.terminal_cursor_y;
+            return true;
+        }
+        if (offset == EMU_TERM_INDEX_OFFSET && width == 4) {
+            *out = memory->devices.terminal_index;
+            return true;
+        }
+        if (offset == EMU_TERM_CELL_OFFSET && (width == 1 || width == 4)) {
+            uint32_t index = memory->devices.terminal_index;
+            *out = index < terminal_cell_count(&memory->devices) ? memory->devices.terminal_cells[index] : 0u;
+            return true;
+        }
+        if (offset == EMU_TERM_DATA_OFFSET || offset == EMU_TERM_CONTROL_OFFSET) {
+            return device_reject_writeonly(device, offset, error, error_size);
+        }
+        if (offset == EMU_TERM_STATUS_OFFSET || offset == EMU_TERM_WIDTH_OFFSET || offset == EMU_TERM_HEIGHT_OFFSET ||
+            offset == EMU_TERM_CURSOR_X_OFFSET || offset == EMU_TERM_CURSOR_Y_OFFSET || offset == EMU_TERM_INDEX_OFFSET ||
+            offset == EMU_TERM_CELL_OFFSET) {
+            return device_reject_width(device, offset, width, "read", error, error_size);
+        }
+        return device_reject_invalid_register(device, offset, width, "read", error, error_size);
+
     case EMU_DEVICE_EXCEPTION: {
         EmuExceptionController *exceptions = memory->devices.exceptions;
         if (exceptions == NULL) {
@@ -427,6 +652,59 @@ static bool device_write(Memory *memory, const EmuDeviceRange *device, uint64_t 
         }
         if (offset == EMU_KBD_STATUS_OFFSET || offset == EMU_KBD_DATA_OFFSET) {
             return device_reject_readonly(device, offset, error, error_size);
+        }
+        return device_reject_invalid_register(device, offset, width, "write", error, error_size);
+
+    case EMU_DEVICE_TERMINAL:
+        if (!device_reject_if_unaligned(device, offset, width, "write", error, error_size)) {
+            return false;
+        }
+        if (offset == EMU_TERM_DATA_OFFSET && (width == 1 || width == 4)) {
+            terminal_put_byte(&memory->devices, (uint8_t)value);
+            return true;
+        }
+        if (offset == EMU_TERM_CURSOR_X_OFFSET && width == 4) {
+            terminal_set_cursor(&memory->devices, (uint32_t)value, memory->devices.terminal_cursor_y);
+            return true;
+        }
+        if (offset == EMU_TERM_CURSOR_Y_OFFSET && width == 4) {
+            terminal_set_cursor(&memory->devices, memory->devices.terminal_cursor_x, (uint32_t)value);
+            return true;
+        }
+        if (offset == EMU_TERM_CONTROL_OFFSET && width == 4) {
+            uint32_t bits = (uint32_t)value;
+            if ((bits & EMU_TERM_CONTROL_CLEAR) != 0) {
+                terminal_clear_screen(&memory->devices);
+            }
+            if ((bits & EMU_TERM_CONTROL_HOME) != 0) {
+                terminal_home(&memory->devices);
+            }
+            if ((bits & EMU_TERM_CONTROL_CLEAR_DIRTY) != 0) {
+                memory->devices.terminal_dirty = false;
+            }
+            return true;
+        }
+        if (offset == EMU_TERM_INDEX_OFFSET && width == 4) {
+            memory->devices.terminal_index = (uint32_t)value;
+            return true;
+        }
+        if (offset == EMU_TERM_CELL_OFFSET && (width == 1 || width == 4)) {
+            uint32_t index = memory->devices.terminal_index;
+            if (index < terminal_cell_count(&memory->devices)) {
+                uint8_t byte = (uint8_t)value;
+                if (memory->devices.terminal_cells[index] != byte) {
+                    memory->devices.terminal_cells[index] = byte;
+                    terminal_mark_dirty(&memory->devices);
+                }
+            }
+            return true;
+        }
+        if (offset == EMU_TERM_STATUS_OFFSET || offset == EMU_TERM_WIDTH_OFFSET || offset == EMU_TERM_HEIGHT_OFFSET) {
+            return device_reject_readonly(device, offset, error, error_size);
+        }
+        if (offset == EMU_TERM_DATA_OFFSET || offset == EMU_TERM_CURSOR_X_OFFSET || offset == EMU_TERM_CURSOR_Y_OFFSET ||
+            offset == EMU_TERM_CONTROL_OFFSET || offset == EMU_TERM_INDEX_OFFSET || offset == EMU_TERM_CELL_OFFSET) {
+            return device_reject_width(device, offset, width, "write", error, error_size);
         }
         return device_reject_invalid_register(device, offset, width, "write", error, error_size);
 
@@ -1008,8 +1286,8 @@ void memory_print_devices(const Memory *memory, FILE *stream) {
         fprintf(stream, "devices: 0\n");
         return;
     }
-    if (memory->devices.range_count == 5 && memory->devices.ranges[4].kind == EMU_DEVICE_EXCEPTION) {
-        fprintf(stream, "devices: 4 legacy + 1 exception\n");
+    if (memory->devices.range_count == 6 && memory->devices.ranges[5].kind == EMU_DEVICE_EXCEPTION) {
+        fprintf(stream, "devices: 5 legacy + 1 exception\n");
     } else {
         fprintf(stream, "devices: %zu\n", memory->devices.range_count);
     }
