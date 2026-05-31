@@ -1,6 +1,6 @@
 # v1.7 Test Plan — Deterministic Keyboard Input Device
 
-This feature adds a deterministic guest-visible keyboard/input MMIO device for future interactive demos such as Snake. It remains a device/bus concern and does not add terminal rendering, blocking stdin syscalls, interrupts, or raw interactive terminal mode.
+This feature adds a deterministic guest-visible keyboard/input MMIO device for future interactive demos and teaching programs. It remains a device/bus concern and does not add terminal rendering, blocking stdin syscalls, interrupts, or raw interactive terminal mode.
 
 ## MMIO map
 
