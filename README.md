@@ -32,6 +32,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v1.4 Test Plan — Exceptions, Traps, and Interrupt Skeleton](docs/test-plan-v1.4.md)
 - [v1.5 Test Plan — Toy Kernel Boot and Cooperative Tasks](docs/test-plan-v1.5.md)
 - [v1.6 Test Plan — Tiny OS Lab and Guest-Managed Tasks](docs/test-plan-v1.6.md)
+- [v1.7 Test Plan — Deterministic Keyboard Input Device](docs/test-plan-v1.7.md)
 
 ## Lessons
 
@@ -202,14 +203,16 @@ Implemented now:
   - adds deterministic generated v1.2 examples in `examples/v1_2/`
   - documents the current v1.2 behavior in `examples/v1_2/README.md` and `lessons/v1.2-virtual-memory.md`
   - includes v1.2 unit, CLI, debugger, docs, clean, and fresh-archive release tests
-- v1.3 memory-mapped-device teaching profile:
-  - adds fixed device ranges for UART 0x09000000, timer 0x09010000, and random 0x09020000 devices
+- v1.3+ memory-mapped-device teaching profile:
+  - adds fixed device ranges for UART 0x09000000, timer 0x09010000, random 0x09020000, exception-controller 0x09030000 when connected, and keyboard input 0x09040000 devices
   - routes CPU data loads/stores through RAM or device-register handlers
   - keeps instruction fetch restricted to executable RAM mappings
   - supports byte writes to UART DATA at `0x09000000` for stdout output
   - supports word reads from UART STATUS at `0x09000004`
   - supports deterministic timer word reads and a timer reset register
   - supports deterministic pseudo-random word reads and a seed register
+  - supports deterministic keyboard input through a fixed FIFO queue, `KBD_STATUS`, `KBD_DATA`, and `KBD_CONTROL` registers
+  - supports `--input <text>` and `--input-file <path>` to queue scripted keyboard bytes before execution
   - reports invalid device offsets, unsupported widths, and boundary crossings as deterministic device faults
   - extends `info` and debugger `maps` / `map <address>` output with device ranges
   - adds deterministic generated v1.3 examples in `examples/v1_3/`
@@ -1129,6 +1132,7 @@ Initial devices:
 - UART console at `0x09000000`.
 - Deterministic timer at `0x09010000`.
 - Deterministic random-number device at `0x09020000`.
+- Deterministic keyboard/input FIFO at `0x09040000`.
 
 Suggested memory map:
 
@@ -1139,6 +1143,7 @@ Suggested memory map:
 0x0900_0000 - UART
 0x0901_0000 - timer
 0x0902_0000 - random device
+0x0904_0000 - keyboard/input device
 ```
 
 UART behavior:
@@ -1162,6 +1167,16 @@ Random behavior:
 read word from 0x09020000 -> next deterministic pseudo-random value
 write word to 0x09020004 -> set deterministic pseudo-random seed
 ```
+
+Keyboard behavior:
+
+```text
+read word from 0x09040000 -> status bits; bit 0 means input available, bit 1 means overflow
+read word from 0x09040004 -> pop one queued byte, or 0 when empty
+write word bit 0 to 0x09040008 -> clear overflow status
+```
+
+Scripted input can be queued before execution with `--input "wasd"` or `--input-file path/to/bytes.bin`.
 
 Generate and run the v1.3 UART example with:
 

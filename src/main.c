@@ -21,6 +21,7 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "or a supported little-endian arm64 Mach-O MH_EXECUTE file.\n");
     fprintf(stream, "v1.3 registers fixed MMIO teaching devices: UART 0x09000000, timer 0x09010000, random 0x09020000.\n");
     fprintf(stream, "v1.4 adds an exception-controller MMIO device at 0x09030000.\n");
+    fprintf(stream, "Keyboard input MMIO is available at 0x09040000; --input and --input-file queue bytes deterministically.\n");
     fprintf(stream, "v1.5 adds an opt-in toy-kernel profile with cooperative BRK traps.\n");
     fprintf(stream, "v1.6 adds guest-managed task services through BRK #0x160 with x8 service IDs.\n");
     fprintf(stream, "options: --exception-vector <address>  enable v1.4 vector before running\n");
@@ -30,6 +31,8 @@ static void print_usage(FILE *stream) {
     fprintf(stream, "         --kernel                   enable v1.5 toy-kernel boot profile\n");
     fprintf(stream, "         --kernel-boot-info         pass a guest-readable boot-info block in x0/x1\n");
     fprintf(stream, "         --kernel-task <address>    add a cooperative task entry point; may repeat\n");
+    fprintf(stream, "         --input <text>             queue scripted keyboard bytes before running\n");
+    fprintf(stream, "         --input-file <path>        queue scripted keyboard bytes from a file\n");
     fprintf(stream, "toy-kernel service IDs: 1=TASK_CREATE, 2=TASK_YIELD, 3=TASK_EXIT, 4=TASK_SLEEP, 5=TASK_GET_ID, 6=TASK_GET_INFO, 7=TASK_SEND, 8=TASK_RECV, 9=CONSOLE_WRITE, 10=KERNEL_PANIC.\n");
     fprintf(stream, "info and debugger maps show RAM mappings and MMIO device ranges.\n");
     fprintf(stream, "dump inspects ordinary readable RAM; CPU loads/stores are what trigger device behavior.\n");
@@ -56,7 +59,41 @@ typedef struct {
     bool kernel_boot_info;
     uint64_t kernel_tasks[EMU_TOY_KERNEL_MAX_TASKS];
     size_t kernel_task_count;
+    const char *input_text;
+    const char *input_file;
 } CliOptions;
+
+static bool queue_input_file(Memory *memory, const char *path, char *error, size_t error_size) {
+    FILE *file = fopen(path, "rb");
+    if (file == NULL) {
+        snprintf(error, error_size, "failed to open --input-file %s: %s", path, strerror(errno));
+        return false;
+    }
+    uint8_t buffer[256];
+    while (!feof(file)) {
+        size_t n = fread(buffer, 1, sizeof(buffer), file);
+        if (n > 0) {
+            (void)memory_keyboard_enqueue_bytes(memory, buffer, n);
+        }
+        if (ferror(file)) {
+            snprintf(error, error_size, "failed to read --input-file %s", path);
+            fclose(file);
+            return false;
+        }
+    }
+    fclose(file);
+    return true;
+}
+
+static bool apply_cli_input(Memory *memory, const CliOptions *options, char *error, size_t error_size) {
+    if (options->input_text != NULL) {
+        (void)memory_keyboard_enqueue_bytes(memory, (const uint8_t *)options->input_text, strlen(options->input_text));
+    }
+    if (options->input_file != NULL && !queue_input_file(memory, options->input_file, error, error_size)) {
+        return false;
+    }
+    return true;
+}
 
 static const char *program_format_name(EmuProgramFormat format) {
     switch (format) {
@@ -167,6 +204,18 @@ static bool parse_cli_options(int argc, char **argv, int start, CliOptions *opti
             options->kernel_enabled = true;
             options->kernel_task_count++;
             i++;
+        } else if (strcmp(argv[i], "--input") == 0) {
+            if (i + 1 >= argc) {
+                snprintf(error, error_size, "missing --input value");
+                return false;
+            }
+            options->input_text = argv[++i];
+        } else if (strcmp(argv[i], "--input-file") == 0) {
+            if (i + 1 >= argc) {
+                snprintf(error, error_size, "missing --input-file path");
+                return false;
+            }
+            options->input_file = argv[++i];
         } else {
             snprintf(error, error_size, "unknown option: %s", argv[i]);
             return false;
@@ -387,6 +436,11 @@ int main(int argc, char **argv) {
             debugger_free(&debugger);
             return 1;
         }
+        if (!apply_cli_input(&debugger.emu.memory, &options, error, sizeof(error))) {
+            fprintf(stderr, "error: %s\n", error);
+            debugger_free(&debugger);
+            return 1;
+        }
         int status = debugger_repl(&debugger, stdin, stdout, stderr);
         debugger_free(&debugger);
         return status;
@@ -449,6 +503,11 @@ int main(int argc, char **argv) {
     }
 
     if (!apply_cli_options(&emu, &options, error, sizeof(error))) {
+        fprintf(stderr, "error: %s\n", error);
+        emulator_free(&emu);
+        return 1;
+    }
+    if (!apply_cli_input(&emu.memory, &options, error, sizeof(error))) {
         fprintf(stderr, "error: %s\n", error);
         emulator_free(&emu);
         return 1;

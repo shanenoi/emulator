@@ -19,6 +19,7 @@
 #define EMU_DEVICE_TIMER_BASE 0x09010000ull
 #define EMU_DEVICE_RANDOM_BASE 0x09020000ull
 #define EMU_DEVICE_EXCEPTION_BASE 0x09030000ull
+#define EMU_DEVICE_KEYBOARD_BASE 0x09040000ull
 #define EMU_DEVICE_SIZE 0x00001000ull
 
 #define EMU_UART_DATA_OFFSET 0x00ull
@@ -28,6 +29,13 @@
 #define EMU_TIMER_RESET_OFFSET 0x08ull
 #define EMU_RANDOM_VALUE_OFFSET 0x00ull
 #define EMU_RANDOM_SEED_OFFSET 0x04ull
+#define EMU_KBD_STATUS_OFFSET 0x00ull
+#define EMU_KBD_DATA_OFFSET 0x04ull
+#define EMU_KBD_CONTROL_OFFSET 0x08ull
+#define EMU_KBD_STATUS_READY 0x1u
+#define EMU_KBD_STATUS_OVERFLOW 0x2u
+#define EMU_KBD_CONTROL_CLEAR_OVERFLOW 0x1u
+#define EMU_KBD_QUEUE_CAPACITY 16u
 #define EMU_EXCEPTION_VECTOR_OFFSET 0x00ull
 #define EMU_EXCEPTION_CONTROL_OFFSET 0x08ull
 #define EMU_EXCEPTION_TIMER_INTERVAL_OFFSET 0x10ull
@@ -403,6 +411,7 @@ typedef enum {
     EMU_DEVICE_TIMER,
     EMU_DEVICE_RANDOM,
     EMU_DEVICE_EXCEPTION,
+    EMU_DEVICE_KEYBOARD,
 } EmuDeviceKind;
 
 typedef struct {
@@ -414,12 +423,16 @@ typedef struct {
 } EmuDeviceRange;
 
 typedef struct {
-    EmuDeviceRange ranges[4];
+    EmuDeviceRange ranges[5];
     size_t range_count;
     uint64_t timer_ticks;
     uint32_t random_state;
     FILE *uart_output;
     EmuExceptionController *exceptions;
+    uint8_t keyboard_queue[EMU_KBD_QUEUE_CAPACITY];
+    size_t keyboard_head;
+    size_t keyboard_count;
+    bool keyboard_overflow;
 } EmuDeviceBus;
 
 typedef struct {
@@ -523,6 +536,8 @@ void memory_print_devices(const Memory *memory, FILE *stream);
 const EmuDeviceRange *memory_find_device(const Memory *memory, uint64_t address);
 void memory_reset_devices(Memory *memory);
 void memory_set_uart_output(Memory *memory, FILE *stream);
+bool memory_keyboard_enqueue(Memory *memory, uint8_t value);
+size_t memory_keyboard_enqueue_bytes(Memory *memory, const uint8_t *bytes, size_t length);
 bool memory_read8(const Memory *memory, uint64_t address, uint8_t *out, char *error, size_t error_size);
 bool memory_write8(Memory *memory, uint64_t address, uint8_t value, char *error, size_t error_size);
 bool memory_read16(const Memory *memory, uint64_t address, uint16_t *out, char *error, size_t error_size);

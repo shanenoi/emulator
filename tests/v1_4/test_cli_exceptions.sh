@@ -70,7 +70,7 @@ contains "$TMP/info.out" "exception_vector_base: 0x0000000000001080"
 contains "$TMP/info.out" "interrupts_enabled: no"
 contains "$TMP/info.out" "timer_interrupt_interval: 0x0000000000000007"
 contains "$TMP/info.out" "pending_timer_interrupt: yes"
-contains "$TMP/info.out" "devices: 3 legacy + 1 exception"
+contains "$TMP/info.out" "devices: 4 legacy + 1 exception"
 contains "$TMP/info.out" "name=exception"
 
 if ./emulator run "$TMP/unhandled_brk.bin" >"$TMP/unhandled.out" 2>"$TMP/unhandled.err"; then

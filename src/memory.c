@@ -15,13 +15,21 @@ static bool checked_add_u64(uint64_t left, uint64_t right, uint64_t *out) {
 
 static void memory_install_default_devices(Memory *memory) {
     EmuExceptionController *exceptions = memory->devices.exceptions;
-    memory->devices.range_count = 3;
+    uint8_t keyboard_queue[EMU_KBD_QUEUE_CAPACITY];
+    size_t keyboard_head = memory->devices.keyboard_head;
+    size_t keyboard_count = memory->devices.keyboard_count;
+    bool keyboard_overflow = memory->devices.keyboard_overflow;
+    memcpy(keyboard_queue, memory->devices.keyboard_queue, sizeof(keyboard_queue));
+
+    memory->devices.range_count = 4;
     memory->devices.ranges[0] = (EmuDeviceRange){EMU_DEVICE_UART_BASE, EMU_DEVICE_SIZE,
                                                   EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_UART, "uart"};
     memory->devices.ranges[1] = (EmuDeviceRange){EMU_DEVICE_TIMER_BASE, EMU_DEVICE_SIZE,
                                                    EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_TIMER, "timer"};
     memory->devices.ranges[2] = (EmuDeviceRange){EMU_DEVICE_RANDOM_BASE, EMU_DEVICE_SIZE,
                                                    EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_RANDOM, "random"};
+    memory->devices.ranges[3] = (EmuDeviceRange){EMU_DEVICE_KEYBOARD_BASE, EMU_DEVICE_SIZE,
+                                                  EMU_MAP_READ | EMU_MAP_WRITE, EMU_DEVICE_KEYBOARD, "keyboard"};
     if (exceptions != NULL) {
         memory->devices.ranges[memory->devices.range_count++] =
             (EmuDeviceRange){EMU_DEVICE_EXCEPTION_BASE, EMU_DEVICE_SIZE, EMU_MAP_READ | EMU_MAP_WRITE,
@@ -31,6 +39,58 @@ static void memory_install_default_devices(Memory *memory) {
     memory->devices.random_state = 0x00c0ffeeu;
     memory->devices.uart_output = stdout;
     memory->devices.exceptions = exceptions;
+    memcpy(memory->devices.keyboard_queue, keyboard_queue, sizeof(memory->devices.keyboard_queue));
+    memory->devices.keyboard_head = keyboard_head;
+    memory->devices.keyboard_count = keyboard_count;
+    memory->devices.keyboard_overflow = keyboard_overflow;
+}
+
+static uint32_t keyboard_status_bits(const EmuDeviceBus *devices) {
+    uint32_t bits = 0;
+    if (devices->keyboard_count > 0) {
+        bits |= EMU_KBD_STATUS_READY;
+    }
+    if (devices->keyboard_overflow) {
+        bits |= EMU_KBD_STATUS_OVERFLOW;
+    }
+    return bits;
+}
+
+bool memory_keyboard_enqueue(Memory *memory, uint8_t value) {
+    if (memory == NULL) {
+        return false;
+    }
+    if (memory->devices.keyboard_count >= EMU_KBD_QUEUE_CAPACITY) {
+        memory->devices.keyboard_overflow = true;
+        return false;
+    }
+    size_t tail = (memory->devices.keyboard_head + memory->devices.keyboard_count) % EMU_KBD_QUEUE_CAPACITY;
+    memory->devices.keyboard_queue[tail] = value;
+    memory->devices.keyboard_count++;
+    return true;
+}
+
+size_t memory_keyboard_enqueue_bytes(Memory *memory, const uint8_t *bytes, size_t length) {
+    size_t accepted = 0;
+    if (memory == NULL || bytes == NULL) {
+        return 0;
+    }
+    for (size_t i = 0; i < length; i++) {
+        if (memory_keyboard_enqueue(memory, bytes[i])) {
+            accepted++;
+        }
+    }
+    return accepted;
+}
+
+static uint8_t keyboard_pop(EmuDeviceBus *devices) {
+    if (devices->keyboard_count == 0) {
+        return 0;
+    }
+    uint8_t value = devices->keyboard_queue[devices->keyboard_head];
+    devices->keyboard_head = (devices->keyboard_head + 1u) % EMU_KBD_QUEUE_CAPACITY;
+    devices->keyboard_count--;
+    return value;
 }
 
 static bool device_contains_range(const EmuDeviceRange *device, uint64_t address, uint64_t width) {
@@ -217,6 +277,26 @@ static bool device_read(Memory *memory, const EmuDeviceRange *device, uint64_t a
         }
         return device_reject_invalid_register(device, offset, width, "read", error, error_size);
 
+    case EMU_DEVICE_KEYBOARD:
+        if (!device_reject_if_unaligned(device, offset, width, "read", error, error_size)) {
+            return false;
+        }
+        if (width != 4) {
+            return device_reject_width(device, offset, width, "read", error, error_size);
+        }
+        if (offset == EMU_KBD_STATUS_OFFSET) {
+            *out = keyboard_status_bits(&memory->devices);
+            return true;
+        }
+        if (offset == EMU_KBD_DATA_OFFSET) {
+            *out = keyboard_pop(&memory->devices);
+            return true;
+        }
+        if (offset == EMU_KBD_CONTROL_OFFSET) {
+            return device_reject_writeonly(device, offset, error, error_size);
+        }
+        return device_reject_invalid_register(device, offset, width, "read", error, error_size);
+
     case EMU_DEVICE_EXCEPTION: {
         EmuExceptionController *exceptions = memory->devices.exceptions;
         if (exceptions == NULL) {
@@ -328,6 +408,24 @@ static bool device_write(Memory *memory, const EmuDeviceRange *device, uint64_t 
             return true;
         }
         if (offset == EMU_RANDOM_VALUE_OFFSET) {
+            return device_reject_readonly(device, offset, error, error_size);
+        }
+        return device_reject_invalid_register(device, offset, width, "write", error, error_size);
+
+    case EMU_DEVICE_KEYBOARD:
+        if (!device_reject_if_unaligned(device, offset, width, "write", error, error_size)) {
+            return false;
+        }
+        if (width != 4) {
+            return device_reject_width(device, offset, width, "write", error, error_size);
+        }
+        if (offset == EMU_KBD_CONTROL_OFFSET) {
+            if (((uint32_t)value & EMU_KBD_CONTROL_CLEAR_OVERFLOW) != 0) {
+                memory->devices.keyboard_overflow = false;
+            }
+            return true;
+        }
+        if (offset == EMU_KBD_STATUS_OFFSET || offset == EMU_KBD_DATA_OFFSET) {
             return device_reject_readonly(device, offset, error, error_size);
         }
         return device_reject_invalid_register(device, offset, width, "write", error, error_size);
@@ -910,8 +1008,8 @@ void memory_print_devices(const Memory *memory, FILE *stream) {
         fprintf(stream, "devices: 0\n");
         return;
     }
-    if (memory->devices.range_count == 4 && memory->devices.ranges[3].kind == EMU_DEVICE_EXCEPTION) {
-        fprintf(stream, "devices: 3 legacy + 1 exception\n");
+    if (memory->devices.range_count == 5 && memory->devices.ranges[4].kind == EMU_DEVICE_EXCEPTION) {
+        fprintf(stream, "devices: 4 legacy + 1 exception\n");
     } else {
         fprintf(stream, "devices: %zu\n", memory->devices.range_count);
     }
