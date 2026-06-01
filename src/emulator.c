@@ -99,23 +99,28 @@ static bool validate_exception_vector(const Emulator *emu, uint64_t vector_base,
     return true;
 }
 
-static bool exception_cause_from_memory_error(const char *error_text, const EmuDecodedInstruction *instruction,
+static bool exception_cause_from_memory_fault(const EmuFault *fault, const EmuDecodedInstruction *instruction,
                                               EmuExceptionCause *cause) {
-    if (strstr(error_text, "device fault:") != NULL) {
-        *cause = EMU_EXCEPTION_DEVICE_FAULT;
-        return true;
-    }
-    if (strstr(error_text, "execute permission") != NULL || strstr(error_text, "non-executable") != NULL) {
-        *cause = EMU_EXCEPTION_EXEC_PERMISSION_FAULT;
-        return true;
-    }
-    if (strstr(error_text, "read permission") != NULL) {
-        *cause = EMU_EXCEPTION_READ_PERMISSION_FAULT;
-        return true;
-    }
-    if (strstr(error_text, "write permission") != NULL) {
-        *cause = EMU_EXCEPTION_WRITE_PERMISSION_FAULT;
-        return true;
+    if (fault != NULL && fault->kind != EMU_FAULT_NONE) {
+        if (fault->kind == EMU_FAULT_DEVICE) {
+            *cause = EMU_EXCEPTION_DEVICE_FAULT;
+            return true;
+        }
+        if (fault->kind == EMU_FAULT_PERMISSION) {
+            switch (fault->access) {
+            case EMU_FAULT_ACCESS_EXECUTE:
+                *cause = EMU_EXCEPTION_EXEC_PERMISSION_FAULT;
+                return true;
+            case EMU_FAULT_ACCESS_WRITE:
+                *cause = EMU_EXCEPTION_WRITE_PERMISSION_FAULT;
+                return true;
+            case EMU_FAULT_ACCESS_READ:
+                *cause = EMU_EXCEPTION_READ_PERMISSION_FAULT;
+                return true;
+            case EMU_FAULT_ACCESS_NONE:
+                break;
+            }
+        }
     }
 
     switch (instruction->kind) {
@@ -133,6 +138,13 @@ static bool exception_cause_from_memory_error(const char *error_text, const EmuD
         break;
     }
     return false;
+}
+
+static EmuExceptionCause fetch_exception_cause_from_memory_fault(const EmuFault *fault) {
+    if (fault != NULL && fault->kind == EMU_FAULT_PERMISSION && fault->access == EMU_FAULT_ACCESS_EXECUTE) {
+        return EMU_EXCEPTION_EXEC_PERMISSION_FAULT;
+    }
+    return EMU_EXCEPTION_FETCH_FAULT;
 }
 
 static bool exception_fault_address_from_instruction(const Cpu *cpu, const Memory *memory,
@@ -1481,11 +1493,9 @@ EmuStatus emulator_step(Emulator *emu, char *error, size_t error_size) {
         return EMU_HALTED;
     }
 
+    memory_clear_last_fault(&emu->memory);
     if (!cpu_fetch(&emu->cpu, &emu->memory, &opcode, error, error_size)) {
-        EmuExceptionCause cause = strstr(error, "execute permission") != NULL ||
-                                          strstr(error, "non-executable") != NULL
-                                      ? EMU_EXCEPTION_EXEC_PERMISSION_FAULT
-                                      : EMU_EXCEPTION_FETCH_FAULT;
+        EmuExceptionCause cause = fetch_exception_cause_from_memory_fault(memory_last_fault(&emu->memory));
         return maybe_raise_exception(emu, cause, current_pc, current_pc, current_pc, error, error_size);
     }
 
@@ -1548,7 +1558,11 @@ EmuStatus emulator_step(Emulator *emu, char *error, size_t error_size) {
         EmuExceptionCause cause = EMU_EXCEPTION_NONE;
         uint64_t fault_address = 0;
         if (exception_fault_address_from_instruction(&emu->cpu, &emu->memory, &instruction, &fault_address) &&
-            exception_cause_from_memory_error(error, &instruction, &cause)) {
+            exception_cause_from_memory_fault(memory_last_fault(&emu->memory), &instruction, &cause)) {
+            const EmuFault *fault = memory_last_fault(&emu->memory);
+            if (fault != NULL && fault->kind != EMU_FAULT_NONE) {
+                fault_address = fault->address;
+            }
             return maybe_raise_exception(emu, cause, fault_address, current_pc, current_pc, error, error_size);
         }
         if (emu->toy_kernel.enabled && emu->toy_kernel.tasks_started && !emu->exceptions.active &&

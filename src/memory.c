@@ -9,13 +9,63 @@
 #include <stdlib.h>
 #include <string.h>
 
-static bool check_bounds(const Memory *memory, uint64_t address, uint64_t width, EmuMemoryFaultKind *fault_kind,
-                         char *error, size_t error_size) {
+static EmuFaultAccess access_for_required(uint8_t required) {
+    if ((required & EMU_MAP_EXEC) != 0) {
+        return EMU_FAULT_ACCESS_EXECUTE;
+    }
+    if ((required & EMU_MAP_WRITE) != 0) {
+        return EMU_FAULT_ACCESS_WRITE;
+    }
+    if ((required & EMU_MAP_READ) != 0) {
+        return EMU_FAULT_ACCESS_READ;
+    }
+    return EMU_FAULT_ACCESS_NONE;
+}
+
+static void memory_record_last_fault_mut(Memory *memory, EmuFaultKind kind, EmuFaultAccess access, uint64_t address,
+                                         uint64_t width, const char *message) {
+    if (memory == NULL) {
+        return;
+    }
+    memory->last_fault.kind = kind;
+    memory->last_fault.access = access;
+    memory->last_fault.address = address;
+    memory->last_fault.width = width;
+    memory->last_fault.is_write = access == EMU_FAULT_ACCESS_WRITE;
+    snprintf(memory->last_fault.message, sizeof(memory->last_fault.message), "%s", message != NULL ? message : "");
+}
+
+static void memory_record_last_fault_const(const Memory *memory, EmuFaultKind kind, EmuFaultAccess access,
+                                           uint64_t address, uint64_t width, const char *message) {
+    memory_record_last_fault_mut((Memory *)memory, kind, access, address, width, message);
+}
+
+void memory_clear_last_fault(Memory *memory) {
+    if (memory == NULL) {
+        return;
+    }
+    memory->last_fault = (EmuFault){0};
+}
+
+static void memory_clear_last_fault_const(const Memory *memory) {
+    memory_clear_last_fault((Memory *)memory);
+}
+
+const EmuFault *memory_last_fault(const Memory *memory) {
+    if (memory == NULL) {
+        return NULL;
+    }
+    return &memory->last_fault;
+}
+
+static bool check_bounds(const Memory *memory, uint64_t address, uint64_t width, EmuFaultAccess access,
+                         EmuMemoryFaultKind *fault_kind, char *error, size_t error_size) {
     if (memory == NULL || memory->bytes == NULL) {
         if (fault_kind != NULL) {
             *fault_kind = EMU_MEMORY_FAULT_BOUNDS;
         }
         snprintf(error, error_size, "memory is not initialized");
+        memory_record_last_fault_const(memory, EMU_FAULT_OUT_OF_BOUNDS, access, address, width, error);
         return false;
     }
 
@@ -29,6 +79,7 @@ static bool check_bounds(const Memory *memory, uint64_t address, uint64_t width,
         if (fault_kind != NULL) {
             *fault_kind = EMU_MEMORY_FAULT_BOUNDS;
         }
+        memory_record_last_fault_const(memory, EMU_FAULT_OUT_OF_BOUNDS, access, address, width, error);
         return false;
     }
 
@@ -57,9 +108,12 @@ static EmuMemoryFaultKind fault_kind_for_required(uint8_t required) {
 
 bool memory_check_access(const Memory *memory, uint64_t address, uint64_t width, uint8_t required,
                          EmuMemoryFaultKind *fault_kind, char *error, size_t error_size) {
+    memory_clear_last_fault_const(memory);
     if (fault_kind != NULL) {
         *fault_kind = EMU_MEMORY_FAULT_NONE;
     }
+
+    EmuFaultAccess access = access_for_required(required);
 
     if ((required & EMU_MAP_EXEC) != 0) {
         const EmuDeviceRange *device = memory_find_device(memory, address);
@@ -72,6 +126,8 @@ bool memory_check_access(const Memory *memory, uint64_t address, uint64_t width,
                      " width=0x%016" PRIx64 " device=%s range=0x%016" PRIx64 "-0x%016" PRIx64,
                      address, width, device->name[0] == '\0' ? "device" : device->name, device->start,
                      device->start + device->size);
+            memory_record_last_fault_const(memory, EMU_FAULT_PERMISSION, EMU_FAULT_ACCESS_EXECUTE, address, width,
+                                           error);
             return false;
         }
     }
@@ -84,13 +140,14 @@ bool memory_check_access(const Memory *memory, uint64_t address, uint64_t width,
                     *fault_kind = (required & EMU_MAP_WRITE) != 0 ? EMU_MEMORY_FAULT_WRITE_PERMISSION
                                                                   : EMU_MEMORY_FAULT_READ_PERMISSION;
                 }
+                memory_record_last_fault_const(memory, EMU_FAULT_DEVICE, access, address, width, error);
                 return false;
             }
             return true;
         }
     }
 
-    if (!check_bounds(memory, address, width, fault_kind, error, error_size)) {
+    if (!check_bounds(memory, address, width, access, fault_kind, error, error_size)) {
         return false;
     }
 
@@ -110,6 +167,7 @@ bool memory_check_access(const Memory *memory, uint64_t address, uint64_t width,
             snprintf(error, error_size,
                      "memory fault: unmapped access: address=0x%016" PRIx64 " width=0x%016" PRIx64,
                      address, width);
+            memory_record_last_fault_const(memory, EMU_FAULT_UNMAPPED, access, address, width, error);
             return false;
         }
         if ((mapping->permissions & required) != required) {
@@ -123,6 +181,7 @@ bool memory_check_access(const Memory *memory, uint64_t address, uint64_t width,
                      " mapping=0x%016" PRIx64 "-0x%016" PRIx64 " permissions=%s name=%s",
                      fault_name, address, width, mapping->start, mapping->start + mapping->size, have,
                      mapping->name[0] == '\0' ? "mapping" : mapping->name);
+            memory_record_last_fault_const(memory, EMU_FAULT_PERMISSION, access, address, width, error);
             return false;
         }
 
@@ -294,10 +353,12 @@ bool memory_check_execute(const Memory *memory, uint64_t address, uint64_t lengt
 }
 
 bool memory_read8(const Memory *memory, uint64_t address, uint8_t *out, char *error, size_t error_size) {
+    memory_clear_last_fault_const(memory);
     const EmuDeviceRange *device = memory_find_device(memory, address);
     if (device != NULL) {
         uint64_t value = 0;
         if (!mmio_read((Memory *)memory, device, address, 1, &value, error, error_size)) {
+            memory_record_last_fault_const(memory, EMU_FAULT_DEVICE, EMU_FAULT_ACCESS_READ, address, 1, error);
             return false;
         }
         *out = (uint8_t)value;
@@ -311,9 +372,14 @@ bool memory_read8(const Memory *memory, uint64_t address, uint8_t *out, char *er
 }
 
 bool memory_write8(Memory *memory, uint64_t address, uint8_t value, char *error, size_t error_size) {
+    memory_clear_last_fault(memory);
     const EmuDeviceRange *device = memory_find_device(memory, address);
     if (device != NULL) {
-        return mmio_write(memory, device, address, 1, value, error, error_size);
+        if (!mmio_write(memory, device, address, 1, value, error, error_size)) {
+            memory_record_last_fault_mut(memory, EMU_FAULT_DEVICE, EMU_FAULT_ACCESS_WRITE, address, 1, error);
+            return false;
+        }
+        return true;
     }
     if (!memory_check_write(memory, address, 1, error, error_size)) {
         return false;
@@ -323,10 +389,12 @@ bool memory_write8(Memory *memory, uint64_t address, uint8_t value, char *error,
 }
 
 bool memory_read16(const Memory *memory, uint64_t address, uint16_t *out, char *error, size_t error_size) {
+    memory_clear_last_fault_const(memory);
     const EmuDeviceRange *device = memory_find_device(memory, address);
     if (device != NULL) {
         uint64_t value = 0;
         if (!mmio_read((Memory *)memory, device, address, 2, &value, error, error_size)) {
+            memory_record_last_fault_const(memory, EMU_FAULT_DEVICE, EMU_FAULT_ACCESS_READ, address, 2, error);
             return false;
         }
         *out = (uint16_t)value;
@@ -340,9 +408,14 @@ bool memory_read16(const Memory *memory, uint64_t address, uint16_t *out, char *
 }
 
 bool memory_write16(Memory *memory, uint64_t address, uint16_t value, char *error, size_t error_size) {
+    memory_clear_last_fault(memory);
     const EmuDeviceRange *device = memory_find_device(memory, address);
     if (device != NULL) {
-        return mmio_write(memory, device, address, 2, value, error, error_size);
+        if (!mmio_write(memory, device, address, 2, value, error, error_size)) {
+            memory_record_last_fault_mut(memory, EMU_FAULT_DEVICE, EMU_FAULT_ACCESS_WRITE, address, 2, error);
+            return false;
+        }
+        return true;
     }
     if (!memory_check_write(memory, address, 2, error, error_size)) {
         return false;
@@ -354,10 +427,12 @@ bool memory_write16(Memory *memory, uint64_t address, uint16_t value, char *erro
 }
 
 bool memory_read32(const Memory *memory, uint64_t address, uint32_t *out, char *error, size_t error_size) {
+    memory_clear_last_fault_const(memory);
     const EmuDeviceRange *device = memory_find_device(memory, address);
     if (device != NULL) {
         uint64_t value = 0;
         if (!mmio_read((Memory *)memory, device, address, 4, &value, error, error_size)) {
+            memory_record_last_fault_const(memory, EMU_FAULT_DEVICE, EMU_FAULT_ACCESS_READ, address, 4, error);
             return false;
         }
         *out = (uint32_t)value;
@@ -373,6 +448,7 @@ bool memory_read32(const Memory *memory, uint64_t address, uint32_t *out, char *
 }
 
 bool memory_fetch32(const Memory *memory, uint64_t address, uint32_t *out, char *error, size_t error_size) {
+    memory_clear_last_fault_const(memory);
     if (!memory_check_execute(memory, address, 4, error, error_size)) {
         return false;
     }
@@ -383,9 +459,14 @@ bool memory_fetch32(const Memory *memory, uint64_t address, uint32_t *out, char 
 }
 
 bool memory_write32(Memory *memory, uint64_t address, uint32_t value, char *error, size_t error_size) {
+    memory_clear_last_fault(memory);
     const EmuDeviceRange *device = memory_find_device(memory, address);
     if (device != NULL) {
-        return mmio_write(memory, device, address, 4, value, error, error_size);
+        if (!mmio_write(memory, device, address, 4, value, error, error_size)) {
+            memory_record_last_fault_mut(memory, EMU_FAULT_DEVICE, EMU_FAULT_ACCESS_WRITE, address, 4, error);
+            return false;
+        }
+        return true;
     }
     if (!memory_check_write(memory, address, 4, error, error_size)) {
         return false;
@@ -399,9 +480,14 @@ bool memory_write32(Memory *memory, uint64_t address, uint32_t value, char *erro
 }
 
 bool memory_read64(const Memory *memory, uint64_t address, uint64_t *out, char *error, size_t error_size) {
+    memory_clear_last_fault_const(memory);
     const EmuDeviceRange *device = memory_find_device(memory, address);
     if (device != NULL) {
-        return mmio_read((Memory *)memory, device, address, 8, out, error, error_size);
+        if (!mmio_read((Memory *)memory, device, address, 8, out, error, error_size)) {
+            memory_record_last_fault_const(memory, EMU_FAULT_DEVICE, EMU_FAULT_ACCESS_READ, address, 8, error);
+            return false;
+        }
+        return true;
     }
     if (!memory_check_read(memory, address, 8, error, error_size)) {
         return false;
@@ -416,9 +502,14 @@ bool memory_read64(const Memory *memory, uint64_t address, uint64_t *out, char *
 }
 
 bool memory_write64(Memory *memory, uint64_t address, uint64_t value, char *error, size_t error_size) {
+    memory_clear_last_fault(memory);
     const EmuDeviceRange *device = memory_find_device(memory, address);
     if (device != NULL) {
-        return mmio_write(memory, device, address, 8, value, error, error_size);
+        if (!mmio_write(memory, device, address, 8, value, error, error_size)) {
+            memory_record_last_fault_mut(memory, EMU_FAULT_DEVICE, EMU_FAULT_ACCESS_WRITE, address, 8, error);
+            return false;
+        }
+        return true;
     }
     if (!memory_check_write(memory, address, 8, error, error_size)) {
         return false;

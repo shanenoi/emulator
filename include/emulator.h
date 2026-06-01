@@ -467,6 +467,31 @@ typedef struct {
 } EmuMemoryMapping;
 
 typedef enum {
+    EMU_FAULT_NONE = 0,
+    EMU_FAULT_OUT_OF_BOUNDS,
+    EMU_FAULT_PERMISSION,
+    EMU_FAULT_UNMAPPED,
+    EMU_FAULT_UNALIGNED,
+    EMU_FAULT_DEVICE,
+} EmuFaultKind;
+
+typedef enum {
+    EMU_FAULT_ACCESS_NONE = 0,
+    EMU_FAULT_ACCESS_READ,
+    EMU_FAULT_ACCESS_WRITE,
+    EMU_FAULT_ACCESS_EXECUTE,
+} EmuFaultAccess;
+
+typedef struct {
+    EmuFaultKind kind;
+    EmuFaultAccess access;
+    uint64_t address;
+    uint64_t width;
+    bool is_write;
+    char message[192];
+} EmuFault;
+
+typedef enum {
     EMU_DEVICE_UART = 0,
     EMU_DEVICE_TIMER,
     EMU_DEVICE_RANDOM,
@@ -513,6 +538,7 @@ typedef struct {
     size_t mapping_count;
     bool permissions_enabled;
     EmuDeviceBus devices;
+    EmuFault last_fault;
 } Memory;
 
 typedef enum {
@@ -598,6 +624,8 @@ bool memory_check_write(const Memory *memory, uint64_t address, uint64_t length,
 bool memory_check_execute(const Memory *memory, uint64_t address, uint64_t length, char *error, size_t error_size);
 bool memory_check_access(const Memory *memory, uint64_t address, uint64_t length, uint8_t required,
                          EmuMemoryFaultKind *fault_kind, char *error, size_t error_size);
+void memory_clear_last_fault(Memory *memory);
+const EmuFault *memory_last_fault(const Memory *memory);
 bool memory_fetch32(const Memory *memory, uint64_t address, uint32_t *out, char *error, size_t error_size);
 void memory_format_permissions(uint8_t permissions, char *out, size_t out_size);
 void memory_print_mappings(const Memory *memory, FILE *stream);

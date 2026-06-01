@@ -635,6 +635,58 @@ static void test_mmio_side_effects_and_boundaries(void) {
     memory_free(&memory);
 }
 
+static void test_structured_memory_fault_metadata(void) {
+    Memory memory;
+    char error[512] = {0};
+    uint64_t wide = 0;
+
+    init_memory_or_die(&memory);
+    memory_clear_mappings(&memory);
+    map_or_die(&memory, 0x1000u, EMU_PAGE_SIZE, EMU_MAP_READ, "ro-data");
+
+    EXPECT_FALSE(memory_check_execute(&memory, 0x1000u, 4u, error, sizeof(error)));
+    const EmuFault *fault = memory_last_fault(&memory);
+    EXPECT_TRUE(fault != NULL);
+    EXPECT_U64_EQ(fault->kind, EMU_FAULT_PERMISSION);
+    EXPECT_U64_EQ(fault->access, EMU_FAULT_ACCESS_EXECUTE);
+    EXPECT_U64_EQ(fault->address, 0x1000u);
+    EXPECT_U64_EQ(fault->width, 4u);
+    EXPECT_STR_CONTAINS(error, "execute permission denied");
+    EXPECT_STR_CONTAINS(fault->message, "execute permission denied");
+
+    EXPECT_FALSE(memory_check_read(&memory, 0x3000u, 4u, error, sizeof(error)));
+    fault = memory_last_fault(&memory);
+    EXPECT_TRUE(fault != NULL);
+    EXPECT_U64_EQ(fault->kind, EMU_FAULT_UNMAPPED);
+    EXPECT_U64_EQ(fault->access, EMU_FAULT_ACCESS_READ);
+    EXPECT_U64_EQ(fault->address, 0x3000u);
+    EXPECT_STR_CONTAINS(error, "unmapped access");
+
+    EXPECT_FALSE(memory_read64(&memory, EMU_DEVICE_TIMER_BASE + EMU_DEVICE_SIZE - 4u, &wide, error, sizeof(error)));
+    fault = memory_last_fault(&memory);
+    EXPECT_TRUE(fault != NULL);
+    EXPECT_U64_EQ(fault->kind, EMU_FAULT_DEVICE);
+    EXPECT_U64_EQ(fault->access, EMU_FAULT_ACCESS_READ);
+    EXPECT_U64_EQ(fault->address, EMU_DEVICE_TIMER_BASE + EMU_DEVICE_SIZE - 4u);
+    EXPECT_U64_EQ(fault->width, 8u);
+    EXPECT_STR_CONTAINS(error, "crosses device boundary");
+    EXPECT_STR_CONTAINS(fault->message, "crosses device boundary");
+
+    EXPECT_FALSE(memory_check_read(&memory, EMU_MEMORY_SIZE, 1u, error, sizeof(error)));
+    fault = memory_last_fault(&memory);
+    EXPECT_TRUE(fault != NULL);
+    EXPECT_U64_EQ(fault->kind, EMU_FAULT_OUT_OF_BOUNDS);
+    EXPECT_U64_EQ(fault->access, EMU_FAULT_ACCESS_READ);
+    EXPECT_U64_EQ(fault->address, EMU_MEMORY_SIZE);
+
+    EXPECT_TRUE(memory_check_read(&memory, 0x1000u, 1u, error, sizeof(error)));
+    fault = memory_last_fault(&memory);
+    EXPECT_TRUE(fault != NULL);
+    EXPECT_U64_EQ(fault->kind, EMU_FAULT_NONE);
+
+    memory_free(&memory);
+}
+
 static void test_loader_mapping_permission_characterization(void) {
     Emulator emu;
     EmuLoadedProgram program;
@@ -714,6 +766,7 @@ int main(void) {
     test_emulator_step_traps_syscalls_and_exceptions();
     test_emulator_step_fetch_decode_and_fault_classification();
     test_mmio_side_effects_and_boundaries();
+    test_structured_memory_fault_metadata();
     test_loader_mapping_permission_characterization();
 
     if (tests_failed != 0) {
