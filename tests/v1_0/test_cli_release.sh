@@ -73,7 +73,7 @@ PF_W = 2
 PF_R = 4
 SVC0 = 0xd4000001
 HLT = 0xd4400000
-UNSUPPORTED = 0xb24003e0
+UNSUPPORTED = 0x1e204000
 
 def movz(rd, imm, shift=0, is64=True):
     return (0x80000000 if is64 else 0) | 0x52800000 | (((shift // 16) & 3) << 21) | ((imm & 0xffff) << 5) | (rd & 31)
@@ -306,7 +306,7 @@ require_contains "$TMP_DIR/stderr.txt" "dump range out of bounds"
 run_expect_status 1 ./emulator run "$TMP_DIR/unsupported.bin"
 require_contains "$TMP_DIR/stderr.txt" "unsupported instruction"
 require_contains "$TMP_DIR/stderr.txt" "pc=0x0000000000001000"
-require_contains "$TMP_DIR/stderr.txt" "opcode=0xb24003e0"
+require_contains "$TMP_DIR/stderr.txt" "opcode=0x1e204000"
 run_expect_status 1 ./emulator run "$TMP_DIR/loop.bin"
 require_contains "$TMP_DIR/stderr.txt" "instruction limit reached"
 require_contains "$TMP_DIR/stderr.txt" "opcode=0x14000000"

@@ -198,25 +198,45 @@ typedef enum {
     EMU_INST_SUB_IMM,
     EMU_INST_ADD_REG,
     EMU_INST_SUB_REG,
+    EMU_INST_ADD_EXT_REG,
+    EMU_INST_SUB_EXT_REG,
     EMU_INST_AND_REG,
     EMU_INST_ORR_REG,
     EMU_INST_EOR_REG,
+    EMU_INST_AND_IMM,
+    EMU_INST_ORR_IMM,
+    EMU_INST_EOR_IMM,
+    EMU_INST_BITFIELD_UNSIGNED,
+    EMU_INST_BITFIELD_SIGNED,
+    EMU_INST_BITFIELD_INSERT,
     EMU_INST_LSL_IMM,
     EMU_INST_LSR_IMM,
     EMU_INST_ASR_IMM,
     EMU_INST_MUL,
+    EMU_INST_MADD,
+    EMU_INST_MSUB,
+    EMU_INST_SMADDL,
+    EMU_INST_SMSUBL,
+    EMU_INST_UMADDL,
+    EMU_INST_UMSUBL,
     EMU_INST_UDIV,
     EMU_INST_SDIV,
     EMU_INST_ADR,
     EMU_INST_ADRP,
     EMU_INST_B,
     EMU_INST_BL,
+    EMU_INST_BR,
+    EMU_INST_BLR,
     EMU_INST_B_COND,
     EMU_INST_CBZ,
     EMU_INST_CBNZ,
+    EMU_INST_TBZ,
+    EMU_INST_TBNZ,
+    EMU_INST_CSEL,
     EMU_INST_CMP_IMM,
     EMU_INST_CMP_REG,
     EMU_INST_LDR,
+    EMU_INST_LDR_LITERAL,
     EMU_INST_STR,
     EMU_INST_LDUR,
     EMU_INST_STUR,
@@ -234,6 +254,7 @@ typedef enum {
     EMU_ADDR_PRE_INDEX,
     EMU_ADDR_POST_INDEX,
     EMU_ADDR_PAIR_OFFSET,
+    EMU_ADDR_REGISTER_OFFSET,
 } EmuAddressMode;
 
 typedef enum {
@@ -264,9 +285,13 @@ typedef struct {
     uint8_t rt2;
     uint8_t shift_type;
     uint8_t shift_amount;
+    uint8_t extend_type;
+    uint8_t bitfield_lsb;
+    uint8_t bitfield_width;
     EmuCondition condition;
     EmuAddressMode address_mode;
     uint8_t access_size;
+    bool sign_extend;
     uint64_t imm;
     int64_t offset;
 } EmuDecodedInstruction;

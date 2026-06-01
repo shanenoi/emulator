@@ -72,7 +72,7 @@ PF_W = 2
 PF_R = 4
 SVC0 = 0xd4000001
 HLT = 0xd4400000
-UNSUPPORTED = 0xb24003e0
+UNSUPPORTED = 0x1e204000
 EMU_SYSCALL_WRITE = 64
 EMU_SYSCALL_EXIT = 93
 
@@ -304,7 +304,7 @@ require_exact_file "$TMP_DIR/stderr.txt" "c error"
 run_expect_status 1 ./emulator run "$TMP_DIR/unsupported.elf"
 require_contains "$TMP_DIR/stderr.txt" "unsupported instruction"
 require_contains "$TMP_DIR/stderr.txt" "pc=0x0000000000001000"
-require_contains "$TMP_DIR/stderr.txt" "opcode=0xb24003e0"
+require_contains "$TMP_DIR/stderr.txt" "opcode=0x1e204000"
 
 # TC-V09-ERR-015 through TC-V09-ERR-018.
 run_expect_status 247 ./emulator run "$TMP_DIR/bad_fd.elf"

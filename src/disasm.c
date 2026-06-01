@@ -29,7 +29,7 @@ static bool addsub_imm_uses_sp(const EmuDecodedInstruction *instruction) {
     if (instruction->sets_flags) {
         return false;
     }
-    if (instruction->rd == 31 && instruction->rn == 31) {
+    if (instruction->rn == 31 || instruction->rd == 31) {
         return true;
     }
     return instruction->rd == 29 && instruction->rn == 31 && instruction->imm == 0;
@@ -98,8 +98,41 @@ static const char *shift_name(uint8_t shift_type) {
     }
 }
 
-static const char *load_store_mnemonic(EmuInstructionKind kind, uint8_t access_size) {
+static const char *extend_name(uint8_t extend_type) {
+    switch (extend_type & 0x7u) {
+    case 0:
+        return "uxtb";
+    case 1:
+        return "uxth";
+    case 2:
+        return "uxtw";
+    case 3:
+        return "uxtx";
+    case 4:
+        return "sxtb";
+    case 5:
+        return "sxth";
+    case 6:
+        return "sxtw";
+    case 7:
+        return "sxtx";
+    }
+    return "ext";
+}
+
+static const char *load_store_mnemonic(const EmuDecodedInstruction *instruction) {
+    EmuInstructionKind kind = instruction->kind;
+    uint8_t access_size = instruction->access_size;
     bool is_load = kind == EMU_INST_LDR || kind == EMU_INST_LDUR;
+    if (is_load && instruction->sign_extend) {
+        if (access_size == 1) {
+            return "ldrsb";
+        }
+        if (access_size == 2) {
+            return "ldrsh";
+        }
+        return "ldrsw";
+    }
     if (access_size == 1) {
         return is_load ? "ldrb" : "strb";
     }
@@ -169,6 +202,15 @@ static void format_memory_operand(const EmuDecodedInstruction *instruction, char
                      gp_reg(instruction->rt2, true), base, instruction->offset);
         }
         break;
+    case EMU_ADDR_REGISTER_OFFSET:
+        if (instruction->shift_amount == 0) {
+            snprintf(out, out_size, "%s, [%s, %s, %s]", rt, base, gp_reg(instruction->rm, true),
+                     extend_name(instruction->extend_type));
+        } else {
+            snprintf(out, out_size, "%s, [%s, %s, %s #%u]", rt, base, gp_reg(instruction->rm, true),
+                     extend_name(instruction->extend_type), (unsigned)instruction->shift_amount);
+        }
+        break;
     }
 }
 
@@ -193,6 +235,7 @@ static void format_pair_memory_operand(const EmuDecodedInstruction *instruction,
         break;
     case EMU_ADDR_UNSIGNED_OFFSET:
     case EMU_ADDR_UNSCALED:
+    case EMU_ADDR_REGISTER_OFFSET:
         snprintf(out, out_size, "%s, %s, [%s, #%" PRId64 "]", rt, rt2, base, instruction->offset);
         break;
     }
@@ -278,6 +321,43 @@ static bool format_decoded_text(const EmuDecodedInstruction *instruction, uint64
         }
         break;
     }
+    case EMU_INST_ADD_EXT_REG:
+    case EMU_INST_SUB_EXT_REG: {
+        const char *mnemonic = instruction->kind == EMU_INST_ADD_EXT_REG ? (instruction->sets_flags ? "adds" : "add")
+                                                                        : (instruction->sets_flags ? "subs" : "sub");
+        if (instruction->shift_amount == 0) {
+            written = snprintf(out, out_size, "%s %s, %s, %s, %s", mnemonic,
+                               gp_reg(instruction->rd, instruction->is_64_bit), base_reg(instruction->rn),
+                               gp_reg(instruction->rm, false), extend_name(instruction->extend_type));
+        } else {
+            written = snprintf(out, out_size, "%s %s, %s, %s, %s #%u", mnemonic,
+                               gp_reg(instruction->rd, instruction->is_64_bit), base_reg(instruction->rn),
+                               gp_reg(instruction->rm, false), extend_name(instruction->extend_type),
+                               (unsigned)instruction->shift_amount);
+        }
+        break;
+    }
+    case EMU_INST_AND_IMM:
+    case EMU_INST_ORR_IMM:
+    case EMU_INST_EOR_IMM: {
+        const char *mnemonic = instruction->kind == EMU_INST_AND_IMM ? (instruction->sets_flags ? "ands" : "and")
+                                                                     : instruction->kind == EMU_INST_ORR_IMM ? "orr" : "eor";
+        written = snprintf(out, out_size, "%s %s, %s, #0x%llx", mnemonic,
+                           gp_reg(instruction->rd, instruction->is_64_bit),
+                           gp_reg(instruction->rn, instruction->is_64_bit), (unsigned long long)instruction->imm);
+        break;
+    }
+    case EMU_INST_BITFIELD_UNSIGNED:
+    case EMU_INST_BITFIELD_SIGNED:
+    case EMU_INST_BITFIELD_INSERT: {
+        const char *mnemonic = instruction->kind == EMU_INST_BITFIELD_UNSIGNED ? "ubfm" :
+                               instruction->kind == EMU_INST_BITFIELD_SIGNED ? "sbfm" : "bfm";
+        written = snprintf(out, out_size, "%s %s, %s, #%u, #%u", mnemonic,
+                           gp_reg(instruction->rd, instruction->is_64_bit),
+                           gp_reg(instruction->rn, instruction->is_64_bit), (unsigned)instruction->bitfield_lsb,
+                           (unsigned)instruction->bitfield_width);
+        break;
+    }
     case EMU_INST_LSL_IMM:
     case EMU_INST_LSR_IMM:
     case EMU_INST_ASR_IMM: {
@@ -292,6 +372,27 @@ static bool format_decoded_text(const EmuDecodedInstruction *instruction, uint64
         written = snprintf(out, out_size, "mul %s, %s, %s", gp_reg(instruction->rd, instruction->is_64_bit),
                            gp_reg(instruction->rn, instruction->is_64_bit), gp_reg(instruction->rm, instruction->is_64_bit));
         break;
+    case EMU_INST_MADD:
+        written = snprintf(out, out_size, "madd %s, %s, %s, %s", gp_reg(instruction->rd, instruction->is_64_bit),
+                           gp_reg(instruction->rn, instruction->is_64_bit), gp_reg(instruction->rm, instruction->is_64_bit),
+                           gp_reg(instruction->rt2, instruction->is_64_bit));
+        break;
+    case EMU_INST_MSUB:
+        written = snprintf(out, out_size, "msub %s, %s, %s, %s", gp_reg(instruction->rd, instruction->is_64_bit),
+                           gp_reg(instruction->rn, instruction->is_64_bit), gp_reg(instruction->rm, instruction->is_64_bit),
+                           gp_reg(instruction->rt2, instruction->is_64_bit));
+        break;
+    case EMU_INST_SMADDL:
+    case EMU_INST_SMSUBL:
+    case EMU_INST_UMADDL:
+    case EMU_INST_UMSUBL: {
+        const char *mnemonic = instruction->kind == EMU_INST_SMADDL ? "smaddl" :
+                               instruction->kind == EMU_INST_SMSUBL ? "smsubl" :
+                               instruction->kind == EMU_INST_UMADDL ? "umaddl" : "umsubl";
+        written = snprintf(out, out_size, "%s %s, %s, %s, %s", mnemonic, gp_reg(instruction->rd, true),
+                           gp_reg(instruction->rn, false), gp_reg(instruction->rm, false), gp_reg(instruction->rt2, true));
+        break;
+    }
     case EMU_INST_UDIV:
         written = snprintf(out, out_size, "udiv %s, %s, %s", gp_reg(instruction->rd, instruction->is_64_bit),
                            gp_reg(instruction->rn, instruction->is_64_bit), gp_reg(instruction->rm, instruction->is_64_bit));
@@ -318,6 +419,12 @@ static bool format_decoded_text(const EmuDecodedInstruction *instruction, uint64
         format_target(target, sizeof(target), address, instruction->offset);
         written = snprintf(out, out_size, "bl %s", target);
         break;
+    case EMU_INST_BR:
+        written = snprintf(out, out_size, "br %s", gp_reg(instruction->rn, true));
+        break;
+    case EMU_INST_BLR:
+        written = snprintf(out, out_size, "blr %s", gp_reg(instruction->rn, true));
+        break;
     case EMU_INST_B_COND:
         format_target(target, sizeof(target), address, instruction->offset);
         written = snprintf(out, out_size, "b.%s %s", condition_name(instruction->condition), target);
@@ -330,6 +437,22 @@ static bool format_decoded_text(const EmuDecodedInstruction *instruction, uint64
         format_target(target, sizeof(target), address, instruction->offset);
         written = snprintf(out, out_size, "cbnz %s, %s", gp_reg(instruction->rn, instruction->is_64_bit), target);
         break;
+    case EMU_INST_TBZ:
+    case EMU_INST_TBNZ:
+        format_target(target, sizeof(target), address, instruction->offset);
+        written = snprintf(out, out_size, "%s %s, #%u, %s", instruction->kind == EMU_INST_TBZ ? "tbz" : "tbnz",
+                           gp_reg(instruction->rn, instruction->is_64_bit), (unsigned)instruction->shift_amount, target);
+        break;
+    case EMU_INST_CSEL: {
+        const char *mnemonic = instruction->shift_type == 0 ? "csel" :
+                               instruction->shift_type == 1 ? "csinc" :
+                               instruction->shift_type == 2 ? "csinv" : "csneg";
+        written = snprintf(out, out_size, "%s %s, %s, %s, %s", mnemonic,
+                           gp_reg(instruction->rd, instruction->is_64_bit),
+                           gp_reg(instruction->rn, instruction->is_64_bit),
+                           gp_reg(instruction->rm, instruction->is_64_bit), condition_name(instruction->condition));
+        break;
+    }
     case EMU_INST_CMP_IMM:
         written = snprintf(out, out_size, "cmp %s, #0x%llx", gp_reg(instruction->rn, instruction->is_64_bit),
                            (unsigned long long)instruction->imm);
@@ -338,21 +461,26 @@ static bool format_decoded_text(const EmuDecodedInstruction *instruction, uint64
         written = snprintf(out, out_size, "cmp %s, %s", gp_reg(instruction->rn, instruction->is_64_bit),
                            gp_reg(instruction->rm, instruction->is_64_bit));
         break;
+    case EMU_INST_LDR_LITERAL:
+        format_target(target, sizeof(target), address, instruction->offset);
+        written = snprintf(out, out_size, "%s %s, %s", instruction->sign_extend ? "ldrsw" : "ldr",
+                           gp_reg(instruction->rd, instruction->is_64_bit), target);
+        break;
     case EMU_INST_LDR:
         format_memory_operand(instruction, operand, sizeof(operand));
-        written = snprintf(out, out_size, "%s %s", load_store_mnemonic(instruction->kind, instruction->access_size), operand);
+        written = snprintf(out, out_size, "%s %s", load_store_mnemonic(instruction), operand);
         break;
     case EMU_INST_STR:
         format_memory_operand(instruction, operand, sizeof(operand));
-        written = snprintf(out, out_size, "%s %s", load_store_mnemonic(instruction->kind, instruction->access_size), operand);
+        written = snprintf(out, out_size, "%s %s", load_store_mnemonic(instruction), operand);
         break;
     case EMU_INST_LDUR:
         format_memory_operand(instruction, operand, sizeof(operand));
-        written = snprintf(out, out_size, "%s %s", load_store_mnemonic(instruction->kind, instruction->access_size), operand);
+        written = snprintf(out, out_size, "%s %s", load_store_mnemonic(instruction), operand);
         break;
     case EMU_INST_STUR:
         format_memory_operand(instruction, operand, sizeof(operand));
-        written = snprintf(out, out_size, "%s %s", load_store_mnemonic(instruction->kind, instruction->access_size), operand);
+        written = snprintf(out, out_size, "%s %s", load_store_mnemonic(instruction), operand);
         break;
     case EMU_INST_LDP:
         format_pair_memory_operand(instruction, operand, sizeof(operand));

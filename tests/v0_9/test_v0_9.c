@@ -199,8 +199,8 @@ static void test_decode_and_formatting(void) {
     EXPECT_U64_EQ(inst.kind, EMU_INST_ORR_REG);
     EXPECT_TRUE(cpu_decode(encode_logical_reg(6, 0, 1, 2, false, 0, 0), &inst, error, sizeof(error)));
     EXPECT_U64_EQ(inst.kind, EMU_INST_EOR_REG);
-    EXPECT_FALSE(cpu_decode(OP_LOGICAL_IMM, &inst, error, sizeof(error)));
-    EXPECT_STR_CONTAINS(error, "unsupported");
+    EXPECT_TRUE(cpu_decode(OP_LOGICAL_IMM, &inst, error, sizeof(error)));
+    EXPECT_U64_EQ(inst.kind, EMU_INST_ORR_IMM);
 
     EXPECT_TRUE(cpu_decode(encode_shift_imm(7, 0, 1, 0, true), &inst, error, sizeof(error)));
     EXPECT_U64_EQ(inst.kind, EMU_INST_LSL_IMM);
@@ -234,10 +234,10 @@ static void test_decode_and_formatting(void) {
     expect_format(encode_ldrstr_unsigned(15, 0, 1, true, 1), EMU_LOAD_ADDRESS, "ldrb w15, [x0, #1]");
     expect_format(encode_ldrstr_unsigned(16, 0, 2, false, 2), EMU_LOAD_ADDRESS, "strh w16, [x0, #2]");
 
-    EXPECT_FALSE(cpu_decode(OP_UXTB_ALIAS, &inst, error, sizeof(error)));
-    EXPECT_STR_CONTAINS(error, "unsupported bitfield");
-    EXPECT_FALSE(cpu_decode(OP_SXTW_ALIAS, &inst, error, sizeof(error)));
-    EXPECT_STR_CONTAINS(error, "unsupported");
+    EXPECT_TRUE(cpu_decode(OP_UXTB_ALIAS, &inst, error, sizeof(error)));
+    EXPECT_U64_EQ(inst.kind, EMU_INST_BITFIELD_UNSIGNED);
+    EXPECT_TRUE(cpu_decode(OP_SXTW_ALIAS, &inst, error, sizeof(error)));
+    EXPECT_U64_EQ(inst.kind, EMU_INST_BITFIELD_SIGNED);
     EXPECT_FALSE(cpu_decode(OP_UNSUPPORTED, &inst, error, sizeof(error)));
     EXPECT_STR_CONTAINS(error, "unsupported instruction");
 }

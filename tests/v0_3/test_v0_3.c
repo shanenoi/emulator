@@ -581,8 +581,10 @@ static void test_error_and_edge_cases(void) {
     EXPECT_TRUE(inst.kind == EMU_INST_STR);
     EXPECT_U8_EQ(inst.access_size, 1);
     reset_error(error, sizeof(error));
-    EXPECT_FALSE(cpu_decode(0xb98003e0u, &inst, error, sizeof(error))); /* ldrsw x0, [sp] */
-    EXPECT_STR_CONTAINS(error, "unsupported");
+    EXPECT_TRUE(cpu_decode(0xb98003e0u, &inst, error, sizeof(error))); /* ldrsw x0, [sp] */
+    EXPECT_TRUE(inst.kind == EMU_INST_LDR);
+    EXPECT_U8_EQ(inst.access_size, 4);
+    EXPECT_TRUE(inst.sign_extend);
 
     init_emulator_or_die(&emu);
     EXPECT_TRUE(memory_write64(&emu.memory, emu.cpu.sp - 8u, 0xabcdef, error, sizeof(error)));

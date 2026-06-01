@@ -37,6 +37,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v1.9 Test Plan — Optional Interactive Host Runner](docs/test-plan-v1.9.md)
 - [v1.10 Test Plan — Deterministic Frame Pacing](docs/test-plan-v1.10.md)
 - [v1.11 Test Plan — Freestanding Guest Runtime Helpers](docs/test-plan-v1.11.md)
+- [v1.12 Test Plan — Practical ARM64 Instruction Coverage for Freestanding Guest Demos](docs/test-plan-v1.12.md)
 
 ## Lessons
 
@@ -59,7 +60,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**, the implemented/tested teaching profile for **v1.5 — Toy Kernel Mode**, the implemented/tested teaching profile for **v1.6 — Tiny OS Lab**, the implemented/tested teaching profile for **v1.7 — Deterministic Keyboard Input Device**, the implemented/tested teaching profile for **v1.8 — Deterministic Terminal Screen Device**, the implemented/tested teaching profile for **v1.9 — Optional Interactive Host Runner**, the implemented/tested teaching profile for **v1.10 — Deterministic Frame Pacing**, and the implemented/tested teaching profile for **v1.11 — Freestanding Guest Runtime Helpers**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests. v1.5 adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, generated fixtures, and dedicated v1.5 unit/CLI/debugger/docs tests. v1.6 adds the guest-managed Tiny OS Lab with a `BRK #0x160` service dispatcher, guest task creation, guest-readable/read-only boot metadata and task descriptors, deterministic task IDs/names, task information lookup, current-task ID lookup, console/panic/yield/exit/sleep services, service-discovery metadata, hardened stack validation, fixed-size nonblocking mailbox IPC, generated fixtures, and dedicated v1.6 unit/CLI/debugger/docs/optional-example tests. v1.7 adds deterministic keyboard/input MMIO with a fixed FIFO and scripted CLI input. v1.8 adds deterministic terminal/screen MMIO with configurable dimensions, cursor/cell access, scrolling, dirty status, guest helpers, and final CLI screen dumps. v1.9 adds an optional TTY-only host-interactive runner that polls keyboard input into the existing keyboard FIFO and redraws the existing terminal screen buffer; scripted input remains the deterministic test path. v1.10 adds a runner-paced frame MMIO device and deterministic `--frames` mode so guest programs can use the same frame counter in scripted and host-paced runs. v1.11 expands `include/emulator_guest.h` into a tiny freestanding helper API for UART output, keyboard polling, terminal drawing, frame waiting, deterministic random reads, toy exit, and explicit decimal/hex formatting. It is not a real OS and does not provide production isolation.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**, the implemented/tested teaching profile for **v1.5 — Toy Kernel Mode**, the implemented/tested teaching profile for **v1.6 — Tiny OS Lab**, the implemented/tested teaching profile for **v1.7 — Deterministic Keyboard Input Device**, the implemented/tested teaching profile for **v1.8 — Deterministic Terminal Screen Device**, the implemented/tested teaching profile for **v1.9 — Optional Interactive Host Runner**, the implemented/tested teaching profile for **v1.10 — Deterministic Frame Pacing**, the implemented/tested teaching profile for **v1.11 — Freestanding Guest Runtime Helpers**, and the implemented/tested teaching profile for **v1.12 — Practical ARM64 Instruction Coverage for Freestanding Guest Demos**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests. v1.5 adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, generated fixtures, and dedicated v1.5 unit/CLI/debugger/docs tests. v1.6 adds the guest-managed Tiny OS Lab with a `BRK #0x160` service dispatcher, guest task creation, guest-readable/read-only boot metadata and task descriptors, deterministic task IDs/names, task information lookup, current-task ID lookup, console/panic/yield/exit/sleep services, service-discovery metadata, hardened stack validation, fixed-size nonblocking mailbox IPC, generated fixtures, and dedicated v1.6 unit/CLI/debugger/docs/optional-example tests. v1.7 adds deterministic keyboard/input MMIO with a fixed FIFO and scripted CLI input. v1.8 adds deterministic terminal/screen MMIO with configurable dimensions, cursor/cell access, scrolling, dirty status, guest helpers, and final CLI screen dumps. v1.9 adds an optional TTY-only host-interactive runner that polls keyboard input into the existing keyboard FIFO and redraws the existing terminal screen buffer; scripted input remains the deterministic test path. v1.10 adds a runner-paced frame MMIO device and deterministic `--frames` mode so guest programs can use the same frame counter in scripted and host-paced runs. v1.11 expands `include/emulator_guest.h` into a tiny freestanding helper API for UART output, keyboard polling, terminal drawing, frame waiting, deterministic random reads, toy exit, and explicit decimal/hex formatting. v1.12 expands the targeted ARM64 subset for common compiler output from small freestanding guest demos. It is not a real OS and does not provide production isolation.
 
 Implemented now:
 
@@ -103,6 +104,7 @@ Implemented now:
   - `RET Xn`
   - `SVC #0` for the tiny fake-syscall runtime
   - v0.9 compiler-oriented instructions: `MOVN`, `MOVK`, `ADD`/`SUB` register and flag-setting immediate/register forms, `AND`/`ORR`/`EOR` register forms, `LSL`/`LSR`/`ASR` immediate aliases, `MUL`, `UDIV`, `SDIV`, `ADR`, `ADRP`, and byte/halfword `LDR`/`STR` forms
+  - v1.12 practical ARM64 compiler coverage: `TBZ`/`TBNZ`, `BR`/`BLR`, logical immediate `AND`/`ORR`/`EOR`/`ANDS`/`TST`, `CSEL`/`CSINC`/`CSINV`/`CSNEG`, `ADD`/`SUB` extended register, `LDR` literal, `LDR`/`STR` register-offset forms, sign-extending `LDRSB`/`LDRSH`/`LDRSW`, `MADD`/`MSUB`, `SMADDL`/`SMSUBL`/`UMADDL`/`UMSUBL` and aliases such as `SMULL`/`UMULL`, plus practical bitfield/sign-extension aliases such as `UBFX`, `SBFX`, `BFI`, `BFXIL`, `UXTB`, `UXTH`, and `SXT[B/H/W]`
 - Basic examples in `examples/v0_1/`.
 - Branch and loop examples in `examples/v0_2/`, including:
   - forward unconditional branch
@@ -280,8 +282,8 @@ Implemented now:
   - v1.2 virtual-memory tests for page mapping, R/W/X permission enforcement, loader-created mappings, stack guard behavior, CPU fault ordering, CLI `info`/`run`/`trace`/`regs`/`dump`, debugger `maps`/`map`, docs consistency, generated fixtures, clean behavior, and fresh-archive release coverage
   - v1.3 memory-mapped-device tests for fixed device ranges, RAM/device routing, UART output and faults, timer/random determinism, width/alignment/boundary edge cases, CPU load/store integration, raw and ELF loader integration, CLI `info`/`run`/`trace`/`regs`/`dump`, debugger `maps`/`map`/`mem`, docs consistency, generated fixtures, clean behavior, and fresh-archive release coverage
 
-The full v0.1 through v1.6 deterministic test suite runs with `make test`. The release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
-Historical release milestones remain covered inside that command: the v0.1 through v1.0 stable-learning checks still run, and the v0.1 through v1.5 deterministic test suite is preserved as the regression base for v1.6. Earlier milestones also preserved the v0.1 through v1.3 deterministic test suite as the regression base for v1.4 and the v0.1 through v1.4 deterministic test suite as the regression base for v1.5.
+The full v0.1 through v1.12 deterministic test suite runs with `make test`. The release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
+Historical release milestones remain covered inside that command: the v0.1 through v1.0 stable-learning checks still run, the v0.1 through v1.6 deterministic test suite remains part of the regression base, and the v0.1 through v1.5 deterministic test suite is preserved as the regression base for v1.6. Earlier milestones also preserved the v0.1 through v1.3 deterministic test suite as the regression base for v1.4 and the v0.1 through v1.4 deterministic test suite as the regression base for v1.5.
 
 ## Build and Run
 
@@ -1253,6 +1255,26 @@ emu_guest_exit(0);
 ```
 
 Scripted input (`--input` / `--input-file`) and deterministic frames (`--frames`) remain the preferred test path for guest programs that use these helpers. Interactive mode is host-paced for humans and should not be required by deterministic tests.
+
+Freestanding guest compiler profile:
+
+Small guest demos should use a freestanding, no-libc profile and stay inside the emulator's targeted ARM64 subset. The v1.12 tests use this shape when an AArch64 Clang toolchain is available:
+
+```sh
+clang --target=aarch64-none-elf \
+  -Iinclude \
+  -ffreestanding \
+  -nostdlib \
+  -fno-builtin \
+  -fno-stack-protector \
+  -fno-pic \
+  -fno-pie \
+  -mgeneral-regs-only \
+  -O2 \
+  -c demo.c -o demo.o
+```
+
+The emulator intentionally supports a targeted ARM64 subset for teaching and small freestanding demos, not the full ARM64 ISA. v1.12 adds coverage for common compiler-emitted integer/control-flow/addressing patterns such as test-bit branches, indirect calls/branches, logical immediates, conditional select, extended-register arithmetic, literal/register-offset loads and stores, sign-extending loads, multiply-add/subtract, and practical bitfield/sign-extension aliases. Floating-point/SIMD, atomics, unwind/runtime ABI, dynamic linking, libc, and a general OS process model remain out of scope.
 
 Render the final terminal buffer after guest execution with:
 

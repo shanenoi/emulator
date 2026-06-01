@@ -451,7 +451,7 @@ static void test_execution_programs(void) {
     const uint32_t xzr[] = {OP_MOVZ_XZR_123, OP_ADD_X0_XZR_5, OP_HLT};
     reset_error(error, sizeof(error));
     EXPECT_STATUS_EQ(run_program(xzr, 3, &emu, error, sizeof(error)), EMU_HALTED);
-    EXPECT_U64_EQ(emu.cpu.x[0], 5);
+    EXPECT_U64_EQ(emu.cpu.x[0], 0x0000000000100005ull);
     emulator_free(&emu);
 
     const uint32_t x30[] = {OP_MOVZ_X30_9, OP_ADD_X0_X30_1, OP_HLT};

@@ -44,5 +44,15 @@ examples/v1_6/*.bin
 
 tests/v1_6/tmp/
 tests/v1_6/test_v1_6
+tests/v1_7/tmp/
+tests/v1_7/test_v1_7
+tests/v1_8/tmp/
+tests/v1_8/test_v1_8
+tests/v1_9/tmp/
+tests/v1_9/test_v1_9
+tests/v1_10/tmp/
+tests/v1_10/test_v1_10
 tests/v1_11/tmp/
 tests/v1_11/test_v1_11
+tests/v1_12/tmp/
+tests/v1_12/test_v1_12
