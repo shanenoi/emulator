@@ -133,7 +133,8 @@ Potential new or updated files:
 
 ```text
 src/cpu.c                    SVC decode and step dispatch handoff
-src/emulator.c               fake syscall dispatcher and host stream handling
+src/syscall.c                fake syscall dispatcher and host stream handling
+src/emulator.c               syscall dispatch handoff and run-loop integration
 src/disasm.c                 svc formatting
 src/main.c                   guest exit-code handling and usage text if needed
 src/debugger.c               step/continue behavior around guest exit
