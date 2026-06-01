@@ -1494,15 +1494,12 @@ EmuStatus emulator_step(Emulator *emu, char *error, size_t error_size) {
     }
 
     memory_clear_last_fault(&emu->memory);
-    if (!cpu_fetch(&emu->cpu, &emu->memory, &opcode, error, error_size)) {
-        EmuExceptionCause cause = fetch_exception_cause_from_memory_fault(memory_last_fault(&emu->memory));
-        return maybe_raise_exception(emu, cause, current_pc, current_pc, current_pc, error, error_size);
-    }
-
-    if (!cpu_decode(opcode, &instruction, error, error_size)) {
-        char detail[512];
-        snprintf(detail, sizeof(detail), "%s", error);
-        snprintf(error, error_size, "decode error at pc=0x%016" PRIx64 ": %s", current_pc, detail);
+    if (!cpu_fetch_decode(&emu->cpu, &emu->memory, &opcode, &instruction, error, error_size)) {
+        const EmuFault *fault = memory_last_fault(&emu->memory);
+        if (fault != NULL && fault->kind != EMU_FAULT_NONE) {
+            EmuExceptionCause cause = fetch_exception_cause_from_memory_fault(fault);
+            return maybe_raise_exception(emu, cause, current_pc, current_pc, current_pc, error, error_size);
+        }
         return maybe_raise_exception(emu, EMU_EXCEPTION_INVALID_INSTRUCTION, 0, current_pc, current_pc, error,
                                      error_size);
     }
@@ -1553,7 +1550,7 @@ EmuStatus emulator_step(Emulator *emu, char *error, size_t error_size) {
         return sample_pending_interrupt(emu, error, error_size);
     }
 
-    status = cpu_step(&emu->cpu, &emu->memory, error, error_size);
+    status = cpu_execute_decoded(&emu->cpu, &emu->memory, opcode, &instruction, error, error_size);
     if (status == EMU_ERROR) {
         EmuExceptionCause cause = EMU_EXCEPTION_NONE;
         uint64_t fault_address = 0;

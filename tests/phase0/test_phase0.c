@@ -421,6 +421,48 @@ static void test_cpu_decode_execute_characterization(void) {
     memory_free(&memory);
 }
 
+static void test_cpu_fetch_decode_execute_split(void) {
+    Cpu cpu;
+    Memory memory;
+    EmuDecodedInstruction inst;
+    uint32_t opcode = 0;
+    char error[512] = {0};
+
+    init_cpu_memory_or_die(&cpu, &memory);
+
+    uint32_t movz = encode_movz(5, 0x1234u, 0u, true);
+    put_op_checked(&memory, cpu.pc, movz);
+    EXPECT_TRUE(cpu_fetch_decode(&cpu, &memory, &opcode, &inst, error, sizeof(error)));
+    EXPECT_U64_EQ(opcode, movz);
+    EXPECT_U64_EQ(inst.kind, EMU_INST_MOVZ);
+    EXPECT_U64_EQ(cpu.pc, EMU_LOAD_ADDRESS);
+    EXPECT_U64_EQ(cpu.instructions_executed, 0u);
+
+    put_op_checked(&memory, cpu.pc, OP_HLT);
+    EXPECT_U64_EQ(cpu_execute_decoded(&cpu, &memory, opcode, &inst, error, sizeof(error)), EMU_OK);
+    EXPECT_FALSE(cpu.halted);
+    EXPECT_U64_EQ(cpu_read_register(&cpu, 5), 0x1234u);
+    EXPECT_U64_EQ(cpu.pc, EMU_LOAD_ADDRESS + 4u);
+    EXPECT_U64_EQ(cpu.instructions_executed, 1u);
+
+    put_op_checked(&memory, cpu.pc, OP_NOP);
+    EXPECT_U64_EQ(cpu_step(&cpu, &memory, error, sizeof(error)), EMU_OK);
+    EXPECT_U64_EQ(cpu.pc, EMU_LOAD_ADDRESS + 8u);
+    EXPECT_U64_EQ(cpu.instructions_executed, 2u);
+
+    put_op_checked(&memory, cpu.pc, OP_SVC_0);
+    EXPECT_TRUE(cpu_fetch_decode(&cpu, &memory, &opcode, &inst, error, sizeof(error)));
+    EXPECT_U64_EQ(cpu_execute_decoded(&cpu, &memory, opcode, &inst, error, sizeof(error)), EMU_ERROR);
+    EXPECT_STR_CONTAINS(error, "svc requires emulator syscall dispatcher");
+    EXPECT_U64_EQ(cpu.instructions_executed, 2u);
+
+    put_op_checked(&memory, cpu.pc, OP_UNSUPPORTED);
+    EXPECT_FALSE(cpu_fetch_decode(&cpu, &memory, &opcode, &inst, error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "decode error at pc=0x0000000000001008: unsupported instruction");
+
+    memory_free(&memory);
+}
+
 static void test_emulator_step_traps_syscalls_and_exceptions(void) {
     const uint64_t vector = 0x2000u;
     Emulator emu;
@@ -763,6 +805,7 @@ int main(void) {
     ensure_tmp_dir();
 
     test_cpu_decode_execute_characterization();
+    test_cpu_fetch_decode_execute_split();
     test_emulator_step_traps_syscalls_and_exceptions();
     test_emulator_step_fetch_decode_and_fault_classification();
     test_mmio_side_effects_and_boundaries();

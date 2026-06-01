@@ -661,6 +661,10 @@ uint64_t cpu_read_register(const Cpu *cpu, uint8_t index);
 void cpu_write_register(Cpu *cpu, uint8_t index, bool is_64_bit, uint64_t value);
 bool cpu_fetch(const Cpu *cpu, const Memory *memory, uint32_t *opcode, char *error, size_t error_size);
 bool cpu_decode(uint32_t opcode, EmuDecodedInstruction *instruction, char *error, size_t error_size);
+bool cpu_fetch_decode(Cpu *cpu, const Memory *memory, uint32_t *opcode, EmuDecodedInstruction *instruction,
+                      char *error, size_t error_size);
+EmuStatus cpu_execute_decoded(Cpu *cpu, Memory *memory, uint32_t opcode, const EmuDecodedInstruction *instruction,
+                              char *error, size_t error_size);
 EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size);
 bool cpu_condition_passed(EmuFlags flags, EmuCondition condition);
 bool cpu_calculate_branch_target(uint64_t pc, int64_t offset, const Memory *memory, uint64_t *target, char *error,

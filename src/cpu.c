@@ -989,21 +989,33 @@ bool cpu_calculate_memory_access(const Cpu *cpu, const EmuDecodedInstruction *in
     return true;
 }
 
-EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
+bool cpu_fetch_decode(Cpu *cpu, const Memory *memory, uint32_t *opcode_out, EmuDecodedInstruction *instruction,
+                      char *error, size_t error_size) {
     uint32_t opcode = 0;
-    EmuDecodedInstruction instruction;
     uint64_t current_pc = cpu->pc;
 
     if (!cpu_fetch(cpu, memory, &opcode, error, error_size)) {
-        return EMU_ERROR;
+        return false;
     }
 
-    if (!cpu_decode(opcode, &instruction, error, error_size)) {
+    if (!cpu_decode(opcode, instruction, error, error_size)) {
         char detail[256];
         snprintf(detail, sizeof(detail), "%s", error);
         snprintf(error, error_size, "decode error at pc=0x%016" PRIx64 ": %s", current_pc, detail);
-        return EMU_ERROR;
+        return false;
     }
+
+    if (opcode_out != NULL) {
+        *opcode_out = opcode;
+    }
+
+    return true;
+}
+
+EmuStatus cpu_execute_decoded(Cpu *cpu, Memory *memory, uint32_t opcode,
+                              const EmuDecodedInstruction *decoded_instruction, char *error, size_t error_size) {
+    EmuDecodedInstruction instruction = *decoded_instruction;
+    uint64_t current_pc = cpu->pc;
 
     switch (instruction.kind) {
     case EMU_INST_NOP:
@@ -1591,6 +1603,17 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
 
     cpu->instructions_executed++;
     return cpu->halted ? EMU_HALTED : EMU_OK;
+}
+
+EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
+    uint32_t opcode = 0;
+    EmuDecodedInstruction instruction;
+
+    if (!cpu_fetch_decode(cpu, memory, &opcode, &instruction, error, error_size)) {
+        return EMU_ERROR;
+    }
+
+    return cpu_execute_decoded(cpu, memory, opcode, &instruction, error, error_size);
 }
 
 void cpu_dump(const Cpu *cpu, FILE *stream) {
