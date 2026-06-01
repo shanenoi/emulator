@@ -23,7 +23,7 @@ CORE_SRC := \
 	src/loader.c
 CORE_OBJ := $(CORE_SRC:.c=.o)
 
-.PHONY: all clean examples regression-examples run-demo test release-docs-check release-hygiene-check release-clean-check release-archive-check release-check release-archive test-asan test-ubsan test-cc-matrix
+.PHONY: all clean examples guest-demos regression-examples run-demo run-snake-demo test release-docs-check release-hygiene-check release-clean-check release-archive-check release-check release-archive test-asan test-ubsan test-cc-matrix
 
 all: $(TARGET)
 
@@ -120,7 +120,12 @@ V1_6_EXAMPLES := \
 	examples/v1_6/host_guest_mixed.bin \
 	examples/v1_6/sleep_with_timer.bin
 
+GUEST_DEMOS := \
+	examples/demos/snake.elf
+
 examples: $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES) $(V0_9_EXAMPLES) $(V1_1_EXAMPLES) $(V1_2_EXAMPLES) $(V1_3_EXAMPLES) $(V1_4_EXAMPLES) $(V1_5_EXAMPLES) $(V1_6_EXAMPLES)
+
+guest-demos: $(GUEST_DEMOS)
 
 TEST_EXAMPLES := $(V0_1_EXAMPLES) $(V0_2_EXAMPLES) $(V0_3_EXAMPLES) $(V0_4_EXAMPLES) $(V0_7_EXAMPLES) $(V0_8_EXAMPLES)
 
@@ -202,8 +207,34 @@ $(V1_5_EXAMPLES): examples/v1_5/generate_kernel_fixtures.py
 $(V1_6_EXAMPLES): examples/v1_6/generate_tiny_os_fixtures.py
 	python3 examples/v1_6/generate_tiny_os_fixtures.py --output-dir examples/v1_6
 
+examples/demos/start.o: examples/demos/start.s
+	@if command -v clang >/dev/null 2>&1; then \
+		clang --target=aarch64-none-elf -c $< -o $@; \
+	else \
+		echo "skipping guest demo startup build: clang is not available"; \
+	fi
+
+examples/demos/%.o: examples/demos/%.c include/emulator_guest.h
+	@if command -v clang >/dev/null 2>&1; then \
+		clang --target=aarch64-none-elf -Iinclude -ffreestanding -nostdlib -fno-builtin \
+			-fno-stack-protector -fno-pic -fno-pie -mgeneral-regs-only -O0 \
+			-Wall -Wextra -Werror -c $< -o $@; \
+	else \
+		echo "skipping guest demo C build for $@: clang is not available"; \
+	fi
+
+examples/demos/%.elf: examples/demos/start.o examples/demos/%.o examples/demos/linker.ld
+	@if command -v ld.lld >/dev/null 2>&1 && [ -f examples/demos/start.o ] && [ -f examples/demos/$*.o ]; then \
+		ld.lld -static -nostdlib -T examples/demos/linker.ld examples/demos/start.o examples/demos/$*.o -o $@; \
+	else \
+		echo "skipping guest demo link for $@: clang/ld.lld outputs are not available"; \
+	fi
+
 run-demo: all examples/v0_1/add.bin
 	./$(TARGET) run examples/v0_1/add.bin
+
+run-snake-demo: all examples/demos/snake.elf
+	./$(TARGET) run examples/demos/snake.elf --interactive --fps 8 --instructions-per-frame 100000 --screen-size 40x20 --screen-border ascii
 
 
 V1_0_RELEASE_TESTS := \
@@ -234,10 +265,11 @@ clean:
 		examples/v0_3/*.o examples/v0_3/*.bin examples/v0_4/*.o examples/v0_4/*.bin \
 		examples/v0_7/*.o examples/v0_7/*.bin examples/v0_8/*.o examples/v0_8/*.elf \
 		examples/v0_9/*.o examples/v0_9/*.elf examples/v1_1/*.macho examples/v1_2/*.bin examples/v1_3/*.bin examples/v1_4/*.bin examples/v1_5/*.bin examples/v1_6/*.bin \
+		examples/demos/*.o examples/demos/*.elf \
 		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/* tests/v0_4/tmp/* tests/v0_5/tmp/* \
 		tests/v0_6/tmp/* tests/v0_7/tmp/* tests/v0_8/tmp/* tests/v0_9/tmp/* tests/v1_0/tmp/*
 	rm -f examples/v1_2/mapping_inspection.txt
-	rm -rf tests/v1_1/tmp/* tests/v1_1/tmp/.fixtures.stamp tests/v1_2/tmp/* tests/v1_2/tmp/.fixtures.stamp tests/v1_3/tmp/* tests/v1_3/tmp/.fixtures.stamp tests/v1_4/tmp/* tests/v1_4/tmp/.fixtures.stamp tests/v1_5/tmp/* tests/v1_5/tmp/.fixtures.stamp tests/v1_6/tmp/* tests/v1_6/tmp/.fixtures.stamp tests/v1_7/tmp/* tests/v1_8/tmp/* tests/v1_9/tmp/* tests/v1_10/tmp/* tests/v1_11/tmp/*
+	rm -rf tests/v1_1/tmp/* tests/v1_1/tmp/.fixtures.stamp tests/v1_2/tmp/* tests/v1_2/tmp/.fixtures.stamp tests/v1_3/tmp/* tests/v1_3/tmp/.fixtures.stamp tests/v1_4/tmp/* tests/v1_4/tmp/.fixtures.stamp tests/v1_5/tmp/* tests/v1_5/tmp/.fixtures.stamp tests/v1_6/tmp/* tests/v1_6/tmp/.fixtures.stamp tests/v1_7/tmp/* tests/v1_8/tmp/* tests/v1_9/tmp/* tests/v1_10/tmp/* tests/v1_11/tmp/* tests/v1_12/tmp/* tests/v1_13/tmp/*
 
 $(V1_1_TEST_FIXTURE_MARKER): tests/fixtures/macho_fixture_writer.py
 	mkdir -p tests/v1_1/tmp
@@ -410,6 +442,8 @@ test: all $(TEST_EXAMPLES) $(V1_1_TEST_FIXTURE_MARKER) $(V1_2_TEST_FIXTURE_MARKE
 	mkdir -p tests/v1_12/tmp
 	./tests/v1_12/test_v1_12
 	./tests/v1_12/test_cli_instruction_coverage.sh
+	mkdir -p tests/v1_13/tmp
+	./tests/v1_13/test_cli_snake_demo.sh
 
 release-docs-check:
 	@set -eu; \

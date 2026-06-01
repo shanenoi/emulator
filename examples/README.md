@@ -32,6 +32,12 @@ v0.9 freestanding C example.c
 example.o + examples/v0_9/start.o
   -> ld.lld -static -nostdlib -T examples/v0_9/linker.ld
 example.elf
+
+optional guest demo C program
+  -> clang --target=aarch64-none-elf -Iinclude -ffreestanding -nostdlib -fno-builtin -mgeneral-regs-only -O0
+demo.o + examples/demos/start.o
+  -> ld.lld -static -nostdlib -T examples/demos/linker.ld
+demo.elf
 ```
 
 The emulator supports three input formats:
@@ -188,6 +194,31 @@ examples/v1_1/    generated Mach-O loader fixtures
 examples/v1_2/    generated virtual-memory fixtures
 examples/v1_3/    generated MMIO device fixtures
 examples/v1_4/    generated exception/trap/interrupt fixtures
+examples/demos/   optional freestanding guest demos using include/emulator_guest.h
 ```
 
 `examples/v1_0/smoke_manifest.txt` is not a new program format. It is a compact checklist of representative examples that should keep working together for the stable v1.0 learning release.
+
+## Optional guest demos
+
+`examples/demos/` contains freestanding guest programs that are useful for
+manual exploration but are not emulator core features. Build the Snake demo
+with:
+
+```sh
+make examples/demos/snake.elf
+```
+
+Run a deterministic non-TTY smoke screen dump:
+
+```sh
+./emulator run examples/demos/snake.elf --input q --frames 2 \
+  --instructions-per-frame 100000 --screen-size 24x12 \
+  --screen-dump --screen-border ascii
+```
+
+Run it interactively from a real TTY:
+
+```sh
+make run-snake-demo
+```
