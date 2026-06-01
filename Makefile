@@ -30,7 +30,7 @@ all: $(TARGET)
 $(TARGET): $(OBJ)
 	$(CC) $(LDFLAGS) -o $@ $(OBJ)
 
-%.o: %.c include/emulator.h
+src/%.o: src/%.c include/emulator.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 V0_1_EXAMPLES := examples/v0_1/add.bin examples/v0_1/nop_hlt.bin examples/v0_1/sub.bin

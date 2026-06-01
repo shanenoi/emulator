@@ -765,12 +765,6 @@ static EmuStatus emulator_run_interactive(Emulator *emu, const CliOptions *optio
         }
 
         for (uint64_t i = 0; i < options->instructions_per_frame; i++) {
-            if (emu->cpu.instructions_executed >= emu->instruction_limit) {
-                snprintf(error, error_size, "instruction limit reached: 0x%016llx",
-                         (unsigned long long)emu->instruction_limit);
-                status = EMU_ERROR;
-                goto done;
-            }
             status = emulator_step(emu, error, error_size);
             if (status != EMU_OK) {
                 goto done;
