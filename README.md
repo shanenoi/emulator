@@ -36,6 +36,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v1.8 Test Plan — Deterministic Terminal Screen Device](docs/test-plan-v1.8.md)
 - [v1.9 Test Plan — Optional Interactive Host Runner](docs/test-plan-v1.9.md)
 - [v1.10 Test Plan — Deterministic Frame Pacing](docs/test-plan-v1.10.md)
+- [v1.11 Test Plan — Freestanding Guest Runtime Helpers](docs/test-plan-v1.11.md)
 
 ## Lessons
 
@@ -58,7 +59,7 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 
 ## Current Implementation Status
 
-The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**, the implemented/tested teaching profile for **v1.5 — Toy Kernel Mode**, the implemented/tested teaching profile for **v1.6 — Tiny OS Lab**, the implemented/tested teaching profile for **v1.7 — Deterministic Keyboard Input Device**, the implemented/tested teaching profile for **v1.8 — Deterministic Terminal Screen Device**, the implemented/tested teaching profile for **v1.9 — Optional Interactive Host Runner**, and the implemented/tested teaching profile for **v1.10 — Deterministic Frame Pacing**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests. v1.5 adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, generated fixtures, and dedicated v1.5 unit/CLI/debugger/docs tests. v1.6 adds the guest-managed Tiny OS Lab with a `BRK #0x160` service dispatcher, guest task creation, guest-readable/read-only boot metadata and task descriptors, deterministic task IDs/names, task information lookup, current-task ID lookup, console/panic/yield/exit/sleep services, service-discovery metadata, hardened stack validation, fixed-size nonblocking mailbox IPC, generated fixtures, and dedicated v1.6 unit/CLI/debugger/docs/optional-example tests. v1.7 adds deterministic keyboard/input MMIO with a fixed FIFO and scripted CLI input. v1.8 adds deterministic terminal/screen MMIO with configurable dimensions, cursor/cell access, scrolling, dirty status, guest helpers, and final CLI screen dumps. v1.9 adds an optional TTY-only host-interactive runner that polls keyboard input into the existing keyboard FIFO and redraws the existing terminal screen buffer; scripted input remains the deterministic test path. v1.10 adds a runner-paced frame MMIO device and deterministic `--frames` mode so guest programs can use the same frame counter in scripted and host-paced runs. It is not a real OS and does not provide production isolation.
+The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**, the implemented/tested teaching profile for **v1.5 — Toy Kernel Mode**, the implemented/tested teaching profile for **v1.6 — Tiny OS Lab**, the implemented/tested teaching profile for **v1.7 — Deterministic Keyboard Input Device**, the implemented/tested teaching profile for **v1.8 — Deterministic Terminal Screen Device**, the implemented/tested teaching profile for **v1.9 — Optional Interactive Host Runner**, the implemented/tested teaching profile for **v1.10 — Deterministic Frame Pacing**, and the implemented/tested teaching profile for **v1.11 — Freestanding Guest Runtime Helpers**. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests. v1.5 adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, generated fixtures, and dedicated v1.5 unit/CLI/debugger/docs tests. v1.6 adds the guest-managed Tiny OS Lab with a `BRK #0x160` service dispatcher, guest task creation, guest-readable/read-only boot metadata and task descriptors, deterministic task IDs/names, task information lookup, current-task ID lookup, console/panic/yield/exit/sleep services, service-discovery metadata, hardened stack validation, fixed-size nonblocking mailbox IPC, generated fixtures, and dedicated v1.6 unit/CLI/debugger/docs/optional-example tests. v1.7 adds deterministic keyboard/input MMIO with a fixed FIFO and scripted CLI input. v1.8 adds deterministic terminal/screen MMIO with configurable dimensions, cursor/cell access, scrolling, dirty status, guest helpers, and final CLI screen dumps. v1.9 adds an optional TTY-only host-interactive runner that polls keyboard input into the existing keyboard FIFO and redraws the existing terminal screen buffer; scripted input remains the deterministic test path. v1.10 adds a runner-paced frame MMIO device and deterministic `--frames` mode so guest programs can use the same frame counter in scripted and host-paced runs. v1.11 expands `include/emulator_guest.h` into a tiny freestanding helper API for UART output, keyboard polling, terminal drawing, frame waiting, deterministic random reads, toy exit, and explicit decimal/hex formatting. It is not a real OS and does not provide production isolation.
 
 Implemented now:
 
@@ -220,6 +221,7 @@ Implemented now:
   - supports `--screen-size <WIDTH>x<HEIGHT>` and `--screen-border <unicode|ascii|none>` for deterministic screen dumps
   - supports optional `emulator run <program> --interactive` host-interactive mode with `--fps <N>`, `--instructions-per-frame <N>`, and `--quit-key <ctrl-c|esc>`
   - supports deterministic non-interactive `emulator run <program> --frames <N> --instructions-per-frame <N>` frame slices through a guest-visible frame counter/status MMIO device
+  - provides `include/emulator_guest.h`, a tiny freestanding helper API for emulator-specific guest demos; it is not a libc and does not provide `printf`, `malloc`, argv/envp, startup files, or dynamic linking
   - normal printable input passes through the keyboard FIFO, Enter normalizes to `\n`, and host arrow keys normalize to `EMU_GUEST_KEY_UP`/`DOWN`/`LEFT`/`RIGHT` bytes `0x80`..`0x83`
   - interactive mode requires stdin/stdout TTYs, uses the terminal/screen buffer for live redraw, and is intentionally separate from deterministic scripted tests
   - reports invalid device offsets, unsupported widths, and boundary crossings as deterministic device faults
@@ -417,7 +419,7 @@ Run the named v1.0 release gate for the current deterministic suite:
 make release-check
 ```
 
-The test target builds the emulator, assembles the regression examples through v0.8, generates deterministic v1.1 through v1.6 fixtures, compiles the v0.1 through v1.6 C test runners, and runs all v0.1 through v1.6 CLI/debugger/docs/release checks. The v0.9 and v1.0 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain.
+The test target builds the emulator, assembles the regression examples through v0.8, generates deterministic v1.1 through v1.6 fixtures, compiles the v0.1 through v1.11 C test runners, and runs all v0.1 through v1.11 CLI/debugger/docs/release checks. The v0.9 and v1.0 CLI tests generate deterministic ELF fixtures directly, so `make test` does not require the optional freestanding-C cross toolchain.
 
 `make release-check` checks v1.0 documentation links/status, repository hygiene, clean-artifact behavior after generating representative artifacts, and a fresh archive that runs the full deterministic suite after extraction. Use `make test` when you want to run the same deterministic suite directly in the current checkout.
 
@@ -1217,6 +1219,40 @@ write word bit 0 to 0x0906000c -> clear frame-ready status without changing the 
 ```
 
 The frame counter starts at 0 and increments exactly once when the runner advances a frame. Normal `emulator run` remains unchanged. `emulator run --frames N --instructions-per-frame M` is deterministic and test-friendly; `emulator run --interactive --fps N --instructions-per-frame M` is host-paced for humans. Wall-clock timing is host-side only and is not exposed through the guest-visible frame counter.
+
+Tiny guest helper API:
+
+`include/emulator_guest.h` is the preferred guest-facing convenience layer for small freestanding demos and tests. It is intentionally emulator-specific and intentionally not a libc: it does not provide `printf`, `malloc`, hosted startup, argv/envp, blocking syscalls, interrupts, dynamic linking, or terminal ANSI parsing. It includes only freestanding-safe headers (`stdint.h` and `stddef.h`) and exposes static-inline helpers over the same MMIO/register contracts documented above.
+
+Useful helpers include:
+
+```c
+emu_guest_uart_putc('A');
+emu_guest_uart_puts("hello");
+emu_guest_uart_put_u32_dec(1234);
+emu_guest_uart_put_u32_hex(0x1a2b3c4d); /* fixed-width lowercase hex */
+
+if (emu_guest_key_available()) {
+    unsigned char key = emu_guest_key_read();
+}
+emu_guest_key_clear_overflow();
+
+emu_guest_screen_clear();
+emu_guest_screen_puts_at(1, 0, "HI");
+emu_guest_screen_set_cursor(0, 1);
+emu_guest_screen_put_u32_dec(42);
+
+uint64_t frame = emu_guest_wait_frame();
+emu_guest_frame_ack();
+
+emu_guest_random_seed(1);
+uint32_t value = emu_guest_random_u32();
+uint32_t tiny_range = emu_guest_random_range(10); /* modulo-based helper */
+
+emu_guest_exit(0);
+```
+
+Scripted input (`--input` / `--input-file`) and deterministic frames (`--frames`) remain the preferred test path for guest programs that use these helpers. Interactive mode is host-paced for humans and should not be required by deterministic tests.
 
 Render the final terminal buffer after guest execution with:
 
