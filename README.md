@@ -1450,6 +1450,12 @@ emulator/
 │   ├── decoder.c
 │   ├── decoder.h
 │   ├── loader.c
+│   ├── loader_io.c
+│   ├── loader_map.c
+│   ├── loader_stack.c
+│   ├── loader_raw.c
+│   ├── loader_elf.c
+│   ├── loader_macho.c
 │   └── loader.h
 ├── examples/
 │   └── v0_1_add.s

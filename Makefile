@@ -18,7 +18,13 @@ SRC := \
 	src/disasm.c \
 	src/cpu.c \
 	src/memory.c \
-	src/loader.c
+	src/loader.c \
+	src/loader_io.c \
+	src/loader_map.c \
+	src/loader_stack.c \
+	src/loader_raw.c \
+	src/loader_elf.c \
+	src/loader_macho.c
 OBJ := $(SRC:.c=.o)
 
 CORE_SRC := \
@@ -34,7 +40,13 @@ CORE_SRC := \
 	src/disasm.c \
 	src/cpu.c \
 	src/memory.c \
-	src/loader.c
+	src/loader.c \
+	src/loader_io.c \
+	src/loader_map.c \
+	src/loader_stack.c \
+	src/loader_raw.c \
+	src/loader_elf.c \
+	src/loader_macho.c
 CORE_OBJ := $(CORE_SRC:.c=.o)
 
 .PHONY: all clean examples guest-demos regression-examples run-demo run-snake-demo test release-docs-check release-hygiene-check release-clean-check release-archive-check release-check release-archive test-asan test-ubsan test-cc-matrix
@@ -44,7 +56,7 @@ all: $(TARGET)
 $(TARGET): $(OBJ)
 	$(CC) $(LDFLAGS) -o $@ $(OBJ)
 
-src/%.o: src/%.c include/emulator.h include/emulator_internal.h include/emu_util.h include/emu_format.h include/devices.h include/mmio.h
+src/%.o: src/%.c include/emulator.h include/emulator_internal.h include/loader_internal.h include/emu_util.h include/emu_format.h include/devices.h include/mmio.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 V0_1_EXAMPLES := examples/v0_1/add.bin examples/v0_1/nop_hlt.bin examples/v0_1/sub.bin

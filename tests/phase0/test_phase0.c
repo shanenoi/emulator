@@ -801,6 +801,39 @@ static void test_loader_mapping_permission_characterization(void) {
     emulator_free(&emu);
 }
 
+static void test_loader_raw_file_and_stack_characterization(void) {
+    Emulator emu;
+    EmuLoadedProgram program;
+    char error[512] = {0};
+    const uint8_t hlt_code[4] = {0x00u, 0x00u, 0x40u, 0xd4u};
+
+    write_file_or_die(TMP_DIR "raw_hlt.bin", hlt_code, sizeof(hlt_code));
+
+    init_emulator_or_die(&emu);
+    EXPECT_TRUE(load_program_path(&emu, TMP_DIR "raw_hlt.bin", &program, error, sizeof(error)));
+    EXPECT_U64_EQ(program.format, EMU_PROGRAM_RAW);
+    EXPECT_U64_EQ(program.entry, EMU_LOAD_ADDRESS);
+    EXPECT_TRUE(memcmp(&emu.memory.bytes[EMU_LOAD_ADDRESS], hlt_code, sizeof(hlt_code)) == 0);
+
+    const EmuMemoryMapping *raw_mapping = memory_find_mapping(&emu.memory, EMU_LOAD_ADDRESS);
+    EXPECT_TRUE(raw_mapping != NULL);
+    EXPECT_U64_EQ(raw_mapping->permissions, EMU_MAP_READ | EMU_MAP_EXEC);
+    EXPECT_TRUE(strcmp(raw_mapping->name, "raw:program") == 0);
+
+    const EmuMemoryMapping *stack_mapping = memory_find_mapping(&emu.memory, program.stack_pointer - 1u);
+    EXPECT_TRUE(stack_mapping != NULL);
+    EXPECT_U64_EQ(stack_mapping->permissions, EMU_MAP_READ | EMU_MAP_WRITE);
+    EXPECT_TRUE(strcmp(stack_mapping->name, "stack") == 0);
+    EXPECT_U64_EQ(stack_mapping->start + stack_mapping->size, program.stack_pointer);
+    emulator_free(&emu);
+
+    write_file_or_die(TMP_DIR "empty.bin", hlt_code, 0u);
+    init_emulator_or_die(&emu);
+    EXPECT_FALSE(load_program_path(&emu, TMP_DIR "empty.bin", &program, error, sizeof(error)));
+    EXPECT_STR_CONTAINS(error, "loader error: input file is empty");
+    emulator_free(&emu);
+}
+
 int main(void) {
     ensure_tmp_dir();
 
@@ -811,6 +844,7 @@ int main(void) {
     test_mmio_side_effects_and_boundaries();
     test_structured_memory_fault_metadata();
     test_loader_mapping_permission_characterization();
+    test_loader_raw_file_and_stack_characterization();
 
     if (tests_failed != 0) {
         fprintf(stderr, "tests/phase0/test_phase0: %d/%d checks failed\n", tests_failed, tests_run);
