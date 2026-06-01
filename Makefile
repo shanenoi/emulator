@@ -260,7 +260,7 @@ clean:
 		tests/v1_6/*.o tests/v1_6/test_v1_6 tests/v1_7/*.o tests/v1_7/test_v1_7 \
 		tests/v1_8/*.o tests/v1_8/test_v1_8 tests/v1_9/*.o tests/v1_9/test_v1_9 \
 		tests/v1_10/*.o tests/v1_10/test_v1_10 tests/v1_11/*.o tests/v1_11/test_v1_11 \
-		tests/v1_12/*.o tests/v1_12/test_v1_12 \
+		tests/v1_12/*.o tests/v1_12/test_v1_12 tests/phase0/*.o tests/phase0/test_phase0 \
 		examples/v0_1/*.o examples/v0_1/*.bin examples/v0_2/*.o examples/v0_2/*.bin \
 		examples/v0_3/*.o examples/v0_3/*.bin examples/v0_4/*.o examples/v0_4/*.bin \
 		examples/v0_7/*.o examples/v0_7/*.bin examples/v0_8/*.o examples/v0_8/*.elf \
@@ -269,7 +269,7 @@ clean:
 		tests/v0_1/tmp/* tests/v0_2/tmp/* tests/v0_3/tmp/* tests/v0_4/tmp/* tests/v0_5/tmp/* \
 		tests/v0_6/tmp/* tests/v0_7/tmp/* tests/v0_8/tmp/* tests/v0_9/tmp/* tests/v1_0/tmp/*
 	rm -f examples/v1_2/mapping_inspection.txt
-	rm -rf tests/v1_1/tmp/* tests/v1_1/tmp/.fixtures.stamp tests/v1_2/tmp/* tests/v1_2/tmp/.fixtures.stamp tests/v1_3/tmp/* tests/v1_3/tmp/.fixtures.stamp tests/v1_4/tmp/* tests/v1_4/tmp/.fixtures.stamp tests/v1_5/tmp/* tests/v1_5/tmp/.fixtures.stamp tests/v1_6/tmp/* tests/v1_6/tmp/.fixtures.stamp tests/v1_7/tmp/* tests/v1_8/tmp/* tests/v1_9/tmp/* tests/v1_10/tmp/* tests/v1_11/tmp/* tests/v1_12/tmp/* tests/v1_13/tmp/*
+	rm -rf tests/v1_1/tmp/* tests/v1_1/tmp/.fixtures.stamp tests/v1_2/tmp/* tests/v1_2/tmp/.fixtures.stamp tests/v1_3/tmp/* tests/v1_3/tmp/.fixtures.stamp tests/v1_4/tmp/* tests/v1_4/tmp/.fixtures.stamp tests/v1_5/tmp/* tests/v1_5/tmp/.fixtures.stamp tests/v1_6/tmp/* tests/v1_6/tmp/.fixtures.stamp tests/v1_7/tmp/* tests/v1_8/tmp/* tests/v1_9/tmp/* tests/v1_10/tmp/* tests/v1_11/tmp/* tests/v1_12/tmp/* tests/v1_13/tmp/* tests/phase0/tmp/*
 
 $(V1_1_TEST_FIXTURE_MARKER): tests/fixtures/macho_fixture_writer.py
 	mkdir -p tests/v1_1/tmp
@@ -365,7 +365,10 @@ tests/v1_11/test_v1_11: tests/v1_11/test_v1_11.o
 tests/v1_12/test_v1_12: tests/v1_12/test_v1_12.o $(CORE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^
 
-test: all $(TEST_EXAMPLES) $(V1_1_TEST_FIXTURE_MARKER) $(V1_2_TEST_FIXTURE_MARKER) $(V1_3_TEST_FIXTURE_MARKER) $(V1_4_TEST_FIXTURE_MARKER) $(V1_5_TEST_FIXTURE_MARKER) $(V1_6_TEST_FIXTURE_MARKER) tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_3 tests/v0_4/test_v0_4 tests/v0_5/test_v0_5 tests/v0_6/test_v0_6 tests/v0_7/test_v0_7 tests/v0_8/test_v0_8 tests/v0_9/test_v0_9 tests/v1_1/test_v1_1 tests/v1_2/test_v1_2 tests/v1_3/test_v1_3 tests/v1_4/test_v1_4 tests/v1_5/test_v1_5 tests/v1_6/test_v1_6 tests/v1_7/test_v1_7 tests/v1_8/test_v1_8 tests/v1_9/test_v1_9 tests/v1_10/test_v1_10 tests/v1_11/test_v1_11 tests/v1_12/test_v1_12
+tests/phase0/test_phase0: tests/phase0/test_phase0.o $(CORE_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+test: all $(TEST_EXAMPLES) $(V1_1_TEST_FIXTURE_MARKER) $(V1_2_TEST_FIXTURE_MARKER) $(V1_3_TEST_FIXTURE_MARKER) $(V1_4_TEST_FIXTURE_MARKER) $(V1_5_TEST_FIXTURE_MARKER) $(V1_6_TEST_FIXTURE_MARKER) tests/v0_1/test_v0_1 tests/v0_2/test_v0_2 tests/v0_3/test_v0_3 tests/v0_4/test_v0_4 tests/v0_5/test_v0_5 tests/v0_6/test_v0_6 tests/v0_7/test_v0_7 tests/v0_8/test_v0_8 tests/v0_9/test_v0_9 tests/v1_1/test_v1_1 tests/v1_2/test_v1_2 tests/v1_3/test_v1_3 tests/v1_4/test_v1_4 tests/v1_5/test_v1_5 tests/v1_6/test_v1_6 tests/v1_7/test_v1_7 tests/v1_8/test_v1_8 tests/v1_9/test_v1_9 tests/v1_10/test_v1_10 tests/v1_11/test_v1_11 tests/v1_12/test_v1_12 tests/phase0/test_phase0
 	./tests/v0_1/test_v0_1
 	./tests/v0_1/test_cli.sh
 	./tests/v0_2/test_v0_2
@@ -444,6 +447,9 @@ test: all $(TEST_EXAMPLES) $(V1_1_TEST_FIXTURE_MARKER) $(V1_2_TEST_FIXTURE_MARKE
 	./tests/v1_12/test_cli_instruction_coverage.sh
 	mkdir -p tests/v1_13/tmp
 	./tests/v1_13/test_cli_snake_demo.sh
+	mkdir -p tests/phase0/tmp
+	./tests/phase0/test_phase0
+	./tests/phase0/test_cli_phase0.sh
 
 release-docs-check:
 	@set -eu; \
