@@ -2,6 +2,9 @@
 
 #include "emulator.h"
 
+#include "emu_format.h"
+#include "emu_util.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -170,20 +173,6 @@ static int guest_or_success_status(const Emulator *emu) {
     return emu->guest_exited ? (int)emu->guest_exit_code : 0;
 }
 
-static bool parse_u64(const char *text, uint64_t *out) {
-    if (text == NULL || text[0] == '\0' || text[0] == '-' || text[0] == '+') {
-        return false;
-    }
-    char *end = NULL;
-    errno = 0;
-    unsigned long long value = strtoull(text, &end, 0);
-    if (errno != 0 || end == text || *end != '\0') {
-        return false;
-    }
-    *out = (uint64_t)value;
-    return true;
-}
-
 static bool parse_screen_size(const char *text, uint32_t *width, uint32_t *height) {
     if (text == NULL || text[0] == '\0') {
         return false;
@@ -206,7 +195,7 @@ static bool parse_screen_size(const char *text, uint32_t *width, uint32_t *heigh
 
     uint64_t parsed_width = 0;
     uint64_t parsed_height = 0;
-    if (!parse_u64(width_text, &parsed_width) || !parse_u64(separator + 1, &parsed_height)) {
+    if (!emu_parse_u64_strict(width_text, &parsed_width) || !emu_parse_u64_strict(separator + 1, &parsed_height)) {
         return false;
     }
     if (parsed_width < EMU_TERM_MIN_WIDTH || parsed_width > EMU_TERM_MAX_WIDTH ||
@@ -220,7 +209,7 @@ static bool parse_screen_size(const char *text, uint32_t *width, uint32_t *heigh
 
 static bool parse_u32_strict(const char *text, uint32_t *out) {
     uint64_t value = 0;
-    if (!parse_u64(text, &value) || value > UINT32_MAX) {
+    if (!emu_parse_u64_strict(text, &value) || value > UINT32_MAX) {
         return false;
     }
     *out = (uint32_t)value;
@@ -234,14 +223,14 @@ static bool parse_cli_options(int argc, char **argv, int start, CliOptions *opti
     options->quit_key = "ctrl-c";
     for (int i = start; i < argc; i++) {
         if (strcmp(argv[i], "--exception-vector") == 0) {
-            if (i + 1 >= argc || !parse_u64(argv[i + 1], &options->exception_vector)) {
+            if (i + 1 >= argc || !emu_parse_u64_strict(argv[i + 1], &options->exception_vector)) {
                 snprintf(error, error_size, "invalid or missing --exception-vector address");
                 return false;
             }
             options->has_exception_vector = true;
             i++;
         } else if (strcmp(argv[i], "--timer-interrupt") == 0) {
-            if (i + 1 >= argc || !parse_u64(argv[i + 1], &options->timer_interval)) {
+            if (i + 1 >= argc || !emu_parse_u64_strict(argv[i + 1], &options->timer_interval)) {
                 snprintf(error, error_size, "invalid or missing --timer-interrupt interval");
                 return false;
             }
@@ -274,7 +263,7 @@ static bool parse_cli_options(int argc, char **argv, int start, CliOptions *opti
                 snprintf(error, error_size, "too many --kernel-task entries: max=%u", EMU_TOY_KERNEL_MAX_TASKS);
                 return false;
             }
-            if (i + 1 >= argc || !parse_u64(argv[i + 1], &options->kernel_tasks[options->kernel_task_count])) {
+            if (i + 1 >= argc || !emu_parse_u64_strict(argv[i + 1], &options->kernel_tasks[options->kernel_task_count])) {
                 snprintf(error, error_size, "invalid or missing --kernel-task address");
                 return false;
             }
@@ -317,7 +306,7 @@ static bool parse_cli_options(int argc, char **argv, int start, CliOptions *opti
         } else if (strcmp(argv[i], "--interactive") == 0) {
             options->interactive = true;
         } else if (strcmp(argv[i], "--frames") == 0) {
-            if (i + 1 >= argc || !parse_u64(argv[i + 1], &options->frames) || options->frames == 0) {
+            if (i + 1 >= argc || !emu_parse_u64_strict(argv[i + 1], &options->frames) || options->frames == 0) {
                 snprintf(error, error_size, "invalid --frames value: expected positive integer");
                 return false;
             }
@@ -331,7 +320,7 @@ static bool parse_cli_options(int argc, char **argv, int start, CliOptions *opti
             options->has_fps = true;
             i++;
         } else if (strcmp(argv[i], "--instructions-per-frame") == 0) {
-            if (i + 1 >= argc || !parse_u64(argv[i + 1], &options->instructions_per_frame) ||
+            if (i + 1 >= argc || !emu_parse_u64_strict(argv[i + 1], &options->instructions_per_frame) ||
                 options->instructions_per_frame == 0) {
                 snprintf(error, error_size, "invalid --instructions-per-frame value: expected positive integer");
                 return false;
@@ -476,41 +465,6 @@ static void print_exception_info(const Emulator *emu, FILE *stream) {
     fprintf(stream, "exception_interrupted_pc: 0x%016" PRIx64 "\n", context->interrupted_pc);
     fprintf(stream, "exception_resume_pc: 0x%016" PRIx64 "\n", context->resume_pc);
     fprintf(stream, "exception_depth: %u\n", context->depth);
-}
-
-static bool dump_memory(const Memory *memory, uint64_t address, uint64_t length, FILE *stream, char *error,
-                        size_t error_size) {
-    if (address > (uint64_t)memory->size || length > (uint64_t)memory->size ||
-        address + length > (uint64_t)memory->size || address + length < address) {
-        snprintf(error, error_size,
-                 "dump range out of bounds: address=0x%016" PRIx64 " length=0x%016" PRIx64
-                 " memory_size=0x%zx",
-                 address, length, memory->size);
-        return false;
-    }
-    if (!memory_check_read(memory, address, length, error, error_size)) {
-        char cause[512];
-        snprintf(cause, sizeof(cause), "%s", error);
-        snprintf(error, error_size,
-                 "dump range is not readable: address=0x%016" PRIx64 " length=0x%016" PRIx64 " (%.300s)",
-                 address, length, cause);
-        return false;
-    }
-
-    fprintf(stream, "memory dump address=0x%016" PRIx64 " length=0x%016" PRIx64 "\n", address, length);
-    for (uint64_t offset = 0; offset < length; offset += 16u) {
-        fprintf(stream, "0x%016" PRIx64 ":", address + offset);
-        uint64_t line_len = length - offset < 16u ? length - offset : 16u;
-        for (uint64_t i = 0; i < line_len; i++) {
-            uint8_t value = 0;
-            if (!memory_read8(memory, address + offset + i, &value, error, error_size)) {
-                return false;
-            }
-            fprintf(stream, " %02x", value);
-        }
-        fprintf(stream, "\n");
-    }
-    return true;
 }
 
 static void print_repeated(FILE *stream, const char *text, uint32_t count) {
@@ -918,7 +872,7 @@ int main(int argc, char **argv) {
             return 2;
         }
         dump_enabled = true;
-        if (!parse_u64(argv[3], &dump_address) || !parse_u64(argv[4], &dump_length)) {
+        if (!emu_parse_u64_strict(argv[3], &dump_address) || !emu_parse_u64_strict(argv[4], &dump_length)) {
             fprintf(stderr, "error: invalid dump address or length\n");
             print_usage(stderr);
             return 2;
@@ -986,7 +940,7 @@ int main(int argc, char **argv) {
         if ((!emu.guest_exited || regs_only) && !options.interactive) {
             cpu_dump(&emu.cpu, stdout);
         }
-        if (dump_enabled && !dump_memory(&emu.memory, dump_address, dump_length, stdout, error, sizeof(error))) {
+        if (dump_enabled && !emu_format_memory_dump(&emu.memory, dump_address, dump_length, stdout, error, sizeof(error))) {
             fprintf(stderr, "error: %s\n", error);
             emulator_free(&emu);
             return 1;

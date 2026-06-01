@@ -1,18 +1,12 @@
 #include "emulator.h"
 
+#include "emu_util.h"
+
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
 #define EMU_TOY_KERNEL_BOOT_INFO_ADDRESS 0x00080000ull
-
-static bool checked_add_u64_local(uint64_t left, uint64_t right, uint64_t *out) {
-    if (right > UINT64_MAX - left) {
-        return false;
-    }
-    *out = left + right;
-    return true;
-}
 
 static void print_trace_line(const Cpu *cpu, const Memory *memory, FILE *stream) {
     uint32_t opcode = 0;
@@ -33,8 +27,9 @@ static bool check_syscall_buffer(const Memory *memory, uint64_t address, uint64_
     if (length == 0) {
         return true;
     }
-    if (address > (uint64_t)memory->size || length > (uint64_t)memory->size ||
-        address + length > (uint64_t)memory->size || address + length < address) {
+    uint64_t end = 0;
+    if (!emu_checked_add_u64(address, length, &end) || address > (uint64_t)memory->size ||
+        length > (uint64_t)memory->size || end > (uint64_t)memory->size) {
         snprintf(error, error_size,
                  "syscall write buffer out of bounds: address=0x%016" PRIx64 " length=0x%016" PRIx64
                  " memory_size=0x%zx",
@@ -332,8 +327,8 @@ static void toy_kernel_refresh_all_descriptors(Emulator *emu) {
 static bool toy_kernel_range_overlaps(uint64_t base, uint64_t size, uint64_t other_base, uint64_t other_size) {
     uint64_t end = 0;
     uint64_t other_end = 0;
-    if (size == 0 || other_size == 0 || !checked_add_u64_local(base, size, &end) ||
-        !checked_add_u64_local(other_base, other_size, &other_end)) {
+    if (size == 0 || other_size == 0 || !emu_checked_add_u64(base, size, &end) ||
+        !emu_checked_add_u64(other_base, other_size, &other_end)) {
         return false;
     }
     return base < other_end && other_base < end;
@@ -363,7 +358,7 @@ static bool toy_kernel_range_overlaps_executable_mapping(const Memory *memory, u
 static bool toy_kernel_internal_write_bytes(Emulator *emu, uint64_t address, const uint8_t *bytes, size_t length,
                                             const char *label, char *error, size_t error_size) {
     uint64_t end = 0;
-    if (bytes == NULL || !checked_add_u64_local(address, (uint64_t)length, &end) ||
+    if (bytes == NULL || !emu_checked_add_u64(address, (uint64_t)length, &end) ||
         end > (uint64_t)emu->memory.size || toy_kernel_range_overlaps_any_device(&emu->memory, address, length)) {
         snprintf(error, error_size,
                  "toy kernel %s internal write is out of RAM: address=0x%016" PRIx64 " length=0x%zx",
@@ -577,7 +572,7 @@ static bool toy_kernel_stack_is_valid(const Emulator *emu, uint64_t stack_base, 
                                       char *error, size_t error_size) {
     uint64_t stack_end = 0;
     if (stack_base == 0 || stack_size == 0 || (stack_base & 0xfull) != 0 || (stack_size & 0xfull) != 0 ||
-        !checked_add_u64_local(stack_base, stack_size, &stack_end)) {
+        !emu_checked_add_u64(stack_base, stack_size, &stack_end)) {
         snprintf(error, error_size, "bad stack: base=0x%016" PRIx64 " size=0x%016" PRIx64, stack_base,
                  stack_size);
         return false;

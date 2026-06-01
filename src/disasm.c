@@ -1,5 +1,7 @@
 #include "emulator.h"
 
+#include "emu_util.h"
+
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
@@ -146,22 +148,10 @@ static const char *load_store_mnemonic(const EmuDecodedInstruction *instruction)
 }
 
 static bool add_signed_address(uint64_t address, int64_t offset, uint64_t *target) {
-    if (offset < 0) {
-        uint64_t magnitude = (uint64_t)(-(offset + 1)) + 1ull;
-        if (magnitude > address) {
-            *target = 0;
-            return false;
-        }
-        *target = address - magnitude;
-        return true;
-    }
-
-    uint64_t magnitude = (uint64_t)offset;
-    if (magnitude > UINT64_MAX - address) {
-        *target = UINT64_MAX;
+    if (!emu_checked_add_i64(address, offset, target)) {
+        *target = offset < 0 ? 0 : UINT64_MAX;
         return false;
     }
-    *target = address + magnitude;
     return true;
 }
 

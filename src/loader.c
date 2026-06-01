@@ -2,6 +2,8 @@
 
 #include "emulator.h"
 
+#include "emu_util.h"
+
 #include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -154,14 +156,6 @@ static uint64_t read_le64(const uint8_t *bytes, size_t offset) {
     return value;
 }
 
-static bool checked_u64_add(uint64_t left, uint64_t right, uint64_t *out) {
-    if (right > UINT64_MAX - left) {
-        return false;
-    }
-    *out = left + right;
-    return true;
-}
-
 static uint64_t align_down_to_page(uint64_t value) {
     return value & ~((uint64_t)EMU_PAGE_SIZE - 1ull);
 }
@@ -182,7 +176,7 @@ static bool align_up_to_page(uint64_t value, uint64_t *out) {
 static bool page_range_for_segment(uint64_t vaddr, uint64_t mem_size, uint64_t *page_start, uint64_t *page_size) {
     uint64_t segment_end = 0;
     uint64_t page_end = 0;
-    if (!checked_u64_add(vaddr, mem_size, &segment_end)) {
+    if (!emu_checked_add_u64(vaddr, mem_size, &segment_end)) {
         return false;
     }
     *page_start = align_down_to_page(vaddr);
@@ -235,7 +229,7 @@ static bool loader_map_pages(Memory *memory, uint64_t address, uint64_t length, 
     }
 
     uint64_t end = 0;
-    if (!checked_u64_add(address, length, &end)) {
+    if (!emu_checked_add_u64(address, length, &end)) {
         snprintf(error, error_size,
                  "memory map error: mapping outside memory: address=0x%016" PRIx64 " length=0x%016" PRIx64,
                  address, length);
@@ -279,18 +273,18 @@ static bool loader_map_pages(Memory *memory, uint64_t address, uint64_t length, 
 
 static bool range_fits_file(uint64_t offset, uint64_t length, size_t file_size) {
     uint64_t end = 0;
-    return checked_u64_add(offset, length, &end) && end <= (uint64_t)file_size;
+    return emu_checked_add_u64(offset, length, &end) && end <= (uint64_t)file_size;
 }
 
 static bool range_fits_memory(uint64_t address, uint64_t length, const Memory *memory) {
     uint64_t end = 0;
-    return checked_u64_add(address, length, &end) && end <= (uint64_t)memory->size;
+    return emu_checked_add_u64(address, length, &end) && end <= (uint64_t)memory->size;
 }
 
 static bool range_overlaps_device(const Memory *memory, uint64_t address, uint64_t length,
                                   const EmuDeviceRange **out_device) {
     uint64_t end = 0;
-    if (length == 0 || !checked_u64_add(address, length, &end)) {
+    if (length == 0 || !emu_checked_add_u64(address, length, &end)) {
         return false;
     }
     for (size_t i = 0; i < memory->devices.range_count; i++) {
@@ -309,7 +303,7 @@ static bool range_overlaps_device(const Memory *memory, uint64_t address, uint64
 static bool ranges_overlap(uint64_t a_start, uint64_t a_length, uint64_t b_start, uint64_t b_length) {
     uint64_t a_end = 0;
     uint64_t b_end = 0;
-    if (!checked_u64_add(a_start, a_length, &a_end) || !checked_u64_add(b_start, b_length, &b_end)) {
+    if (!emu_checked_add_u64(a_start, a_length, &a_end) || !emu_checked_add_u64(b_start, b_length, &b_end)) {
         return true;
     }
     return a_start < b_end && b_start < a_end;
@@ -684,7 +678,7 @@ static bool resolve_macho_entry_from_lc_main(const EmuLoadedProgram *program, ui
     for (size_t i = 0; i < program->segment_count; i++) {
         const EmuLoadedSegment *segment = &program->segments[i];
         uint64_t file_end = 0;
-        if (segment->file_size == 0 || !checked_u64_add(segment->file_offset, segment->file_size, &file_end)) {
+        if (segment->file_size == 0 || !emu_checked_add_u64(segment->file_offset, segment->file_size, &file_end)) {
             continue;
         }
         if (entryoff >= segment->file_offset && entryoff < file_end) {
@@ -757,7 +751,7 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
     uint64_t entryoff = 0;
     uint64_t command_offset = MACHO64_HEADER_SIZE;
     uint64_t commands_end = 0;
-    if (!checked_u64_add(MACHO64_HEADER_SIZE, sizeofcmds, &commands_end)) {
+    if (!emu_checked_add_u64(MACHO64_HEADER_SIZE, sizeofcmds, &commands_end)) {
         snprintf(error, error_size, "Mach-O loader error: load-command table size overflow");
         return false;
     }
@@ -771,7 +765,7 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
         uint32_t cmd = read_le32(bytes, (size_t)command_offset + MACHO_LC_CMD);
         uint32_t cmdsize = read_le32(bytes, (size_t)command_offset + MACHO_LC_CMDSIZE);
         uint64_t next_command_offset = 0;
-        if (!checked_u64_add(command_offset, cmdsize, &next_command_offset) ||
+        if (!emu_checked_add_u64(command_offset, cmdsize, &next_command_offset) ||
             !command_range_is_valid(command_offset, cmdsize, file_size) || next_command_offset > commands_end) {
             snprintf(error, error_size,
                      "Mach-O loader error: invalid load command %u size: offset=0x%016" PRIx64
@@ -814,7 +808,7 @@ static bool load_macho64_from_bytes(Emulator *emu, const uint8_t *bytes, size_t 
                 snprintf(error, error_size, "Mach-O loader error: LC_SEGMENT_64 section table size overflow");
                 return false;
             }
-            if (!checked_u64_add(MACHO64_SEGMENT_COMMAND_SIZE, section_table_size, &required_segment_size) ||
+            if (!emu_checked_add_u64(MACHO64_SEGMENT_COMMAND_SIZE, section_table_size, &required_segment_size) ||
                 cmdsize < required_segment_size) {
                 snprintf(error, error_size,
                          "Mach-O loader error: LC_SEGMENT_64 section table is truncated: nsects=%" PRIu32
@@ -1065,7 +1059,7 @@ bool emulator_load_program(Emulator *emu, const char *path, EmuLoadedProgram *pr
         if ((size_t)raw_instruction_size < file_size) {
             snprintf(error, error_size, "loader error: raw mapping size overflow for file size 0x%zx", file_size);
             ok = false;
-        } else if (!checked_u64_add(EMU_LOAD_ADDRESS, raw_instruction_size, &raw_end) ||
+        } else if (!emu_checked_add_u64(EMU_LOAD_ADDRESS, raw_instruction_size, &raw_end) ||
                    !align_up_to_page(raw_end, &raw_mapping_size) || raw_mapping_size < EMU_LOAD_ADDRESS) {
             snprintf(error, error_size, "loader error: raw page mapping size overflow for file size 0x%zx", file_size);
             ok = false;

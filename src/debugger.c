@@ -1,10 +1,11 @@
 #include "emulator.h"
 
+#include "emu_format.h"
+#include "emu_util.h"
+
 #include <ctype.h>
-#include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #define DEBUGGER_LINE_SIZE 256u
@@ -12,20 +13,6 @@
 static void debugger_clear_break_stop(Debugger *debugger) {
     debugger->stopped_at_breakpoint = false;
     debugger->stopped_breakpoint_address = 0;
-}
-
-static bool parse_u64_debug(const char *text, uint64_t *out) {
-    if (text == NULL || text[0] == '\0' || text[0] == '-' || text[0] == '+') {
-        return false;
-    }
-    char *end = NULL;
-    errno = 0;
-    unsigned long long value = strtoull(text, &end, 0);
-    if (errno != 0 || end == text || *end != '\0') {
-        return false;
-    }
-    *out = (uint64_t)value;
-    return true;
 }
 
 static char *trim_left(char *text) {
@@ -154,41 +141,6 @@ static void debugger_print_kernel_context(const Debugger *debugger, FILE *stream
                 task->pc, task->sp, task->wake_tick, task->exit_code, task->switch_count, task->mailbox_count,
                 EMU_TOY_KERNEL_MAILBOX_SLOTS, (unsigned)task->fault_cause, task->fault_address);
     }
-}
-
-static bool dump_memory_debug(const Memory *memory, uint64_t address, uint64_t length, FILE *stream, char *error,
-                              size_t error_size) {
-    if (address > (uint64_t)memory->size || length > (uint64_t)memory->size ||
-        address + length > (uint64_t)memory->size || address + length < address) {
-        snprintf(error, error_size,
-                 "dump range out of bounds: address=0x%016" PRIx64 " length=0x%016" PRIx64
-                 " memory_size=0x%zx",
-                 address, length, memory->size);
-        return false;
-    }
-    if (!memory_check_read(memory, address, length, error, error_size)) {
-        char cause[512];
-        snprintf(cause, sizeof(cause), "%s", error);
-        snprintf(error, error_size,
-                 "dump range is not readable: address=0x%016" PRIx64 " length=0x%016" PRIx64 " (%.300s)",
-                 address, length, cause);
-        return false;
-    }
-
-    fprintf(stream, "memory dump address=0x%016" PRIx64 " length=0x%016" PRIx64 "\n", address, length);
-    for (uint64_t offset = 0; offset < length; offset += 16u) {
-        fprintf(stream, "0x%016" PRIx64 ":", address + offset);
-        uint64_t line_len = length - offset < 16u ? length - offset : 16u;
-        for (uint64_t i = 0; i < line_len; i++) {
-            uint8_t value = 0;
-            if (!memory_read8(memory, address + offset + i, &value, error, error_size)) {
-                return false;
-            }
-            fprintf(stream, " %02x", value);
-        }
-        fprintf(stream, "\n");
-    }
-    return true;
 }
 
 static void debugger_print_stop(const Debugger *debugger, EmuStatus status, const char *error, FILE *output,
@@ -498,7 +450,7 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
         if (strcmp(command, "map") == 0) {
             char *address_text = next_token(&cursor);
             uint64_t address = 0;
-            if (address_text == NULL || has_extra_tokens(&cursor) || !parse_u64_debug(address_text, &address)) {
+            if (address_text == NULL || has_extra_tokens(&cursor) || !emu_parse_u64_strict(address_text, &address)) {
                 fprintf(error_stream, "error: usage: map <address>\n");
                 continue;
             }
@@ -541,12 +493,12 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
             uint64_t address = 0;
             uint64_t length = 0;
             if (address_text == NULL || length_text == NULL || has_extra_tokens(&cursor) ||
-                !parse_u64_debug(address_text, &address) ||
-                !parse_u64_debug(length_text, &length)) {
+                !emu_parse_u64_strict(address_text, &address) ||
+                !emu_parse_u64_strict(length_text, &length)) {
                 fprintf(error_stream, "error: usage: mem <address> <length>\n");
                 continue;
             }
-            if (!dump_memory_debug(&debugger->emu.memory, address, length, output, error, sizeof(error))) {
+            if (!emu_format_memory_dump(&debugger->emu.memory, address, length, output, error, sizeof(error))) {
                 fprintf(error_stream, "error: %s\n", error);
             }
             continue;
@@ -554,7 +506,7 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
         if (strcmp(command, "break") == 0 || strcmp(command, "b") == 0) {
             char *address_text = next_token(&cursor);
             uint64_t address = 0;
-            if (address_text == NULL || has_extra_tokens(&cursor) || !parse_u64_debug(address_text, &address)) {
+            if (address_text == NULL || has_extra_tokens(&cursor) || !emu_parse_u64_strict(address_text, &address)) {
                 fprintf(error_stream, "error: usage: break <address>\n");
                 continue;
             }
@@ -581,7 +533,7 @@ int debugger_repl(Debugger *debugger, FILE *input, FILE *output, FILE *error_str
         if (strcmp(command, "delete") == 0) {
             char *target_text = next_token(&cursor);
             uint64_t target = 0;
-            if (target_text == NULL || has_extra_tokens(&cursor) || !parse_u64_debug(target_text, &target)) {
+            if (target_text == NULL || has_extra_tokens(&cursor) || !emu_parse_u64_strict(target_text, &target)) {
                 fprintf(error_stream, "error: usage: delete <breakpoint-id-or-address>\n");
                 continue;
             }

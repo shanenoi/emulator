@@ -1,5 +1,7 @@
 #include "emulator.h"
 
+#include "emu_util.h"
+
 #include <inttypes.h>
 #include <limits.h>
 #include <stdio.h>
@@ -12,27 +14,10 @@ static int64_t sign_extend(uint64_t value, unsigned bits) {
     return (int64_t)((value ^ sign_bit) - sign_bit);
 }
 
-static bool checked_add_signed(uint64_t base, int64_t offset, uint64_t *result) {
-    if (offset < 0) {
-        uint64_t magnitude = (uint64_t)(-(offset + 1)) + 1ull;
-        if (magnitude > base) {
-            return false;
-        }
-        *result = base - magnitude;
-        return true;
-    }
-
-    uint64_t magnitude = (uint64_t)offset;
-    if (magnitude > UINT64_MAX - base) {
-        return false;
-    }
-    *result = base + magnitude;
-    return true;
-}
-
 static bool check_data_range(const Memory *memory, uint64_t address, uint8_t width, char *error, size_t error_size) {
-    if (address > (uint64_t)memory->size || width > memory->size ||
-        address + width > (uint64_t)memory->size || address + width < address) {
+    uint64_t end = 0;
+    if (!emu_checked_add_u64(address, width, &end) || address > (uint64_t)memory->size || width > memory->size ||
+        end > (uint64_t)memory->size) {
         snprintf(error, error_size, "memory access out of bounds: address=0x%016" PRIx64 " width=%u memory_size=0x%zx",
                  address, (unsigned)width, memory->size);
         return false;
@@ -257,22 +242,15 @@ bool cpu_calculate_branch_target(uint64_t pc, int64_t offset, const Memory *memo
                                  size_t error_size) {
     uint64_t result = 0;
 
-    if (offset < 0) {
-        uint64_t magnitude = (uint64_t)(-(offset + 1)) + 1ull;
-        if (magnitude > pc) {
+    if (!emu_checked_add_i64(pc, offset, &result)) {
+        if (offset < 0) {
             snprintf(error, error_size, "branch target before memory: pc=0x%016" PRIx64 " offset=%" PRId64, pc,
                      offset);
-            return false;
-        }
-        result = pc - magnitude;
-    } else {
-        uint64_t magnitude = (uint64_t)offset;
-        if (magnitude > UINT64_MAX - pc) {
+        } else {
             snprintf(error, error_size, "branch target overflow: pc=0x%016" PRIx64 " offset=%" PRId64, pc,
                      offset);
-            return false;
         }
-        result = pc + magnitude;
+        return false;
     }
 
     if ((result & 0x3ull) != 0) {
@@ -958,7 +936,7 @@ bool cpu_calculate_memory_access(const Cpu *cpu, const EmuDecodedInstruction *in
     case EMU_ADDR_UNSIGNED_OFFSET:
     case EMU_ADDR_UNSCALED:
     case EMU_ADDR_PAIR_OFFSET:
-        if (!checked_add_signed(base, instruction->offset, &access_address)) {
+        if (!emu_checked_add_i64(base, instruction->offset, &access_address)) {
             snprintf(error, error_size, "memory address overflow: base=0x%016" PRIx64 " offset=%" PRId64, base,
                      instruction->offset);
             return false;
@@ -970,18 +948,17 @@ bool cpu_calculate_memory_access(const Cpu *cpu, const EmuDecodedInstruction *in
         if (instruction->shift_amount != 0) {
             offset <<= instruction->shift_amount;
         }
-        if (offset > UINT64_MAX - base) {
+        if (!emu_checked_add_u64(base, offset, &access_address)) {
             snprintf(error, error_size, "register-offset memory address overflow: base=0x%016" PRIx64
                                           " offset=0x%016" PRIx64,
                      base, offset);
             return false;
         }
-        access_address = base + offset;
         break;
     }
 
     case EMU_ADDR_PRE_INDEX:
-        if (!checked_add_signed(base, instruction->offset, &updated_base)) {
+        if (!emu_checked_add_i64(base, instruction->offset, &updated_base)) {
             snprintf(error, error_size, "pre-index write-back overflow: base=0x%016" PRIx64 " offset=%" PRId64,
                      base, instruction->offset);
             return false;
@@ -992,7 +969,7 @@ bool cpu_calculate_memory_access(const Cpu *cpu, const EmuDecodedInstruction *in
 
     case EMU_ADDR_POST_INDEX:
         access_address = base;
-        if (!checked_add_signed(base, instruction->offset, &updated_base)) {
+        if (!emu_checked_add_i64(base, instruction->offset, &updated_base)) {
             snprintf(error, error_size, "post-index write-back overflow: base=0x%016" PRIx64 " offset=%" PRId64,
                      base, instruction->offset);
             return false;
@@ -1308,7 +1285,7 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
 
     case EMU_INST_ADR: {
         uint64_t target = 0;
-        if (!checked_add_signed(current_pc, instruction.offset, &target)) {
+        if (!emu_checked_add_i64(current_pc, instruction.offset, &target)) {
             snprintf(error, error_size, "ADR target overflow: pc=0x%016" PRIx64 " offset=%" PRId64, current_pc,
                      instruction.offset);
             return EMU_ERROR;
@@ -1321,7 +1298,7 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
     case EMU_INST_ADRP: {
         uint64_t page = current_pc & ~0xfffull;
         uint64_t target = 0;
-        if (!checked_add_signed(page, instruction.offset, &target)) {
+        if (!emu_checked_add_i64(page, instruction.offset, &target)) {
             snprintf(error, error_size, "ADRP target overflow: pc_page=0x%016" PRIx64 " offset=%" PRId64, page,
                      instruction.offset);
             return EMU_ERROR;
@@ -1480,7 +1457,7 @@ EmuStatus cpu_step(Cpu *cpu, Memory *memory, char *error, size_t error_size) {
     case EMU_INST_LDR_LITERAL: {
         uint64_t address = 0;
         uint64_t value = 0;
-        if (!checked_add_signed(current_pc, instruction.offset, &address)) {
+        if (!emu_checked_add_i64(current_pc, instruction.offset, &address)) {
             snprintf(error, error_size, "literal load address overflow: pc=0x%016" PRIx64 " offset=%" PRId64,
                      current_pc, instruction.offset);
             return EMU_ERROR;

@@ -1,17 +1,11 @@
 #include "emulator.h"
 
+#include "emu_util.h"
+
 #include <errno.h>
 #include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
-
-static bool checked_add_u64(uint64_t left, uint64_t right, uint64_t *out) {
-    if (right > UINT64_MAX - left) {
-        return false;
-    }
-    *out = left + right;
-    return true;
-}
 
 static void terminal_clear_cells(EmuDeviceBus *devices) {
     memset(devices->terminal_cells, ' ', EMU_TERM_MAX_CELLS);
@@ -299,7 +293,7 @@ bool memory_frame_ready(const Memory *memory) {
 
 static bool device_contains_range(const EmuDeviceRange *device, uint64_t address, uint64_t width) {
     uint64_t end = 0;
-    if (device == NULL || width == 0 || !checked_add_u64(address, width, &end)) {
+    if (device == NULL || width == 0 || !emu_checked_add_u64(address, width, &end)) {
         return false;
     }
     return address >= device->start && end <= device->start + device->size;
@@ -840,7 +834,7 @@ static bool check_bounds(const Memory *memory, uint64_t address, uint64_t width,
     }
 
     uint64_t end = 0;
-    if (!checked_add_u64(address, width, &end) || address > (uint64_t)memory->size || width > (uint64_t)memory->size ||
+    if (!emu_checked_add_u64(address, width, &end) || address > (uint64_t)memory->size || width > (uint64_t)memory->size ||
         end > (uint64_t)memory->size) {
         snprintf(error, error_size,
                  "memory access out of bounds: address=0x%016" PRIx64 " width=0x%016" PRIx64
@@ -1045,7 +1039,7 @@ bool memory_map_range(Memory *memory, uint64_t address, uint64_t length, uint8_t
     }
 
     uint64_t end = 0;
-    if (!checked_add_u64(address, length, &end)) {
+    if (!emu_checked_add_u64(address, length, &end)) {
         snprintf(error, error_size,
                  "memory map error: mapping outside memory: address=0x%016" PRIx64 " length=0x%016" PRIx64
                  " memory_size=0x%zx",

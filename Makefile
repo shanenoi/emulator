@@ -6,6 +6,8 @@ LDFLAGS ?=
 TARGET := emulator
 SRC := \
 	src/main.c \
+	src/util.c \
+	src/format.c \
 	src/debugger.c \
 	src/emulator.c \
 	src/disasm.c \
@@ -16,6 +18,8 @@ OBJ := $(SRC:.c=.o)
 
 CORE_SRC := \
 	src/emulator.c \
+	src/util.c \
+	src/format.c \
 	src/debugger.c \
 	src/disasm.c \
 	src/cpu.c \
@@ -30,7 +34,7 @@ all: $(TARGET)
 $(TARGET): $(OBJ)
 	$(CC) $(LDFLAGS) -o $@ $(OBJ)
 
-src/%.o: src/%.c include/emulator.h
+src/%.o: src/%.c include/emulator.h include/emu_util.h include/emu_format.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 V0_1_EXAMPLES := examples/v0_1/add.bin examples/v0_1/nop_hlt.bin examples/v0_1/sub.bin
