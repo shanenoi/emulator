@@ -8,6 +8,8 @@ SRC := \
 	src/main.c \
 	src/util.c \
 	src/format.c \
+	src/devices.c \
+	src/mmio.c \
 	src/debugger.c \
 	src/emulator.c \
 	src/disasm.c \
@@ -20,6 +22,8 @@ CORE_SRC := \
 	src/emulator.c \
 	src/util.c \
 	src/format.c \
+	src/devices.c \
+	src/mmio.c \
 	src/debugger.c \
 	src/disasm.c \
 	src/cpu.c \
@@ -34,7 +38,7 @@ all: $(TARGET)
 $(TARGET): $(OBJ)
 	$(CC) $(LDFLAGS) -o $@ $(OBJ)
 
-src/%.o: src/%.c include/emulator.h include/emu_util.h include/emu_format.h
+src/%.o: src/%.c include/emulator.h include/emu_util.h include/emu_format.h include/devices.h include/mmio.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 V0_1_EXAMPLES := examples/v0_1/add.bin examples/v0_1/nop_hlt.bin examples/v0_1/sub.bin

@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #define TMP_DIR "tests/phase0/tmp/"
 
@@ -209,6 +210,11 @@ static FILE *tmpfile_or_die(void) {
         exit(1);
     }
     return file;
+}
+
+static void ensure_tmp_dir(void) {
+    (void)mkdir("tests/phase0", 0777);
+    (void)mkdir("tests/phase0/tmp", 0777);
 }
 
 static size_t read_stream(FILE *file, uint8_t *out, size_t capacity) {
@@ -702,6 +708,8 @@ static void test_loader_mapping_permission_characterization(void) {
 }
 
 int main(void) {
+    ensure_tmp_dir();
+
     test_cpu_decode_execute_characterization();
     test_emulator_step_traps_syscalls_and_exceptions();
     test_emulator_step_fetch_decode_and_fault_classification();
