@@ -491,10 +491,16 @@ release-docs-check:
 	@set -eu; \
 		fail() { echo "release docs check failed: $$*" >&2; exit 1; }; \
 		need_file() { [ -f "$$1" ] || fail "missing required file: $$1"; }; \
-		for version in v0.1 v0.2 v0.3 v0.4 v0.5 v0.6 v0.7 v0.8 v0.9 v1.0 v1.1 v1.2 v1.3 v1.4 v1.5 v1.6; do \
+		need_readme_link() { grep -q -- "$$1" README.md || fail "README does not link or describe: $$1"; }; \
+		test_versions="v0.1 v0.2 v0.3 v0.4 v0.5 v0.6 v0.7 v0.8 v0.9 v1.0 v1.1 v1.2 v1.3 v1.4 v1.5 v1.6 v1.7 v1.8 v1.9 v1.10 v1.11 v1.12 v1.13"; \
+		for version in $$test_versions; do \
 			need_file "docs/test-plan-$$version.md"; \
+			need_readme_link "$$version Test Plan"; \
 		done; \
 		need_file docs/test-plan-v1.3-traceability.md; \
+		need_readme_link "v1.3 Test Traceability"; \
+		need_file docs/module-ownership.md; \
+		need_readme_link "Module Ownership"; \
 		for lesson in \
 			lessons/v0.1-instruction-sandbox.md \
 			lessons/v0.2-branches-and-loops.md \
@@ -514,90 +520,123 @@ release-docs-check:
 			lessons/v1.6-tiny-os-lab.md; do \
 			need_file "$$lesson"; \
 		done; \
-		need_file examples/README.md; \
-		need_file examples/v1_0/README.md; \
-		need_file examples/v1_0/smoke_manifest.txt; \
-		need_file examples/v1_1/README.md; \
-		need_file examples/v1_1/generate_macho_fixtures.py; \
-		need_file examples/v1_2/README.md; \
-		need_file examples/v1_2/generate_vm_fixtures.py; \
-		need_file examples/v1_3/README.md; \
-		need_file examples/v1_3/generate_device_fixtures.py; \
-		need_file examples/v1_4/README.md; \
-		need_file examples/v1_4/generate_exception_fixtures.py; \
-		need_file examples/v1_5/README.md; \
-		need_file examples/v1_5/generate_kernel_fixtures.py; \
-		need_file examples/v1_6/README.md; \
-		need_file examples/v1_6/generate_tiny_os_fixtures.py; \
-		need_file tests/v1_0/test_cli_release.sh; \
-		need_file tests/v1_0/test_docs_release.sh; \
-		need_file tests/v1_0/test_optional_release_examples.sh; \
-		need_file tests/fixtures/macho_fixture_writer.py; \
-		need_file tests/v1_1/test_v1_1.c; \
-		need_file tests/v1_1/test_cli_macho.sh; \
-		need_file tests/v1_1/test_docs_macho.sh; \
-		need_file tests/v1_1/test_optional_macho_examples.sh; \
-		need_file tests/fixtures/vm_fixture_writer.py; \
-		need_file tests/v1_2/test_v1_2.c; \
-		need_file tests/v1_2/test_cli_virtual_memory.sh; \
-		need_file tests/v1_2/test_debugger_virtual_memory.sh; \
-		need_file tests/v1_2/test_docs_virtual_memory.sh; \
-		need_file tests/fixtures/device_fixture_writer.py; \
-		need_file tests/v1_3/test_v1_3.c; \
-		need_file tests/v1_3/test_cli_devices.sh; \
-		need_file tests/v1_3/test_debugger_devices.sh; \
-		need_file tests/v1_3/test_docs_devices.sh; \
-		need_file tests/fixtures/exception_fixture_writer.py; \
-		need_file tests/v1_4/test_v1_4.c; \
-		need_file tests/v1_4/test_cli_exceptions.sh; \
-		need_file tests/v1_4/test_debugger_exceptions.sh; \
-		need_file tests/v1_4/test_docs_exceptions.sh; \
-		need_file tests/fixtures/kernel_fixture_writer.py; \
-		need_file tests/v1_5/test_v1_5.c; \
-		need_file tests/v1_5/test_cli_kernel.sh; \
-		need_file tests/v1_5/test_debugger_kernel.sh; \
-		need_file tests/v1_5/test_docs_kernel.sh; \
-		need_file tests/v1_5/test_optional_kernel_examples.sh; \
-		need_file tests/fixtures/tiny_os_fixture_writer.py; \
-		need_file tests/v1_6/test_v1_6.c; \
-		need_file tests/v1_6/test_cli_tiny_os.sh; \
-		need_file tests/v1_6/test_debugger_tiny_os.sh; \
-		need_file tests/v1_6/test_docs_tiny_os.sh; \
-		need_file tests/v1_6/test_optional_tiny_os_examples.sh; \
-		need_file README.md; \
-		grep -q "v1.1 Test Plan" README.md || fail "README does not link the v1.1 test plan"; \
-		grep -q "v1.2 Test Plan" README.md || fail "README does not link the v1.2 test plan"; \
-		grep -q "v1.3 Test Plan" README.md || fail "README does not link the v1.3 test plan"; \
-		grep -q "v1.4 Test Plan" README.md || fail "README does not link the v1.4 test plan"; \
-		grep -q "v1.5 Test Plan" README.md || fail "README does not link the v1.5 test plan"; \
-		grep -q "v1.6 Test Plan" README.md || fail "README does not link the v1.6 test plan"; \
-		grep -q "v1.3 Test Traceability" README.md || fail "README does not link the v1.3 traceability checklist"; \
-		grep -q "v1.1 Lesson" README.md || fail "README does not link the v1.1 lesson"; \
-		grep -q "v1.2 Lesson" README.md || fail "README does not link the v1.2 lesson"; \
-		grep -q "v1.3 Lesson" README.md || fail "README does not link the v1.3 lesson"; \
-		grep -q "v1.4 Lesson" README.md || fail "README does not link the v1.4 lesson"; \
-		grep -q "v1.5 Lesson" README.md || fail "README does not link the v1.5 lesson"; \
-		grep -q "v1.6 Lesson" README.md || fail "README does not link the v1.6 lesson"; \
-		grep -q "v0.1 through v1.6" README.md || fail "README does not describe current deterministic tests"; \
-		grep -q "make release-check" README.md || fail "README does not document make release-check"; \
-		grep -q "make test-asan" README.md || fail "README does not document optional sanitizer checks"; \
-		grep -q "fresh archive.*full deterministic test suite\|fresh-archive full deterministic-suite" README.md || fail "README does not document full deterministic-suite archive validation"; \
-		grep -q "raw.*ELF64" README.md || fail "README does not describe raw and ELF64 program support"; \
-		grep -q "Mach-O" README.md || fail "README does not describe Mach-O program support"; \
-		grep -q "Virtual Memory" README.md || fail "README does not describe v1.2 virtual memory"; \
-		grep -q "page" README.md || fail "README does not describe page mappings"; \
-		grep -q "Memory-Mapped Devices" README.md || fail "README does not describe v1.3 memory-mapped devices"; \
-		grep -q "UART" README.md || fail "README does not describe the v1.3 UART device"; \
-		grep -q "Exceptions, Traps, and Interrupt Skeleton" README.md || fail "README does not describe v1.4 exceptions"; \
-		grep -q "0x09030000" README.md || fail "README does not describe the v1.4 exception controller"; \
-		grep -q "Toy Kernel Mode" README.md || fail "README does not describe v1.5 toy kernel mode"; \
-		grep -q -- "--kernel" README.md || fail "README does not describe the v1.5 kernel flag"; \
-		grep -q "implemented/tested teaching profile for \*\*v1.5" README.md || fail "README does not describe v1.5 as implemented/tested"; \
-		grep -q "dynamic linking" README.md || fail "README does not list stable limitations"; \
+		for text in "v1.1 Lesson" "v1.2 Lesson" "v1.3 Lesson" "v1.4 Lesson" "v1.5 Lesson" "v1.6 Lesson"; do \
+			need_readme_link "$$text"; \
+		done; \
+		for file in \
+			examples/README.md \
+			examples/v1_0/README.md \
+			examples/v1_0/smoke_manifest.txt \
+			examples/v1_1/README.md \
+			examples/v1_1/generate_macho_fixtures.py \
+			examples/v1_2/README.md \
+			examples/v1_2/generate_vm_fixtures.py \
+			examples/v1_3/README.md \
+			examples/v1_3/generate_device_fixtures.py \
+			examples/v1_4/README.md \
+			examples/v1_4/generate_exception_fixtures.py \
+			examples/v1_5/README.md \
+			examples/v1_5/generate_kernel_fixtures.py \
+			examples/v1_6/README.md \
+			examples/v1_6/generate_tiny_os_fixtures.py \
+			examples/demos/README.md \
+			examples/demos/snake.c \
+			examples/demos/start.s \
+			examples/demos/linker.ld; do \
+			need_file "$$file"; \
+		done; \
+		for file in \
+			tests/v1_0/test_cli_release.sh \
+			tests/v1_0/test_docs_release.sh \
+			tests/v1_0/test_optional_release_examples.sh \
+			tests/fixtures/macho_fixture_writer.py \
+			tests/v1_1/test_v1_1.c \
+			tests/v1_1/test_cli_macho.sh \
+			tests/v1_1/test_docs_macho.sh \
+			tests/v1_1/test_optional_macho_examples.sh \
+			tests/fixtures/vm_fixture_writer.py \
+			tests/v1_2/test_v1_2.c \
+			tests/v1_2/test_cli_virtual_memory.sh \
+			tests/v1_2/test_debugger_virtual_memory.sh \
+			tests/v1_2/test_docs_virtual_memory.sh \
+			tests/fixtures/device_fixture_writer.py \
+			tests/v1_3/test_v1_3.c \
+			tests/v1_3/test_cli_devices.sh \
+			tests/v1_3/test_debugger_devices.sh \
+			tests/v1_3/test_docs_devices.sh \
+			tests/fixtures/exception_fixture_writer.py \
+			tests/v1_4/test_v1_4.c \
+			tests/v1_4/test_cli_exceptions.sh \
+			tests/v1_4/test_debugger_exceptions.sh \
+			tests/v1_4/test_docs_exceptions.sh \
+			tests/fixtures/kernel_fixture_writer.py \
+			tests/v1_5/test_v1_5.c \
+			tests/v1_5/test_cli_kernel.sh \
+			tests/v1_5/test_debugger_kernel.sh \
+			tests/v1_5/test_docs_kernel.sh \
+			tests/v1_5/test_optional_kernel_examples.sh \
+			tests/fixtures/tiny_os_fixture_writer.py \
+			tests/v1_6/test_v1_6.c \
+			tests/v1_6/test_cli_tiny_os.sh \
+			tests/v1_6/test_debugger_tiny_os.sh \
+			tests/v1_6/test_docs_tiny_os.sh \
+			tests/v1_6/test_optional_tiny_os_examples.sh \
+			tests/v1_7/test_v1_7.c \
+			tests/v1_7/test_cli_keyboard.sh \
+			tests/v1_8/test_v1_8.c \
+			tests/v1_8/test_cli_terminal.sh \
+			tests/v1_9/test_v1_9.c \
+			tests/v1_9/test_cli_interactive.sh \
+			tests/v1_10/test_v1_10.c \
+			tests/v1_10/test_cli_frames.sh \
+			tests/v1_11/test_v1_11.c \
+			tests/v1_11/test_cli_guest_helpers.sh \
+			tests/v1_12/test_v1_12.c \
+			tests/v1_12/test_cli_instruction_coverage.sh \
+			tests/v1_13/test_cli_snake_demo.sh \
+			tests/phase0/test_phase0.c \
+			tests/phase0/test_cli_phase0.sh; do \
+			need_file "$$file"; \
+		done; \
+		for text in \
+			"v0.1 through v1.13" \
+			"make release-check" \
+			"make test-asan" \
+			"fresh archive" \
+			"raw" \
+			"ELF64" \
+			"Mach-O" \
+			"Virtual Memory" \
+			"page" \
+			"Memory-Mapped Devices" \
+			"UART" \
+			"Exceptions, Traps, and Interrupt Skeleton" \
+			"0x09030000" \
+			"Toy Kernel Mode" \
+			"--kernel" \
+			"BRK #0x160" \
+			"Deterministic Keyboard Input Device" \
+			"Deterministic Terminal Screen Device" \
+			"Optional Interactive Host Runner" \
+			"Deterministic Frame Pacing" \
+			"Freestanding Guest Runtime Helpers" \
+			"Practical ARM64 Instruction Coverage" \
+			"Snake" \
+			"dynamic linking"; do \
+			need_readme_link "$$text"; \
+		done; \
+		for text in \
+			"CPU owns" \
+			"Memory owns" \
+			"MMIO owns" \
+			"Devices own" \
+			"public umbrella include"; do \
+			grep -q "$$text" docs/module-ownership.md || fail "module ownership doc does not describe: $$text"; \
+		done; \
 		if grep -qi "no ELF loader yet" README.md; then fail "README still says there is no ELF loader"; fi; \
 		if grep -qi "v0.8 tests are missing\|v0.9 tests are missing" README.md; then fail "README contains stale missing-test wording for implemented versions"; fi; \
 		if grep -qi "not added yet\|will be added in the v1.0 test phase\|tests/v1_0/.*planned\|tests are still pending\|tests are intentionally deferred\|fixtures/tests are deferred" README.md; then fail "README contains stale wording about missing implemented tests"; fi; \
-		printf '%s\n' "v1.6 release docs check passed"
+		printf '%s\n' "v1.13 release docs check passed"
 
 release-hygiene-check:
 	@set -eu; \
@@ -605,11 +644,11 @@ release-hygiene-check:
 		[ -d .git ] || fail "not running from a git checkout"; \
 		tracked_generated=$$(git ls-files | grep -E '(^emulator$$|\.(o|bin|elf|macho)$$|^tests/v[0-9_]+/test_v[0-9_]+$$)' || true); \
 		if [ -n "$$tracked_generated" ]; then echo "$$tracked_generated" >&2; fail "generated build outputs are tracked"; fi; \
-		for pattern in 'emulator' '*.o' '*.bin' '*.elf' '*.macho' 'tests/v0_9/tmp/' 'tests/v1_0/tmp/' 'tests/v1_1/tmp/' 'tests/v1_2/tmp/' 'tests/v1_3/tmp/' 'tests/v1_4/tmp/' 'tests/v1_5/tmp/' 'tests/v1_6/tmp/'; do \
+		for pattern in 'emulator' '*.o' '*.bin' '*.elf' '*.macho' 'tests/v0_9/tmp/' 'tests/v1_0/tmp/' 'tests/v1_1/tmp/' 'tests/v1_2/tmp/' 'tests/v1_3/tmp/' 'tests/v1_4/tmp/' 'tests/v1_5/tmp/' 'tests/v1_6/tmp/' 'tests/v1_7/tmp/' 'tests/v1_8/tmp/' 'tests/v1_9/tmp/' 'tests/v1_10/tmp/' 'tests/v1_11/tmp/' 'tests/v1_12/tmp/' 'tests/v1_13/tmp/'; do \
 			grep -Fq "$$pattern" .gitignore || fail ".gitignore does not cover $$pattern"; \
 		done; \
 		if [ -d scripts ]; then fail "./scripts must not be shipped in source"; fi; \
-		printf '%s\n' "v1.6 release hygiene check passed"
+		printf '%s\n' "v1.13 release hygiene check passed"
 
 release-clean-check:
 	@set -eu; \
@@ -626,8 +665,8 @@ release-clean-check:
 		: > tests/v1_4/tmp/clean_probe.tmp; \
 		mkdir -p tests/v1_5/tmp; \
 		: > tests/v1_5/tmp/clean_probe.tmp; \
-		mkdir -p tests/v1_6/tmp; \
-		: > tests/v1_6/tmp/clean_probe.tmp; \
+		mkdir -p tests/v1_6/tmp tests/v1_7/tmp tests/v1_8/tmp tests/v1_9/tmp tests/v1_10/tmp tests/v1_11/tmp tests/v1_12/tmp tests/v1_13/tmp; \
+		for dir in tests/v1_6/tmp tests/v1_7/tmp tests/v1_8/tmp tests/v1_9/tmp tests/v1_10/tmp tests/v1_11/tmp tests/v1_12/tmp tests/v1_13/tmp; do : > $$dir/clean_probe.tmp; done; \
 		: > examples/v1_2/mapping_inspection.txt; \
 		: > tests/v0_9/test_v0_9; \
 		if [ "$${RELEASE_CLEAN_FULL:-0}" = "1" ]; then make examples >/dev/null; make test >/dev/null; fi; \
@@ -642,10 +681,13 @@ release-clean-check:
 			-o -path './tests/v0_9/test_v0_9' -o -path './tests/v1_1/test_v1_1' \
 			-o -path './tests/v1_2/test_v1_2' -o -path './tests/v1_3/test_v1_3' \
 			-o -path './tests/v1_4/test_v1_4' -o -path './tests/v1_5/test_v1_5' \
-			-o -path './tests/v1_6/test_v1_6' \
+			-o -path './tests/v1_6/test_v1_6' -o -path './tests/v1_7/test_v1_7' \
+			-o -path './tests/v1_8/test_v1_8' -o -path './tests/v1_9/test_v1_9' \
+			-o -path './tests/v1_10/test_v1_10' -o -path './tests/v1_11/test_v1_11' \
+			-o -path './tests/v1_12/test_v1_12' \
 			\) -print | sort); \
 		if [ -n "$$leftovers" ]; then echo "$$leftovers" >&2; fail "make clean left generated artifacts behind"; fi; \
-		printf '%s\n' "v1.6 release clean-artifact check passed"
+		printf '%s\n' "v1.13 release clean-artifact check passed"
 
 release-archive-check:
 	@set -eu; \
@@ -669,10 +711,10 @@ release-archive-check:
 		EMULATOR_SKIP_OPTIONAL_REAL_TOOLCHAIN=1 make -C "$$extract_dir" -j$${RELEASE_ARCHIVE_JOBS:-4} test; \
 		[ -x "$$extract_dir/emulator" ] || fail "fresh archive did not build emulator through make test"; \
 		"$$extract_dir/emulator" help >/dev/null; \
-		printf '%s\n' "v1.6 release archive check passed: fresh archive ran the full deterministic test suite"
+		printf '%s\n' "v1.13 release archive check passed: fresh archive ran the full deterministic test suite"
 
 release-check: release-docs-check release-hygiene-check release-clean-check release-archive-check
-	@echo "v1.6 release gate passed: tests, docs, hygiene, clean-artifact, and fresh-archive full-suite checks completed successfully"
+	@echo "v1.13 release gate passed: tests, docs, hygiene, clean-artifact, and fresh-archive full-suite checks completed successfully"
 
 test-asan:
 	@set -eu; \

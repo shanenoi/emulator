@@ -59,6 +59,10 @@ This project is for learning CPU emulation, binary loading, low-level debugging,
 - [v1.5 Lesson — Toy Kernel Boot and Cooperative Tasks](lessons/v1.5-toy-kernel-and-cooperative-tasks.md)
 - [v1.6 Lesson — Tiny OS Lab and Guest-Managed Tasks](lessons/v1.6-tiny-os-lab.md)
 
+## Architecture Notes
+
+- [Module Ownership and Header Boundaries](docs/module-ownership.md)
+
 ## Current Implementation Status
 
 The repository currently contains the runtime implementation through **v0.9 — Tiny Freestanding C Programs**, **v1.0 — Stable Learning Emulator** release polish, the implemented/tested teaching profile for **v1.1 — Mach-O Loader**, the implemented/tested teaching profile for **v1.2 — Virtual Memory and Page Permissions**, the implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**, the implemented/tested teaching profile for **v1.4 — Exceptions, Traps, and Interrupt Skeleton**, the implemented/tested teaching profile for **v1.5 — Toy Kernel Mode**, the implemented/tested teaching profile for **v1.6 — Tiny OS Lab**, the implemented/tested teaching profile for **v1.7 — Deterministic Keyboard Input Device**, the implemented/tested teaching profile for **v1.8 — Deterministic Terminal Screen Device**, the implemented/tested teaching profile for **v1.9 — Optional Interactive Host Runner**, the implemented/tested teaching profile for **v1.10 — Deterministic Frame Pacing**, the implemented/tested teaching profile for **v1.11 — Freestanding Guest Runtime Helpers**, the implemented/tested teaching profile for **v1.12 — Practical ARM64 Instruction Coverage for Freestanding Guest Demos**, and an optional **v1.13 freestanding Snake guest demo** under `examples/demos/`. v1.4 adds the exception-controller data model, host and CLI vector configuration, a guest-visible exception-controller MMIO device, simplified exception entry/return flow, `BRK` and `ERET` decoding, catchable paths for selected faults/traps when a vector is configured, deterministic instruction-count timer interrupts, explicit trace/debug exception visibility, runnable generated examples, and dedicated v1.4 unit/CLI/debugger/docs tests. v1.5 adds an opt-in toy-kernel profile, optional boot-info metadata, host/CLI task creation, fixed task stacks, an explicit kernel-to-scheduler handoff trap, deterministic cooperative round-robin scheduling, instruction-count timer scheduling, blocked/sleeping task state, per-task fault reporting, toy-kernel `BRK` traps for yield/exit/panic/console output/sleep/start, generated fixtures, and dedicated v1.5 unit/CLI/debugger/docs tests. v1.6 adds the guest-managed Tiny OS Lab with a `BRK #0x160` service dispatcher, guest task creation, guest-readable/read-only boot metadata and task descriptors, deterministic task IDs/names, task information lookup, current-task ID lookup, console/panic/yield/exit/sleep services, service-discovery metadata, hardened stack validation, fixed-size nonblocking mailbox IPC, generated fixtures, and dedicated v1.6 unit/CLI/debugger/docs/optional-example tests. v1.7 adds deterministic keyboard/input MMIO with a fixed FIFO and scripted CLI input. v1.8 adds deterministic terminal/screen MMIO with configurable dimensions, cursor/cell access, scrolling, dirty status, guest helpers, and final CLI screen dumps. v1.9 adds an optional TTY-only host-interactive runner that polls keyboard input into the existing keyboard FIFO and redraws the existing terminal screen buffer; scripted input remains the deterministic test path. v1.10 adds a runner-paced frame MMIO device and deterministic `--frames` mode so guest programs can use the same frame counter in scripted and host-paced runs. v1.11 expands `include/emulator_guest.h` into a tiny freestanding helper API for UART output, keyboard polling, terminal drawing, frame waiting, deterministic random reads, toy exit, and explicit decimal/hex formatting. v1.12 expands the targeted ARM64 subset for common compiler output from small freestanding guest demos. v1.13 adds a small guest-space Snake demo without adding game-specific behavior to emulator internals. It is not a real OS and does not provide production isolation.
@@ -257,7 +261,7 @@ Implemented now:
   - adds a deterministic per-task mailbox: 4 queued messages per task, up to 32 bytes per message, FIFO receive order, and nonblocking `WOULD_BLOCK` errors when empty/full
   - extends `info`, trace output, and debugger `kernel` output with guest-created task metadata, service trap, descriptor table, task IDs, switch counts, labels, and mailbox counts
   - dedicated v1.6 unit, CLI, debugger, docs, optional-example, fixture-generation, clean, and release-hygiene tests
-- Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.0.md`:
+- Automated test suites following `docs/test-plan-v0.1.md` through `docs/test-plan-v1.13.md`:
   - v0.1 unit tests for CPU, memory, loader, fetch, and decode behavior
   - v0.1 integration tests for supported instructions and edge cases
   - v0.1 CLI tests for success, usage errors, loader errors, and decode errors
@@ -282,9 +286,13 @@ Implemented now:
   - v1.1 Mach-O tests for deterministic fixture generation, loader metadata, segment mapping, zero-fill behavior, entry resolution, unsupported runtime command rejection, CLI `run`/`trace`/`regs`/`dump`/`debug`/`info` behavior, docs consistency, and optional Mach-O toolchain smoke checks
   - v1.2 virtual-memory tests for page mapping, R/W/X permission enforcement, loader-created mappings, stack guard behavior, CPU fault ordering, CLI `info`/`run`/`trace`/`regs`/`dump`, debugger `maps`/`map`, docs consistency, generated fixtures, clean behavior, and fresh-archive release coverage
   - v1.3 memory-mapped-device tests for fixed device ranges, RAM/device routing, UART output and faults, timer/random determinism, width/alignment/boundary edge cases, CPU load/store integration, raw and ELF loader integration, CLI `info`/`run`/`trace`/`regs`/`dump`, debugger `maps`/`map`/`mem`, docs consistency, generated fixtures, clean behavior, and fresh-archive release coverage
+  - v1.4 exception and interrupt tests for vector configuration, `BRK`, `ERET`, catchable faults, timer interrupts, trace/debug visibility, and docs consistency
+  - v1.5 toy-kernel tests for kernel boot, host-created tasks, cooperative scheduling, traps, sleeping tasks, task faults, trace/debug visibility, generated fixtures, and docs consistency
+  - v1.6 Tiny OS Lab tests for guest-created tasks, service dispatch, boot metadata, task descriptors, mailbox IPC, stack validation, trace/debug visibility, generated fixtures, and docs consistency
+  - v1.7 through v1.13 tests for keyboard input, terminal rendering, optional interactive mode, frame pacing, guest helper APIs, practical ARM64 instruction coverage, and the optional Snake guest demo
 
 The full v0.1 through v1.13 deterministic test suite runs with `make test`. The release gate runs with `make release-check`; it checks docs, repository hygiene, clean-artifact behavior, and a fresh archive that runs the full deterministic suite after extraction.
-Historical release milestones remain covered inside that command: the v0.1 through v1.0 stable-learning checks still run, the v0.1 through v1.6 deterministic test suite remains part of the regression base, and the v0.1 through v1.5 deterministic test suite is preserved as the regression base for v1.6. Earlier milestones also preserved the v0.1 through v1.3 deterministic test suite as the regression base for v1.4 and the v0.1 through v1.4 deterministic test suite as the regression base for v1.5.
+Historical release milestones remain covered inside that command: the v0.1 through v1.0 stable-learning checks still run, the v0.1 through v1.13 deterministic suite is the current regression base, and earlier version-specific docs checks continue to guard the behavior introduced by each milestone. Historical docs checks also preserve the original milestone wording that the v0.1 through v1.3 deterministic test suite was the regression base for v1.4, the v0.1 through v1.4 deterministic test suite was the regression base for v1.5, the v0.1 through v1.5 deterministic test suite was the regression base for v1.6, and the v0.1 through v1.6 deterministic test suite remains part of the longer regression history.
 
 ## Build and Run
 
@@ -416,7 +424,7 @@ Run the current automated test suite:
 make test
 ```
 
-Run the named v1.0 release gate for the current deterministic suite:
+Run the current release gate for the deterministic suite:
 
 ```sh
 make release-check
@@ -424,7 +432,7 @@ make release-check
 
 The test target builds the emulator, assembles the regression examples through v0.8, generates deterministic v1.1 through v1.6 fixtures, compiles the v0.1 through v1.12 C test runners, and runs all v0.1 through v1.13 CLI/debugger/docs/release checks. The v0.9 and v1.0 CLI tests generate deterministic ELF fixtures directly, and later optional guest-demo checks skip clearly if the freestanding-C cross toolchain is unavailable.
 
-`make release-check` checks v1.0 documentation links/status, repository hygiene, clean-artifact behavior after generating representative artifacts, and a fresh archive that runs the full deterministic suite after extraction. Use `make test` when you want to run the same deterministic suite directly in the current checkout.
+`make release-check` checks current documentation links/status through v1.13, repository hygiene, clean-artifact behavior after generating representative artifacts, and a fresh archive that runs the full deterministic suite after extraction. Use `make test` when you want to run the same deterministic suite directly in the current checkout.
 
 The v1.0 smoke manifest in `examples/v1_0/smoke_manifest.txt` lists representative raw, debugger, syscall, ELF, and tiny-C examples to try manually.
 
@@ -1451,29 +1459,50 @@ emulator/
 │   ├── debugger_commands.c
 │   ├── cpu.c
 │   ├── memory.c
+│   ├── mmio.c
+│   ├── devices.c
+│   ├── emulator.c
+│   ├── exceptions.c
+│   ├── syscall.c
+│   ├── toy_kernel.c
 │   ├── loader.c
 │   ├── loader_io.c
 │   ├── loader_map.c
 │   ├── loader_stack.c
 │   ├── loader_raw.c
 │   ├── loader_elf.c
-│   └── loader_macho.c
+│   ├── loader_macho.c
+│   ├── disasm.c
+│   ├── format.c
+│   └── util.c
 ├── include/
 │   ├── emulator.h
+│   ├── emulator_internal.h
+│   ├── emu_constants.h
 │   ├── cpu.h
 │   ├── memory.h
 │   ├── loader.h
+│   ├── loader_internal.h
 │   ├── exceptions.h
 │   ├── toy_kernel.h
+│   ├── devices.h
 │   ├── mmio.h
+│   ├── cli_options.h
+│   ├── cli_run.h
+│   ├── debugger_commands.h
+│   ├── output_format.h
+│   ├── terminal_ui.h
+│   ├── emu_format.h
+│   ├── emu_util.h
 │   └── emulator_guest.h
 ├── examples/
-│   └── v0_1_add.s
+│   ├── v0_1/
+│   ├── ...
+│   └── demos/
 ├── tests/
 ├── docs/
-│   ├── roadmap.md
-│   ├── instruction-support.md
-│   └── memory-map.md
+│   ├── module-ownership.md
+│   └── test-plan-v*.md
 ├── Makefile
 └── README.md
 ```
