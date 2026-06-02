@@ -136,8 +136,10 @@ src/cpu.c                    SVC decode and step dispatch handoff
 src/syscall.c                fake syscall dispatcher and host stream handling
 src/emulator.c               syscall dispatch handoff and run-loop integration
 src/disasm.c                 svc formatting
-src/main.c                   guest exit-code handling and usage text if needed
+src/cli_run.c                guest exit-code handling and command routing
+src/cli_options.c            usage text if needed
 src/debugger.c               step/continue behavior around guest exit
+src/debugger_commands.c      debugger command dispatch around guest exit
 include/emulator.h           new instruction/syscall declarations
 examples/v0_7/hello.s        write stdout then exit 0
 examples/v0_7/stderr.s       write stderr then exit 0

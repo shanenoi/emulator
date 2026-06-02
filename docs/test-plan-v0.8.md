@@ -178,8 +178,10 @@ Suggested implementation files, if useful:
 src/elf_loader.c
 src/program_loader.c
 include/emulator.h
-src/main.c
+src/cli_run.c
+src/output_format.c
 src/debugger.c
+src/debugger_commands.c
 Makefile
 README.md
 examples/README.md

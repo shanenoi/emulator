@@ -1443,6 +1443,12 @@ Definition of done:
 emulator/
 ├── src/
 │   ├── main.c
+│   ├── cli_options.c
+│   ├── cli_run.c
+│   ├── output_format.c
+│   ├── terminal_ui.c
+│   ├── debugger.c
+│   ├── debugger_commands.c
 │   ├── cpu.c
 │   ├── cpu.h
 │   ├── memory.c

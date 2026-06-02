@@ -117,9 +117,12 @@ Potential new or updated files:
 
 ```text
 src/disasm.c              instruction-formatting helper
-src/main.c                CLI command routing and usage updates
+src/main.c                thin CLI entrypoint
+src/cli_options.c         CLI usage and option parsing updates
+src/cli_run.c             CLI command routing
 src/emulator.c            trace formatting integration
 src/debugger.c            debugger trace formatting integration
+src/debugger_commands.c   debugger command dispatch
 include/emulator.h        helper declarations
 examples/README.md        example-building/running guide
 lessons/v0.6-assembler-friendly-runtime.md

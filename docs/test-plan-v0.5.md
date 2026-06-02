@@ -152,11 +152,12 @@ EmuStatus debugger_continue(Debugger *debugger, char *error, size_t error_size);
 
 Direct helper exposure is optional, but if helpers are not exposed, the CLI/script tests must cover equivalent behavior.
 
-Current implementation exposes the recommended `Debugger` type and helper functions through `include/emulator.h`, and the CLI uses those helpers.
+Current implementation exposes the recommended `Debugger` type and helper functions through `include/emulator.h`, keeps core debugger state/step/breakpoint helpers in `src/debugger.c`, and keeps REPL command parsing/dispatch in `src/debugger_commands.c`.
 
 ## Current Runtime Artifacts
 
 - `src/debugger.c`
+- `src/debugger_commands.c`
 - `./emulator debug <raw-binary>`
 - `debugger_init()` / `debugger_free()` / `debugger_reset()`
 - `debugger_add_breakpoint()` / `debugger_delete_breakpoint()` / `debugger_has_breakpoint()`
