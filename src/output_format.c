@@ -1,5 +1,7 @@
 #include "output_format.h"
 
+#include "emulator.h"
+
 #include <inttypes.h>
 #include <stdio.h>
 

@@ -1450,19 +1450,23 @@ emulator/
 │   ├── debugger.c
 │   ├── debugger_commands.c
 │   ├── cpu.c
-│   ├── cpu.h
 │   ├── memory.c
-│   ├── memory.h
-│   ├── decoder.c
-│   ├── decoder.h
 │   ├── loader.c
 │   ├── loader_io.c
 │   ├── loader_map.c
 │   ├── loader_stack.c
 │   ├── loader_raw.c
 │   ├── loader_elf.c
-│   ├── loader_macho.c
-│   └── loader.h
+│   └── loader_macho.c
+├── include/
+│   ├── emulator.h
+│   ├── cpu.h
+│   ├── memory.h
+│   ├── loader.h
+│   ├── exceptions.h
+│   ├── toy_kernel.h
+│   ├── mmio.h
+│   └── emulator_guest.h
 ├── examples/
 │   └── v0_1_add.s
 ├── tests/

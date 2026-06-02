@@ -1,7 +1,7 @@
 #ifndef EMU_DEVICES_H
 #define EMU_DEVICES_H
 
-#include "emulator.h"
+#include "memory.h"
 
 #include <stdbool.h>
 #include <stddef.h>

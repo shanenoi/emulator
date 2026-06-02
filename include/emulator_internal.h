@@ -11,6 +11,8 @@
 FILE *emulator_trace_stream(Emulator *emu);
 bool check_syscall_buffer(const Memory *memory, uint64_t address, uint64_t length, char *error,
                           size_t error_size);
+EmuStatus emulator_handle_syscall(Emulator *emu, const EmuDecodedInstruction *instruction, char *error,
+                                  size_t error_size);
 
 const char *exception_cause_name(EmuExceptionCause cause);
 bool exception_cause_from_memory_fault(const EmuFault *fault, const EmuDecodedInstruction *instruction,

@@ -1,6 +1,7 @@
-#include "emulator.h"
+#include "cpu.h"
 
 #include "emu_util.h"
+#include "memory.h"
 
 #include <inttypes.h>
 #include <limits.h>

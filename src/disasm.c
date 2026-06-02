@@ -1,4 +1,4 @@
-#include "emulator.h"
+#include "cpu.h"
 
 #include "emu_util.h"
 

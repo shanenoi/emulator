@@ -3,6 +3,7 @@
 #include "cli_options.h"
 
 #include "emu_util.h"
+#include "emulator.h"
 
 #include <errno.h>
 #include <stdio.h>

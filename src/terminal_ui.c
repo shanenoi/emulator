@@ -2,6 +2,8 @@
 
 #include "terminal_ui.h"
 
+#include "emulator.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>

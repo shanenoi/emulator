@@ -1,7 +1,7 @@
 #ifndef EMU_MMIO_H
 #define EMU_MMIO_H
 
-#include "emulator.h"
+#include "memory.h"
 
 #include <stddef.h>
 #include <stdint.h>

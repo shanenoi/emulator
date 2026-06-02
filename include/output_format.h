@@ -1,9 +1,12 @@
 #ifndef OUTPUT_FORMAT_H
 #define OUTPUT_FORMAT_H
 
-#include "emulator.h"
+#include "loader.h"
+#include "memory.h"
 
 #include <stdio.h>
+
+typedef struct Emulator Emulator;
 
 void cli_print_program_info(const EmuLoadedProgram *program, const Memory *memory, FILE *stream);
 void cli_print_exception_info(const Emulator *emu, FILE *stream);

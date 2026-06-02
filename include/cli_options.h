@@ -1,12 +1,15 @@
 #ifndef CLI_OPTIONS_H
 #define CLI_OPTIONS_H
 
-#include "emulator.h"
+#include "emu_constants.h"
+#include "memory.h"
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+
+typedef struct Emulator Emulator;
 
 typedef struct {
     bool has_exception_vector;

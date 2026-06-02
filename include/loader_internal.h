@@ -1,6 +1,7 @@
 #ifndef EMU_LOADER_INTERNAL_H
 #define EMU_LOADER_INTERNAL_H
 
+#include "loader.h"
 #include "emulator.h"
 
 #include <stdbool.h>

@@ -62,7 +62,11 @@ all: $(TARGET)
 $(TARGET): $(OBJ)
 	$(CC) $(LDFLAGS) -o $@ $(OBJ)
 
-src/%.o: src/%.c include/emulator.h include/emulator_internal.h include/loader_internal.h include/emu_util.h include/emu_format.h include/devices.h include/mmio.h include/cli_options.h include/cli_run.h include/debugger_commands.h include/output_format.h include/terminal_ui.h
+src/%.o: src/%.c include/emulator.h include/emu_constants.h include/cpu.h include/exceptions.h \
+          include/memory.h include/loader.h include/toy_kernel.h include/emulator_internal.h \
+          include/loader_internal.h include/emu_util.h include/emu_format.h include/devices.h \
+          include/mmio.h include/cli_options.h include/cli_run.h include/debugger_commands.h \
+          include/output_format.h include/terminal_ui.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 V0_1_EXAMPLES := examples/v0_1/add.bin examples/v0_1/nop_hlt.bin examples/v0_1/sub.bin

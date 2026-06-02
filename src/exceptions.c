@@ -1,5 +1,3 @@
-#include "emulator.h"
-
 #include "emulator_internal.h"
 
 #include <inttypes.h>
