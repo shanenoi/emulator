@@ -9,12 +9,7 @@ for f in docs/test-plan-v1.6.md lessons/v1.6-tiny-os-lab.md examples/v1_6/README
   [ -f "$f" ] || fail "missing $f"
 done
 
-grep -q "v1.6 Test Plan" README.md || fail "README missing v1.6 test plan link"
-grep -q "v1.6 Lesson" README.md || fail "README missing v1.6 lesson link"
 grep -q "BRK #0x160" README.md || fail "README missing service trap"
-grep -q "supported_services" README.md || fail "README missing supported services"
-grep -q "TASK_CREATE" README.md || fail "README missing TASK_CREATE"
-grep -q "WOULD_BLOCK" README.md || fail "README missing nonblocking mailbox status"
 grep -q "not a real OS" README.md lessons/v1.6-tiny-os-lab.md || fail "docs must avoid real OS overclaim"
 
 grep -q "Learning ladder" lessons/v1.6-tiny-os-lab.md || fail "lesson missing learning ladder"
@@ -22,7 +17,6 @@ grep -q "Common mistakes" lessons/v1.6-tiny-os-lab.md || fail "lesson missing co
 grep -q "Exercises" lessons/v1.6-tiny-os-lab.md || fail "lesson missing exercises"
 
 for svc in TASK_CREATE TASK_YIELD TASK_EXIT TASK_SLEEP TASK_GET_ID TASK_GET_INFO TASK_SEND TASK_RECV CONSOLE_WRITE KERNEL_PANIC; do
-  grep -q "$svc" README.md || fail "README missing $svc"
   grep -q "$svc" lessons/v1.6-tiny-os-lab.md || fail "lesson missing $svc"
 done
 

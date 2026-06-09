@@ -326,7 +326,7 @@ for text in "freestanding C" "_start" "hosted C" "logical-immediate" "UXTB" "SXT
     require_contains README.md "$text"
     require_contains lessons/v0.9-tiny-c-programs.md "$text"
 done
-require_contains README.md "v0.9 Test Plan"
+require_contains docs/test-plan-v0.9.md "Tiny Freestanding C Programs"
 require_not_contains README.md "v0.9 automated tests are intentionally not added yet"
 require_not_contains README.md "v0.1 through v0.8 C test runners"
 require_not_contains README.md "v0.1 through v0.8 CLI checks"

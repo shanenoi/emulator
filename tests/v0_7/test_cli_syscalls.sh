@@ -192,7 +192,7 @@ for text in "write = 64" "exit = 93" "SVC #0" "-EBADF" "-ENOSYS" "low 8 bits"; d
     require_contains README.md "$text"
     require_contains lessons/v0.7-toy-syscalls.md "$text"
 done
-require_contains README.md "v0.7 Test Plan"
+require_contains docs/test-plan-v0.7.md "Toy Syscalls"
 require_contains examples/README.md "svc #0"
 require_contains examples/README.md "write = 64"
 require_contains examples/README.md "exit = 93"

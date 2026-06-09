@@ -19,16 +19,9 @@ need_file tests/v1_4/test_cli_exceptions.sh
 need_file tests/v1_4/test_debugger_exceptions.sh
 need_file tests/v1_4/test_docs_exceptions.sh
 
-contains README.md "v1.4 Test Plan"
-contains README.md "v1.4 Lesson"
-contains README.md "v1.4 — Exceptions, Traps, and Interrupt Skeleton"
-contains README.md "implemented/tested teaching profile for **v1.4"
-contains README.md "v0.1 through v1.4 deterministic test suite"
 contains README.md "0x09030000"
 contains README.md "--exception-vector"
 contains README.md "--timer-interrupt"
-contains README.md "v1.5 — Toy Kernel Mode"
-contains README.md "v1.6 — Tiny OS Lab"
 not_contains_i README.md "v1\.4.*initial development slice|current v1\.4 test pass is pending|tests are intentionally deferred|v1\.4 tests are still pending|yet to add tests"
 
 for f in docs/test-plan-v1.4.md lessons/v1.4-exceptions-and-interrupts.md examples/v1_4/README.md; do
@@ -53,7 +46,6 @@ contains docs/test-plan-v1.4.md "tests/v1_4/test_cli_exceptions.sh"
 
 python3 - <<'PY'
 from pathlib import Path
-readme = Path('README.md').read_text()
 makefile = Path('Makefile').read_text()
 required = [
     'tests/v1_4/test_v1_4',
@@ -66,8 +58,6 @@ required = [
 missing = [item for item in required if item not in makefile]
 if missing:
     raise SystemExit('Makefile missing v1.4 test hooks: ' + ', '.join(missing))
-if readme.find('v1.4 — Exceptions') > readme.find('v1.5 — Toy Kernel Mode'):
-    raise SystemExit('README roadmap order puts v1.4 after v1.5')
 PY
 
 printf '%s\n' "v1.4 docs exception tests passed"

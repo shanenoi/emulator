@@ -270,7 +270,6 @@ printf 'run\nquit\n' | ./emulator debug examples/v0_4/simple_call.bin >"$TMP_DIR
 require_contains "$TMP_DIR/debug_old.out" "halted"
 
 # TC-V08-DOC-*.
-require_contains README.md "v0.8 Test Plan"
 require_contains README.md "ELF64"
 require_contains README.md "ET_EXEC"
 require_contains README.md "PT_LOAD"

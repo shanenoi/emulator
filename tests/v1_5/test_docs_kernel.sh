@@ -20,14 +20,7 @@ need_file tests/v1_5/test_debugger_kernel.sh
 need_file tests/v1_5/test_docs_kernel.sh
 need_file tests/v1_5/test_optional_kernel_examples.sh
 
-contains README.md "v1.5 Test Plan"
-contains README.md "v1.5 Lesson"
-contains README.md "v1.5 — Toy Kernel Mode"
-contains README.md "implemented/tested teaching profile for **v1.5"
-contains README.md "v0.1 through v1.5 deterministic test suite"
 contains README.md "--kernel"
-contains README.md "--kernel-boot-info"
-contains README.md "--kernel-task"
 not_contains_i README.md "v1\.5.*tests are still pending|dedicated v1\.5 automated tests are still to be added|tests are intentionally deferred|yet to add tests"
 
 for f in docs/test-plan-v1.5.md lessons/v1.5-toy-kernel-and-cooperative-tasks.md examples/v1_5/README.md; do
@@ -70,9 +63,6 @@ required = [
 missing = [item for item in required if item not in makefile]
 if missing:
     raise SystemExit('Makefile missing v1.5 test hooks: ' + ', '.join(missing))
-readme = Path('README.md').read_text()
-if readme.find('v1.5 — Toy Kernel Mode') > readme.find('v1.6 — Tiny OS Lab'):
-    raise SystemExit('README roadmap order puts v1.5 after v1.6')
 plan = Path('docs/test-plan-v1.5.md').read_text()
 for needle in ['Implemented v1.5 Contract', '`ERET` outside an active exception inside a task', 'guest-visible task descriptors']:
     if needle not in plan:

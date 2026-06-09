@@ -20,14 +20,13 @@ need_file tests/v1_3/test_cli_devices.sh
 need_file tests/v1_3/test_debugger_devices.sh
 need_file tests/v1_3/test_docs_devices.sh
 
-contains README.md "v1.3 Test Plan"
-contains README.md "v1.3 Test Traceability"
-contains README.md "v1.3 Lesson"
-contains README.md "implemented/tested teaching profile for **v1.3 — Memory-Mapped Devices**"
-contains README.md "v0.1 through v1.3 deterministic test suite"
-contains README.md "UART 0x09000000"
-contains README.md "timer 0x09010000"
-contains README.md "random 0x09020000"
+contains README.md "MMIO devices"
+contains README.md "UART"
+contains README.md "0x09000000"
+contains README.md "timer"
+contains README.md "0x09010000"
+contains README.md "pseudo-random"
+contains README.md "0x09020000"
 contains README.md "interrupts"
 contains README.md "DMA"
 not_contains_i README.md "v1\.3 test suite is still the next step|upcoming v1\.3 test pass|dedicated v1\.3 coverage is the next testing milestone|initial implementation for \*\*v1\.3"

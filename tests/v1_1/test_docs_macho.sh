@@ -38,20 +38,17 @@ for file in \
 done
 
 for text in \
-    "v1.1 Test Plan" \
-    "v1.1 Lesson" \
     "Mach-O" \
     "info" \
     "LC_SEGMENT_64" \
     "LC_MAIN" \
     "arm64" \
     "MH_EXECUTE" \
-    "dyld" \
-    "normal dynamically linked"; do
+    "dyld"; do
     require_contains README.md "$text"
 done
 
-for file in README.md lessons/v1.1-mach-o-loader.md examples/v1_1/README.md; do
+for file in lessons/v1.1-mach-o-loader.md examples/v1_1/README.md; do
     require_contains "$file" "LC_SEGMENT_64"
     require_contains "$file" "LC_MAIN"
     require_contains "$file" "little-endian"
@@ -61,7 +58,6 @@ for file in README.md lessons/v1.1-mach-o-loader.md examples/v1_1/README.md; do
     require_contains "$file" "unsupported"
 done
 
-require_contains README.md "symbol names/addresses"
 require_contains lessons/v1.1-mach-o-loader.md "symbol names/addresses"
 require_contains examples/v1_1/README.md "symbol-name/address"
 

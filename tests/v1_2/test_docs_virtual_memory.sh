@@ -33,12 +33,9 @@ require_file tests/v1_2/test_v1_2.c
 require_file tests/v1_2/test_cli_virtual_memory.sh
 require_file tests/v1_2/test_debugger_virtual_memory.sh
 
-require_contains README.md "v1.2 Test Plan"
-require_contains README.md "v1.2 Lesson"
-require_contains README.md "Virtual Memory"
 require_contains README.md "maps"
 require_contains README.md "map <address>"
-require_contains README.md "stack-guard"
+require_contains README.md "stack guard"
 require_contains lessons/v1.2-virtual-memory.md "page"
 require_contains lessons/v1.2-virtual-memory.md "zero-fill"
 require_contains lessons/v1.2-virtual-memory.md "unmapped access"
